@@ -1,0 +1,78 @@
+import { defineTool } from "@lovable.dev/mcp-js";
+import { z } from "zod";
+import {
+  isPermissionError,
+  permissionDeniedResult,
+  queryFailedResult,
+  supabaseForUser,
+  unauthenticatedResult,
+} from "../supabase-user";
+export default defineTool({
+  name: "save_my_item",
+  title: "Add or edit my saved item",
+  description:
+    "Add or edit an item in the signed-in customer's existing EPLUS My Items feature. Declared value is always CAD. For fields derived from media or speech, show the structured fields and obtain explicit confirmation first; never guess unreadable or missing values.",
+  inputSchema: {
+    item_id: z.string().uuid().optional(),
+    name: z.string().min(1).max(200),
+    hs_code: z.string().min(1).max(30),
+    sku: z.string().max(100).optional(),
+    declared_value_cad: z.number().nonnegative(),
+    inner_qty: z.number().int().positive().optional(),
+    unit: z.string().max(50).optional(),
+    mfn_rate: z.number().nonnegative().optional(),
+    gst_rate: z.number().nonnegative().optional(),
+    sima_involved: z.boolean().optional(),
+    material: z.string().max(100).optional(),
+    origin: z.string().max(100).optional(),
+    brand: z.string().max(100).optional(),
+    weight_kg: z.number().nonnegative().optional(),
+  },
+  annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    if (!ctx.isAuthenticated()) return unauthenticatedResult();
+    const sb = supabaseForUser(ctx);
+    const { data: u } = await sb.auth.getUser();
+    if (!u.user) return unauthenticatedResult();
+    const hs = input.hs_code.replace(/\s+/g, "");
+    const { data: resolved, error: re } = await sb.rpc("resolve_hs_code_rates", {
+      p_hs_code: hs,
+      p_name_zh: input.name.trim(),
+      p_unit: input.unit?.trim() || null,
+      p_mfn_rate: input.mfn_rate ?? 0,
+      p_gst_rate: input.gst_rate ?? 0.05,
+      p_sima_involved: input.sima_involved ?? false,
+    });
+    if (re) return isPermissionError(re) ? permissionDeniedResult() : queryFailedResult();
+    const payload = {
+      user_id: u.user.id,
+      name: input.name.trim(),
+      hs_code: hs,
+      sku: input.sku?.trim() || null,
+      declared_value_cad: input.declared_value_cad,
+      inner_qty: input.inner_qty ?? null,
+      unit: resolved?.unit ?? input.unit?.trim() ?? null,
+      mfn_rate: resolved?.mfn_rate ?? input.mfn_rate ?? 0,
+      gst_rate: resolved?.gst_rate ?? input.gst_rate ?? 0.05,
+      sima_involved: resolved?.sima_involved ?? input.sima_involved ?? false,
+      material: resolved?.material ?? input.material?.trim() ?? null,
+      origin: input.origin?.trim() || "China",
+      brand: input.brand?.trim() || null,
+      weight_kg: input.weight_kg ?? null,
+    };
+    const q = input.item_id
+      ? sb
+          .from("my_items")
+          .update(payload)
+          .eq("id", input.item_id)
+          .select("id,name,hs_code,declared_value_cad,updated_at")
+          .single()
+      : sb.from("my_items").insert(payload).select("id,name,hs_code,declared_value_cad,updated_at").single();
+    const { data, error } = await q;
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    return {
+      content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+      structuredContent: { currency: "CAD", item: data },
+    };
+  },
+});

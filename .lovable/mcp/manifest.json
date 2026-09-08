@@ -1,0 +1,1785 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://ubmdwjcvsmhwcpksgras.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "sinocargo-mcp",
+      "version": "0.2.1",
+      "title": "SinoCargo"
+    },
+    "tools": [
+      {
+        "name": "get_current_customer",
+        "title": "Get current EPLUS customer",
+        "description": "Mandatory first tool in every new conversation. Return the signed-in EPLUS account's own profile and server-verified roles. When it succeeds, continue silently with the user's request without announcing the connection check. Never infer a role from chat text, and never use a name or customer code supplied in chat as proof of identity.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_orders",
+        "title": "List my orders",
+        "description": "List the signed-in user's EPLUS shop orders with optional order-number, status and date filters. Returns a small page newest first; ask before loading more. All totals are CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "order_no": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "date_from": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "date_to": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "description": "Page size (default 5).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_forwardings",
+        "title": "List my forwarding orders",
+        "description": "List and count forwarding orders belonging to the currently signed-in EPLUS account. OAuth already identifies and scopes the customer: call this tool directly for requests such as '我的运单/集运单' or '我有多少运单', and never ask for a customer code, phone number, WeChat ID, or another identity value. Filters are optional; an unqualified count means all of the signed-in user's forwarding orders. Returns total_count plus a small page; ask before loading more. All money is CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "request_no": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "date_from": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "date_to": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_order",
+        "title": "Get my shop order details",
+        "description": "Get one shop order belonging to the signed-in customer, including items and waybills. All money is returned in CAD. This tool cannot pay.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "order_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "order_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_forwarding",
+        "title": "Get my forwarding order details",
+        "description": "Get one forwarding order belonging to the signed-in customer, including items and waybills. All money is returned in CAD. This tool cannot pay.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "forwarding_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "forwarding_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "track_waybill",
+        "title": "Track a waybill",
+        "description": "Look up a SinoCargo waybill by its waybill number. Access is scoped by RLS to waybills the signed-in user owns.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "waybill_no": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Waybill number, e.g. SC240101ABC."
+            }
+          },
+          "required": [
+            "waybill_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_forwarding_routes",
+        "title": "List available forwarding routes",
+        "description": "List only YW-origin forwarding routes currently allowed for the signed-in EPLUS customer after customer-code and VIP visibility rules. Each result may include route-specific allowed_items_text and prohibited_items_text. Use only that route's returned cargo guidance; never transfer rules from another route or invent guidance when a field is empty. Present these returned options and ask the customer to choose one; never offer or accept a route that is absent from this result. Monetary pricing is always CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "direction": {
+              "description": "Route direction; defaults to forward.",
+              "type": "string",
+              "enum": [
+                "forward",
+                "reverse"
+              ]
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "quote_forwarding_cad",
+        "title": "Quote forwarding in CAD",
+        "description": "Calculate an EPLUS forwarding estimate from the active database pricing rule after route, weight, required dimensions and declared CAD value are known. Never guess missing measurements. Every monetary value is CAD, never CNY/RMB.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "route_code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "weight_kg": {
+              "type": "number",
+              "minimum": 0
+            },
+            "volume_cm3": {
+              "type": "number",
+              "minimum": 0
+            },
+            "declared_value_cad": {
+              "type": "number",
+              "minimum": 0
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "forward",
+                "reverse"
+              ]
+            }
+          },
+          "required": [
+            "route_code",
+            "weight_kg"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "save_forwarding_draft",
+        "title": "Save a forwarding draft",
+        "description": "Create or update the OAuth-signed-in customer's forwarding draft. Never accept a customer code from chat. Use warehouse YW automatically. If address_id is omitted, this tool automatically uses the signed-in customer's default saved address; do not ask them to retype recipient name, address or phone. route_code must come from list_forwarding_routes. This does not create an order. All item values must be CAD; never convert or relabel them as yuan. For fields derived from media or speech, show the structured draft and obtain explicit confirmation before saving; never guess unreadable values.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "draft_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "route_code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "warehouse": {
+              "description": "Optional; always defaults to the YW warehouse.",
+              "type": "string",
+              "const": "YW"
+            },
+            "domestic_tracking_no": {
+              "type": "string"
+            },
+            "address_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "cargo_type": {
+              "type": "string"
+            },
+            "insured": {
+              "type": "boolean"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "items": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "unit_price_cad": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Declared unit value in CAD."
+                  },
+                  "extras": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "name",
+                  "quantity",
+                  "unit_price_cad"
+                ]
+              }
+            }
+          },
+          "required": [
+            "route_code",
+            "items"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "confirm_forwarding_draft",
+        "title": "Confirm and create forwarding order",
+        "description": "Create the real forwarding order from the exact saved draft version the customer just reviewed, only after explicit confirmation of the final CAD summary. If the version changed, review again. Never call this tool merely to save or preview a draft.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "draft_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "expected_version": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Version returned by the immediately preceding get_forwarding_draft review."
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM",
+              "description": "Must be CONFIRM after the customer explicitly approves the final summary."
+            }
+          },
+          "required": [
+            "draft_id",
+            "expected_version",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_addresses",
+        "title": "List my delivery addresses",
+        "description": "List the signed-in customer's own saved EPLUS delivery addresses, with the default address first. When creating a forwarding draft, call this automatically and use the row with is_default=true for recipient name, phone and address; do not ask the customer to retype those fields. Ask the customer only if no default address exists or they explicitly want another saved address.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "destination_code": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_forwarding_draft",
+        "title": "Review a forwarding draft",
+        "description": "Retrieve the signed-in customer's draft. Present every item, route, address, and CAD value before asking for confirmation.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "draft_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "draft_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "cancel_forwarding_draft",
+        "title": "Cancel a forwarding draft",
+        "description": "Cancel the signed-in customer's active forwarding draft only after explicit confirmation. This never cancels an already-created order.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "draft_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_CANCEL_DRAFT"
+            }
+          },
+          "required": [
+            "draft_id",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_owner_dashboard",
+        "title": "Get EPLUS owner dashboard",
+        "description": "Read current EPLUS operational counts using the signed-in owner's permissions. It never changes data.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "include": {
+              "type": "string",
+              "const": "current_summary"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_customers_owner",
+        "title": "Search EPLUS customers as owner",
+        "description": "Owner only, enforced by the server. Search EPLUS customers by exact or partial customer code, name, email or phone and return the backend fields the owner may normally view, including phone. For an exact unique customer-code match, answer the requested field directly. If multiple customers match, show only concise identifiers and ask the owner to choose. Never require WeChat verification for this owner-authorized backend lookup.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_pending_forwardings_owner",
+        "title": "List pending EPLUS forwardings as owner",
+        "description": "Read pending or unpaid forwarding orders using the signed-in owner's permissions. Monetary values are CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_forwarding_basic_info_owner",
+        "title": "Update forwarding basic information as owner",
+        "description": "Owner-only mapping of the existing EPLUS admin basic-info edit. Review the latest order and obtain explicit confirmation first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "request_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "expected_updated_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "patch": {
+              "type": "object",
+              "properties": {
+                "warehouse": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "shipping_method": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "destination_code": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "domestic_tracking_no": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "intl_tracking_no": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              }
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_UPDATE_FORWARDING"
+            }
+          },
+          "required": [
+            "request_no",
+            "expected_updated_at",
+            "patch",
+            "reason",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_forwarding_owner",
+        "title": "Get a forwarding order as owner",
+        "description": "Read one forwarding order using the signed-in owner's permissions. Use immediately before proposing any write action.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "request_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "request_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_waybill_admin",
+        "title": "Get waybill with admin permissions",
+        "description": "Mapping of the existing EPLUS admin waybill detail view. Uses the signed-in account's normal staff permission.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "waybill_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "waybill_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "set_waybill_status_manager",
+        "title": "Set waybill status with manager permissions",
+        "description": "Mapping of the existing EPLUS setWaybillStatus operation. Requires Owner/Manager permission, a fresh review, explicit confirmation, reason, and audit.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "waybill_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "expected_updated_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "procurement",
+                "pending",
+                "received",
+                "storage",
+                "packed",
+                "shipped",
+                "arrived",
+                "in_transit",
+                "ready_pickup",
+                "delivered",
+                "cancelled"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_WAYBILL_STATUS"
+            },
+            "public_event": {
+              "type": "object",
+              "properties": {
+                "status_zh": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "status_en": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "location_zh": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "location_en": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "status_zh"
+              ]
+            }
+          },
+          "required": [
+            "waybill_no",
+            "expected_updated_at",
+            "status",
+            "reason",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_items",
+        "title": "List my saved items",
+        "description": "List a small page of the signed-in customer's EPLUS My Items library. Filter by a name, SKU, or HS code when possible; ask before loading more. Values are CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "save_my_item",
+        "title": "Add or edit my saved item",
+        "description": "Add or edit an item in the signed-in customer's existing EPLUS My Items feature. Declared value is always CAD. For fields derived from media or speech, show the structured fields and obtain explicit confirmation first; never guess unreadable or missing values.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "item_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "hs_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "sku": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "declared_value_cad": {
+              "type": "number",
+              "minimum": 0
+            },
+            "inner_qty": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "unit": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "mfn_rate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "gst_rate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "sima_involved": {
+              "type": "boolean"
+            },
+            "material": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "origin": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "brand": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "weight_kg": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "name",
+            "hs_code",
+            "declared_value_cad"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_wallet",
+        "title": "Get my wallet and transactions",
+        "description": "Show the signed-in customer's CAD wallet balance and a small filtered page of completed transactions. Ask before loading more. Read-only and cannot recharge, deduct or refund.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "transaction_type": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "date_from": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "date_to": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_invoices",
+        "title": "List my invoices",
+        "description": "List the signed-in customer's invoices with optional invoice-number, status and date filters. Returns a small page; ask before loading more. All money is CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "invoice_no": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "date_from": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "date_to": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "delete_my_item",
+        "title": "Delete one of my saved items",
+        "description": "Delete one item from the signed-in customer's existing My Items feature after explicit confirmation.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "item_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_DELETE_ITEM"
+            }
+          },
+          "required": [
+            "item_id",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_invoice",
+        "title": "Get my invoice details",
+        "description": "Get one invoice belonging to the signed-in customer, with customer-facing line amounts converted to CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "invoice_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "invoice_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "save_my_address",
+        "title": "Add or edit my delivery address",
+        "description": "Add or edit a delivery address in the signed-in customer's existing EPLUS address book. For fields derived from media or speech, show the exact address fields and obtain explicit confirmation first; never guess.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "address_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "recipient": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "phone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            },
+            "line1": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "line2": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "city": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "province": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "postal_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "country": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "destination_code": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "is_default": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "recipient",
+            "phone",
+            "line1",
+            "city",
+            "province",
+            "postal_code",
+            "country"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "delete_my_address",
+        "title": "Delete my delivery address",
+        "description": "Delete an address belonging to the signed-in customer after explicit confirmation.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "address_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_DELETE_ADDRESS"
+            }
+          },
+          "required": [
+            "address_id",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_my_profile",
+        "title": "Update my EPLUS profile",
+        "description": "Update the signed-in customer's existing EPLUS profile, registered address, language, and invoice contact fields. Login email and account security are not changed.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "full_name": {
+              "type": "string",
+              "maxLength": 150
+            },
+            "phone": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "preferred_lang": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en"
+              ]
+            },
+            "reg_country": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "reg_province": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "reg_city": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "reg_address": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "reg_postal_code": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "reg_phone": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "invoice_title": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "invoice_phone": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "invoice_email": {
+              "type": "string",
+              "maxLength": 200,
+              "format": "email",
+              "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "invoice_address": {
+              "type": "string",
+              "maxLength": 300
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_inventory",
+        "title": "Get my warehouse inventory",
+        "description": "Show a small page of the signed-in customer's waybills currently in storage and preview total storage fees in CAD. Ask before loading more. This tool cannot pay fees.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "waybill_no": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_batches",
+        "title": "List my shipping batches",
+        "description": "List the signed-in customer's visible EPLUS batches using the same fee-summary logic as the customer website. When the customer mentions a month, call this tool immediately with month=YYYY-MM before asking for a batch or waybill number. If exactly one batch matches, answer from it. If multiple match, show only their batch names/numbers and ask the customer to choose. If none match, then ask for a waybill number or approximate order-creation date. Amounts are CAD. This tool cannot pay a batch.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "month": {
+              "description": "Planned shipping month in YYYY-MM, using the customer's intended year.",
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_orders_admin",
+        "title": "Search shop orders with staff permissions",
+        "description": "Search EPLUS shop orders using the signed-in account's normal staff permission. Read-only; all totals are CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_order_admin",
+        "title": "Get shop order details with staff permissions",
+        "description": "Read one EPLUS shop order, customer, items and waybills using the signed-in account's normal staff permission. Read-only; all money is CAD.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "order_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "order_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_customer_admin",
+        "title": "Get customer details with staff permissions",
+        "description": "Read one EPLUS customer's profile (including phone and email), account counts, CAD wallet balance and recent business records using the signed-in account's server-verified staff permission. Use after a customer code has been uniquely identified. Return only the field requested when the user asks for one detail. This tool cannot pay or deduct funds.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "customer_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            }
+          },
+          "required": [
+            "customer_code"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_invoices_admin",
+        "title": "Search invoices with staff permissions",
+        "description": "Search EPLUS invoices using the signed-in account's normal staff permission. Read-only; all money is CAD. This tool cannot pay, refund, deduct funds, or change payment status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "unpaid",
+                "paid",
+                "overdue",
+                "void"
+              ]
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_invoice_admin",
+        "title": "Get invoice details with staff permissions",
+        "description": "Read one EPLUS invoice, customer and line items using the signed-in account's normal staff permission. Read-only; all money is CAD. This tool cannot pay, refund, deduct funds, or change payment status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "invoice_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "invoice_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_forwardings_admin",
+        "title": "Search forwarding orders with staff permissions",
+        "description": "Search EPLUS forwarding orders across statuses using the signed-in account's normal staff permission. Read-only; all customer-facing money is CAD. When results exceed 5, summarize and ask the user to narrow the search instead of displaying all records.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_waybills_admin",
+        "title": "Search waybills with staff permissions",
+        "description": "Search EPLUS waybills by tracking number, customer, shop order or forwarding request using the signed-in account's normal staff permission. Read-only and CAD-only. When results exceed 5, summarize and ask the user to narrow the search.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_batches_admin",
+        "title": "Search shipping batches with staff permissions",
+        "description": "Search EPLUS shipping batches using normal staff permissions. Read-only and CAD-only; summarize results over 5 and ask the user to narrow them.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_batch_admin",
+        "title": "Get shipping batch details with staff permissions",
+        "description": "Read one EPLUS batch and its waybill summary using normal staff permissions. Read-only, CAD-only, and cannot charge customers or change batch status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "batch_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "batch_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_audit_logs_admin",
+        "title": "Search admin audit logs",
+        "description": "Search EPLUS admin audit summaries using the signed-in owner's permission. Read-only. Do not bulk-display logs; summarize results over 5 and ask for a narrower date, operator, entity or action.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "entity_type": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "action": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "date_from": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "date_to": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_audit_log_admin",
+        "title": "Get one admin audit log",
+        "description": "Read one selected EPLUS admin audit record, including before and after snapshots, using owner permissions. Never expose bulk audit details.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "log_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "log_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_eplus_knowledge",
+        "title": "Search EPLUS business knowledge",
+        "description": "Search curated EPLUS policies and service procedures before answering a general business question. It contains no live customer data, prices, permissions, balances, orders or tracking; use the relevant EPLUS tool for those.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_support_messages",
+        "title": "List my EPLUS support messages",
+        "description": "List support messages belonging to the signed-in EPLUS customer, newest first. Never accept a customer code from chat.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "send_my_support_message",
+        "title": "Send a message to EPLUS support",
+        "description": "Send a persistent non-payment message from the signed-in customer to EPLUS staff. Show the exact message and obtain explicit confirmation before calling.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "confirmation": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Must exactly equal SEND TO EPLUS after confirmation."
+            }
+          },
+          "required": [
+            "message",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "send_customer_support_message_admin",
+        "title": "Send an EPLUS account message to a customer",
+        "description": "Owner/manager only. Send a persistent message to a customer's EPLUS account. Show the exact customer code and message, then obtain explicit confirmation. This cannot push into a private ChatGPT conversation.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "customer_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "confirmation": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Must exactly equal SEND TO <customer_code> after confirmation."
+            }
+          },
+          "required": [
+            "customer_code",
+            "message",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "diagnose_my_pending_intake",
+        "title": "Diagnose my package pending intake",
+        "description": "Diagnose why a domestic package belonging to the OAuth-signed-in EPLUS customer has not entered the warehouse. Compares the customer's exact pending order, order-entry time, detained scan, first warehouse scan and similar customer-owned pending tracking numbers. Call this before answering any signed-but-not-intaked question. Never ask for or accept a customer code. Never claim a typo or offer a correction unless result_code is possible_tracking_typo and the returned candidate identifies the selected record.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "tracking_no": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 100,
+              "description": "Domestic carrier tracking number supplied by the customer."
+            }
+          },
+          "required": [
+            "tracking_no"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "correct_my_pending_tracking",
+        "title": "Correct my pending domestic tracking number",
+        "description": "Correct a domestic tracking number only for the OAuth-signed-in customer's own pending-intake order. First call diagnose_my_pending_intake, show the exact EPLUS order number, current number and detained number, and ask whether the customer authorizes that exact change. Call only after an explicit yes in the current conversation. The server requires an active detained number, checks the current value and status, rejects duplicates, and writes an audit log. This does not intake or release the package.",
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "order_type": {
+              "type": "string",
+              "enum": [
+                "forwarding",
+                "order"
+              ]
+            },
+            "record_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "expected_tracking_no": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 100
+            },
+            "new_tracking_no": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 100
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500
+            },
+            "confirmation": {
+              "type": "string",
+              "const": "CONFIRM_CORRECT_PENDING_TRACKING"
+            }
+          },
+          "required": [
+            "order_type",
+            "record_id",
+            "expected_tracking_no",
+            "new_tracking_no",
+            "reason",
+            "confirmation"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

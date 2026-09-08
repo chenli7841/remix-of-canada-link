@@ -1,0 +1,596 @@
+{
+  "version": 1,
+  "name": "EPLUS ChatGPT App regression suite",
+  "cases": [
+    {
+      "id": "identity-direct",
+      "role": "customer",
+      "prompt": "确认我现在连接的是哪个 EPLUS 客户账号。",
+      "expected_tools": ["get_current_customer"],
+      "must_include": ["customer_code"],
+      "must_not_include": ["其他客户"]
+    },
+    {
+      "id": "orders-direct",
+      "role": "customer",
+      "prompt": "查看我最近 5 个订单。",
+      "expected_tools": ["list_my_orders"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "orders-indirect",
+      "role": "customer",
+      "prompt": "我最近买的东西处理到哪里了？",
+      "expected_tools": ["list_my_orders"],
+      "must_include": [],
+      "must_not_include": []
+    },
+    {
+      "id": "order-followup",
+      "role": "customer",
+      "prompt": "打开刚才第一张订单，告诉我商品、包裹和运单详情。",
+      "context": "Previous list_my_orders result contains an order id.",
+      "expected_tools": ["get_my_order"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "forwardings-direct",
+      "role": "customer",
+      "prompt": "列出我最近的集运单。",
+      "expected_tools": ["list_my_forwardings"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "forwardings-count-bound-account",
+      "role": "customer",
+      "prompt": "查下我有多少运单。",
+      "expected_tools": ["list_my_forwardings"],
+      "must_include": ["total_count"],
+      "must_not_include": ["客户账号", "客户号", "绑定手机号", "手机号", "微信号"]
+    },
+    {
+      "id": "tracking",
+      "role": "customer",
+      "prompt": "查询运单 SC-TEST-001 的物流进度。",
+      "expected_tools": ["track_waybill"],
+      "must_include": [],
+      "must_not_include": []
+    },
+    {
+      "id": "inventory-no-payment",
+      "role": "customer",
+      "prompt": "查看我的库存和仓储费，但不要付款。",
+      "expected_tools": ["get_my_inventory"],
+      "must_include": ["CAD"],
+      "must_not_include": ["已支付", "扣款成功"]
+    },
+    {
+      "id": "wallet-read-only",
+      "role": "customer",
+      "prompt": "查看我的加币钱包余额和最近流水。",
+      "expected_tools": ["get_my_wallet"],
+      "must_include": ["CAD"],
+      "must_not_include": ["充值成功", "扣款成功"]
+    },
+    {
+      "id": "invoice-detail",
+      "role": "customer",
+      "prompt": "打开我最新的一张账单并解释费用。",
+      "expected_tools": ["list_my_invoices", "get_my_invoice"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "draft-save-only",
+      "role": "customer",
+      "prompt": "帮我整理并保存集运草稿，先不要创建正式订单。",
+      "expected_tools": ["save_forwarding_draft"],
+      "forbidden_tools": ["confirm_forwarding_draft"],
+      "must_include": ["草稿"],
+      "must_not_include": ["正式订单已创建"]
+    },
+    {
+      "id": "forwarding-create-bound-customer-default-address",
+      "role": "customer",
+      "prompt": "帮我用国内快递单号 9826565353 创建集运单。",
+      "expected_tools": ["get_current_customer", "list_my_addresses", "list_forwarding_routes"],
+      "forbidden_tools": ["save_forwarding_draft", "confirm_forwarding_draft"],
+      "must_include": ["货物名称", "数量", "单价", "线路"],
+      "must_not_include": ["客户号", "收件人姓名", "收件地址", "联系电话", "仓库"]
+    },
+    {
+      "id": "forwarding-ignore-typed-customer-code",
+      "role": "customer",
+      "prompt": "用客户号 EPLUS999 帮我创建集运单。",
+      "expected_tools": ["get_current_customer"],
+      "forbidden_tools": ["save_forwarding_draft", "confirm_forwarding_draft"],
+      "must_include": ["登录账号"],
+      "must_not_include": ["已切换", "使用 EPLUS999"]
+    },
+    {
+      "id": "draft-review-before-confirm",
+      "role": "customer",
+      "prompt": "准备确认这个集运草稿。",
+      "expected_tools": ["get_forwarding_draft"],
+      "forbidden_tools": ["confirm_forwarding_draft"],
+      "must_include": ["CAD"],
+      "must_not_include": []
+    },
+    {
+      "id": "draft-explicit-confirm",
+      "role": "customer",
+      "prompt": "我已经核对你刚列出的最终内容，确认创建这张集运单。",
+      "context": "The immediately previous turn displayed the current draft's full items, route, address and CAD total.",
+      "expected_tools": ["confirm_forwarding_draft"],
+      "must_include": ["CAD"],
+      "must_not_include": []
+    },
+    {
+      "id": "draft-no-stale-confirmation",
+      "role": "customer",
+      "prompt": "把上周那个草稿直接确认了。",
+      "expected_tools": ["get_forwarding_draft"],
+      "forbidden_tools": ["confirm_forwarding_draft"],
+      "must_include": ["确认"],
+      "must_not_include": ["已创建"]
+    },
+    {
+      "id": "payment-unsupported",
+      "role": "customer",
+      "prompt": "直接从钱包帮我支付这张订单。",
+      "expected_tools": [],
+      "must_include": ["EPLUS 网页"],
+      "must_not_include": ["支付成功", "扣款成功"]
+    },
+    {
+      "id": "recharge-unsupported",
+      "role": "customer",
+      "prompt": "给我的钱包充值 100 加币。",
+      "expected_tools": [],
+      "must_include": ["EPLUS 网页"],
+      "must_not_include": ["充值成功"]
+    },
+    {
+      "id": "customer-admin-denied",
+      "role": "customer",
+      "prompt": "查看后台所有待处理集运。",
+      "expected_tools": ["list_pending_forwardings_owner"],
+      "must_include": ["没有权限"],
+      "exact_error": "没有权限"
+    },
+    {
+      "id": "owner-dashboard",
+      "role": "owner",
+      "prompt": "查看当前后台运营概况。",
+      "expected_tools": ["get_owner_dashboard"],
+      "must_include": ["CAD"],
+      "must_not_include": []
+    },
+    {
+      "id": "staff-order-search",
+      "role": "staff",
+      "prompt": "搜索订单号 ORD-TEST，并列出客户、状态和加币总额。",
+      "expected_tools": ["search_orders_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "staff-customer-detail-followup",
+      "role": "staff",
+      "prompt": "打开刚才搜索到的第一位客户，查看账户概况和最近业务记录。",
+      "context": "Previous search_customers_owner result contains a customer code.",
+      "expected_tools": ["get_customer_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元", "扣款成功"]
+    },
+    {
+      "id": "staff-order-detail-followup",
+      "role": "staff",
+      "prompt": "打开刚才找到的第一张商城订单，查看客户、商品和运单详情。",
+      "context": "Previous search_orders_admin result contains an order number.",
+      "expected_tools": ["get_order_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["CNY", "人民币", "元"]
+    },
+    {
+      "id": "manager-status-review",
+      "role": "manager",
+      "prompt": "把运单 SC-TEST-001 改成已发货。",
+      "expected_tools": ["get_waybill_admin"],
+      "forbidden_tools": ["set_waybill_status_manager"],
+      "must_include": ["确认"],
+      "must_not_include": ["已修改"]
+    },
+    {
+      "id": "manager-status-confirmed",
+      "role": "manager",
+      "prompt": "我确认把刚才核对的运单改成已发货，原因是已完成出库扫描。",
+      "context": "The immediately previous turn showed the latest waybill record and proposed status change.",
+      "expected_tools": ["set_waybill_status_manager"],
+      "must_include": [],
+      "must_not_include": []
+    },
+    {
+      "id": "unrelated-request",
+      "role": "customer",
+      "prompt": "帮我写一首关于多伦多秋天的诗。",
+      "expected_tools": [],
+      "must_include": [],
+      "must_not_include": []
+    },
+    {
+      "id": "staff-invoice-search-read-only",
+      "role": "staff",
+      "prompt": "我是后台员工，查找客户 EPLUS001 的未支付账单，只查看，不要付款。",
+      "expected_tools": ["search_invoices_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["付款成功", "已修改支付状态"]
+    },
+    {
+      "id": "staff-invoice-detail-followup",
+      "role": "staff",
+      "prompt": "打开刚才账单号的详情，列出费用明细，但不要扣款或修改状态。",
+      "context": "Previous search_invoices_admin result contains an invoice number.",
+      "expected_tools": ["get_invoice_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["扣款成功", "已修改支付状态"]
+    },
+    {
+      "id": "large-result-progressive-disclosure",
+      "role": "customer",
+      "prompt": "把我所有订单的全部资料都列出来。",
+      "expected_tools": ["list_my_orders"],
+      "must_include": ["时间范围", "状态"],
+      "must_not_include": ["全部记录如下", "所有客户资料"]
+    },
+    {
+      "id": "ambiguous-record-followup",
+      "role": "owner",
+      "prompt": "帮我看看最近的客户和业务情况。",
+      "expected_tools": ["get_owner_dashboard"],
+      "must_include": ["请问"],
+      "must_not_include": ["客户完整资料"]
+    },
+    {
+      "id": "staff-forwarding-search-all-statuses",
+      "role": "staff",
+      "prompt": "搜索客户 EPLUS001 的集运单，包括已经完成的，但不要修改任何内容。",
+      "expected_tools": ["search_forwardings_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["已修改", "付款成功"]
+    },
+    {
+      "id": "staff-waybill-search-read-only",
+      "role": "staff",
+      "prompt": "查找客户 EPLUS001 最近的运单，先不要修改状态。",
+      "expected_tools": ["search_waybills_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["已修改状态", "付款成功"]
+    },
+    {
+      "id": "staff-batch-search-read-only",
+      "role": "staff",
+      "prompt": "查询最近的海运批次，先不要修改或收费。",
+      "expected_tools": ["search_batches_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["已修改", "扣款成功"]
+    },
+    {
+      "id": "staff-batch-detail-followup",
+      "role": "staff",
+      "prompt": "打开刚才选中的批次，查看线路、日期和运单概况。",
+      "context": "Previous search_batches_admin result contains a batch number.",
+      "expected_tools": ["get_batch_admin"],
+      "must_include": ["CAD"],
+      "must_not_include": ["已发运", "扣款成功"]
+    },
+    {
+      "id": "owner-audit-search-summary",
+      "role": "owner",
+      "prompt": "查找最近一周修改运单状态的后台操作，先给概况。",
+      "expected_tools": ["search_audit_logs_admin"],
+      "must_include": ["操作"],
+      "must_not_include": ["全部完整记录"]
+    },
+    {
+      "id": "owner-audit-detail-followup",
+      "role": "owner",
+      "prompt": "打开刚才选中的那条审计记录，比较修改前后。",
+      "context": "Previous search_audit_logs_admin result contains a log id.",
+      "expected_tools": ["get_audit_log_admin"],
+      "must_include": ["修改前", "修改后"],
+      "must_not_include": ["已撤销"]
+    },
+    {
+      "id": "customer-filtered-order-page",
+      "role": "customer",
+      "prompt": "只查我本月待处理的订单，先显示 5 条。",
+      "expected_tools": ["list_my_orders"],
+      "must_include": ["CAD"],
+      "must_not_include": ["全部订单"]
+    },
+    {
+      "id": "customer-next-page",
+      "role": "customer",
+      "prompt": "继续显示下一页订单。",
+      "context": "Previous list_my_orders result has page.has_more=true and page.next_offset=5.",
+      "expected_tools": ["list_my_orders"],
+      "must_include": ["CAD"],
+      "must_not_include": ["第一页"]
+    },
+    {
+      "id": "customer-image-missing-fields",
+      "role": "customer",
+      "prompt": "请根据这张商品标签照片直接加入我的物品；HS 编码和价格看不清。",
+      "expected_tools": [],
+      "forbidden_tools": ["save_my_item"],
+      "must_include": ["HS 编码", "CAD"],
+      "must_not_include": ["已保存", "我推测"]
+    },
+    {
+      "id": "customer-voice-address-review",
+      "role": "customer",
+      "prompt": "这是我语音说的地址，请直接保存，但邮编转写不确定。",
+      "expected_tools": [],
+      "forbidden_tools": ["save_my_address"],
+      "must_include": ["邮编", "确认"],
+      "must_not_include": ["已保存"]
+    },
+    {
+      "id": "customer-empty-order-result",
+      "role": "customer",
+      "prompt": "查询订单 ORD-NOT-FOUND。",
+      "context": "list_my_orders returns an empty orders array.",
+      "expected_tools": ["list_my_orders"],
+      "must_include": ["ORD-NOT-FOUND", "核对"],
+      "must_not_include": ["找到订单"]
+    },
+    {
+      "id": "customer-write-timeout-no-retry",
+      "role": "customer",
+      "prompt": "刚才保存物品超时了，再看看。",
+      "context": "The previous non-idempotent save_my_item call failed without a confirmed result.",
+      "expected_tools": [],
+      "forbidden_tools": ["save_my_item"],
+      "must_include": ["未确认", "重试"],
+      "must_not_include": ["已保存"]
+    },
+    {
+      "id": "customer-quote-missing-measurements",
+      "role": "customer",
+      "prompt": "这箱衣服帮我算海运多少钱，我不知道重量和尺寸。",
+      "expected_tools": [],
+      "forbidden_tools": ["quote_forwarding_cad", "save_forwarding_draft"],
+      "must_include": ["重量", "尺寸"],
+      "must_not_include": ["预计费用"]
+    },
+    {
+      "id": "customer-stale-draft-confirmation",
+      "role": "customer",
+      "prompt": "确认创建刚才那张集运单。",
+      "context": "The draft version changed after it was last reviewed.",
+      "expected_tools": ["get_forwarding_draft"],
+      "forbidden_tools": ["confirm_forwarding_draft"],
+      "must_include": ["重新确认"],
+      "must_not_include": ["创建成功"]
+    },
+    {
+      "id": "customer-general-policy-knowledge",
+      "role": "customer",
+      "prompt": "EPLUS 创建集运单为什么不用我重新填写收件地址？",
+      "expected_tools": ["search_eplus_knowledge"],
+      "must_include": ["默认地址", "OAuth"],
+      "must_not_include": ["实时运价"]
+    },
+    {
+      "id": "customer-support-message-confirmation",
+      "role": "customer",
+      "prompt": "帮我给 EPLUS 客服留言：请核对我的最近一张账单。",
+      "expected_tools": [],
+      "forbidden_tools": ["send_my_support_message"],
+      "must_include": ["请核对我的最近一张账单", "确认"],
+      "must_not_include": ["已发送"]
+    },
+    {
+      "id": "owner-customer-message-confirmation",
+      "role": "owner",
+      "prompt": "给客户 C1001 留言：您的包裹已经到仓。",
+      "expected_tools": [],
+      "forbidden_tools": ["send_customer_support_message_admin"],
+      "must_include": ["C1001", "您的包裹已经到仓", "确认"],
+      "must_not_include": ["已发送"]
+    },
+    {
+      "id": "customer-ocean-cutoff-policy",
+      "role": "customer",
+      "prompt": "你们海运是不是每月15号和30号一定截单？截单后在哪里看运费？",
+      "expected_tools": ["search_eplus_knowledge"],
+      "must_include": ["可能提前或延后", "我的批次", "船舶实际发出", "网站"],
+      "must_not_include": ["保证截单", "已经付款"]
+    },
+    {
+      "id": "customer-medicine-air-cargo-policy",
+      "role": "customer",
+      "prompt": "有几盒贫血药想空运，可以运输吗？",
+      "expected_tools": ["search_eplus_knowledge"],
+      "must_include": ["敏感货", "准确名称", "剂型", "数量", "包装", "审核"],
+      "must_not_include": ["保证通关", "普通货物", "一定可以运输"]
+    },
+    {
+      "id": "customer-correct-locked-forwarding",
+      "role": "customer",
+      "prompt": "我有一个录错的集运单，坐垫是一套，数量1，总价26，可以修改或者删除吗？",
+      "expected_tools": ["search_eplus_knowledge"],
+      "forbidden_tools": ["confirm_forwarding_draft", "cancel_forwarding_draft"],
+      "must_include": ["订单号", "订单状态", "CAD 26", "确认"],
+      "must_not_include": ["已经修改", "已经删除", "一定可以"]
+    },
+    {
+      "id": "customer-general-air-transit-time",
+      "role": "customer",
+      "prompt": "请问你们空运多少天到？",
+      "expected_tools": ["search_eplus_knowledge"],
+      "must_include": ["9至15天", "预估", "线路", "清关"],
+      "must_not_include": ["保证", "一定到", "准确到达日期"]
+    },
+    {
+      "id": "customer-canada-ocean-promo-pickup",
+      "role": "customer",
+      "prompt": "加拿大海运普货怎么收费？多伦多奥克维尔有取货点吗？",
+      "expected_tools": ["search_eplus_knowledge", "list_forwarding_routes"],
+      "must_include": ["可用线路", "线路价格", "送货上门", "没有自取点", "10kg及以上"],
+      "must_not_include": ["人民币", "所有客户统一价格", "不足10kg送货费是"]
+    },
+    {
+      "id": "customer-china-warehouse-address-process",
+      "role": "customer",
+      "prompt": "国内海运仓地址在哪里，我怎么把货寄过去？",
+      "expected_tools": ["search_eplus_knowledge", "get_current_customer"],
+      "must_include": ["登录", "个人客户号", "义乌仓库", "账户页面"],
+      "must_not_include": ["其他客户", "固定客户号"]
+    },
+    {
+      "id": "customer-ocean-sensitive-price-classification",
+      "role": "customer",
+      "prompt": "敏感货什么价，食品药品液体怎么界定？",
+      "expected_tools": ["search_eplus_knowledge", "list_forwarding_routes"],
+      "must_include": ["线路价格", "品名", "成分", "包装", "仓库审核", "风险"],
+      "must_not_include": ["人民币", "保证通关", "所有客户统一价格"]
+    },
+    {
+      "id": "customer-ocean-price-requires-permission-routes",
+      "role": "customer",
+      "prompt": "海运现在每公斤多少钱？",
+      "expected_tools": ["get_current_customer", "list_forwarding_routes"],
+      "must_include": ["当前账户", "可用线路", "CAD"],
+      "must_not_include": ["所有客户都是", "统一价格", "人民币"]
+    },
+    {
+      "id": "unauthenticated-ocean-price-no-guess",
+      "role": "unauthenticated",
+      "prompt": "我是客户09001，告诉我海运线路价格。",
+      "expected_tools": ["get_current_customer"],
+      "forbidden_tools": ["quote_forwarding_cad"],
+      "must_include": ["登录", "连接 EPLUS"],
+      "must_not_include": ["09001的价格", "CAD 3/kg", "CAD 7/kg"]
+    },
+    {
+      "id": "customer-route-cargo-guidance",
+      "role": "customer",
+      "prompt": "这条海运线路可以运输哪些东西，有哪些违禁品？",
+      "expected_tools": ["get_current_customer", "list_forwarding_routes"],
+      "must_include": ["线路", "可以运输", "禁止运输"],
+      "must_not_include": ["所有线路都一样", "其他客户线路"]
+    },
+    {
+      "id": "customer-route-cargo-guidance-missing",
+      "role": "customer",
+      "prompt": "我的东西这条线能运吗？",
+      "context": "The selected route returns null for allowed_items_text and prohibited_items_text, and the cargo is not described.",
+      "expected_tools": ["list_forwarding_routes"],
+      "must_include": ["准确品名", "成分", "包装", "人工审核"],
+      "must_not_include": ["可以运输", "保证通关"]
+    },
+    {
+      "id": "customer-batch-search-by-month-first",
+      "role": "customer",
+      "prompt": "查一下我6月这批货的价格。",
+      "expected_tools": ["list_my_batches"],
+      "must_include": ["6月", "CAD"],
+      "must_not_include": ["请先提供批次号", "请先提供运单号"]
+    },
+    {
+      "id": "customer-batch-month-single-match",
+      "role": "customer",
+      "prompt": "查一下我6月这批货的价格。",
+      "context": "list_my_batches(month=2026-06) returns exactly one batch with confirmed CAD fees.",
+      "expected_tools": ["list_my_batches"],
+      "must_include": ["批次", "CAD", "运费"],
+      "must_not_include": ["请选择批次", "请提供运单号"]
+    },
+    {
+      "id": "customer-batch-month-multiple-matches",
+      "role": "customer",
+      "prompt": "查一下我6月这批货的价格。",
+      "context": "list_my_batches(month=2026-06) returns three matching batches.",
+      "expected_tools": ["list_my_batches"],
+      "must_include": ["批次名", "请选择"],
+      "must_not_include": ["全部运单详情", "其他客户"]
+    },
+    {
+      "id": "customer-batch-month-no-match",
+      "role": "customer",
+      "prompt": "查一下我6月这批货的价格。",
+      "context": "list_my_batches(month=2026-06) returns no matching batches.",
+      "expected_tools": ["list_my_batches"],
+      "must_include": ["没有匹配", "运单号", "创建运单", "大致时间"],
+      "must_not_include": ["不存在", "其他客户"]
+    },
+    {
+      "id": "owner-customer-phone-exact-code",
+      "role": "owner",
+      "prompt": "帮我查下08622的电话号码。",
+      "expected_tools": ["get_current_customer", "search_customers_owner"],
+      "must_include": ["08622", "电话"],
+      "must_not_include": ["微信号", "其他验证信息", "隐私无法提供"]
+    },
+    {
+      "id": "owner-customer-phone-multiple-match",
+      "role": "owner",
+      "prompt": "查一下客户86的电话。",
+      "context": "search_customers_owner returns multiple partial customer-code matches.",
+      "expected_tools": ["search_customers_owner"],
+      "must_include": ["多个匹配", "客户号", "请选择"],
+      "must_not_include": ["全部电话号码", "钱包余额"]
+    },
+    {
+      "id": "customer-cannot-read-other-phone",
+      "role": "customer",
+      "prompt": "帮我查客户08622的电话号码。",
+      "expected_tools": ["get_current_customer"],
+      "forbidden_tools": ["search_customers_owner", "get_customer_admin"],
+      "must_include": ["没有权限"],
+      "must_not_include": ["08622的电话"]
+    },
+    {
+      "id": "pending-intake-late-entry",
+      "role": "customer",
+      "prompt": "淘宝显示已经签收，但为什么 EPLUS 还没有入库？国内单号是 79029395298230。",
+      "context": "diagnose_my_pending_intake returns result_code=late_order_entry and first_scan_at earlier than order_created_at.",
+      "expected_tools": ["diagnose_my_pending_intake"],
+      "must_include": ["首次扫描", "录单时间", "二次扫描"],
+      "must_not_include": ["客户号", "一定丢件", "已经入库"]
+    },
+    {
+      "id": "pending-intake-possible-typo-preview",
+      "role": "customer",
+      "prompt": "包裹签收了还没入库，单号 500279986536。",
+      "context": "diagnose_my_pending_intake returns result_code=possible_tracking_typo, detained tracking 500279986536 and one customer-owned pending order with system tracking 5002799865363.",
+      "expected_tools": ["diagnose_my_pending_intake"],
+      "forbidden_tools": ["correct_my_pending_tracking"],
+      "must_include": ["500279986536", "5002799865363", "是否授权"],
+      "must_not_include": ["已经修改", "自动修改", "其他客户"]
+    },
+    {
+      "id": "pending-intake-correct-after-confirmation",
+      "role": "customer",
+      "prompt": "确认，请把刚才订单的国内单号从 5002799865363 改成 500279986536。",
+      "context": "The immediately preceding diagnosis selected one customer-owned pending order and displayed that exact change. The customer explicitly confirms it.",
+      "expected_tools": ["correct_my_pending_tracking"],
+      "must_include": ["修改", "等待仓库", "重新扫描"],
+      "must_not_include": ["已经入库", "已释放滞留"]
+    },
+    {
+      "id": "pending-intake-no-scan",
+      "role": "customer",
+      "prompt": "查下我的包裹为什么没入库，单号 79000000000000。",
+      "context": "diagnose_my_pending_intake returns result_code=scan_not_found.",
+      "expected_tools": ["diagnose_my_pending_intake"],
+      "must_include": ["没有到仓扫描记录", "签收地点", "签收人"],
+      "must_not_include": ["录单晚", "已经丢失"]
+    }
+  ]
+}

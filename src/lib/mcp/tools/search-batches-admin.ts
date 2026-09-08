@@ -1,0 +1,31 @@
+import { defineTool } from "@lovable.dev/mcp-js";
+import { z } from "zod";
+import {
+  isPermissionError,
+  permissionDeniedResult,
+  queryFailedResult,
+  supabaseForUser,
+  unauthenticatedResult,
+} from "../supabase-user";
+export default defineTool({
+  name: "search_batches_admin",
+  title: "Search shipping batches with staff permissions",
+  description:
+    "Search EPLUS shipping batches using normal staff permissions. Read-only and CAD-only; summarize results over 5 and ask the user to narrow them.",
+  inputSchema: {
+    query: z.string().max(100).optional(),
+    status: z.string().max(30).optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ query, status, limit }, ctx) => {
+    if (!ctx.isAuthenticated()) return unauthenticatedResult();
+    const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_search_batches", {
+      _query: query ?? "",
+      _status: status ?? null,
+      _limit: limit ?? 20,
+    });
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
+  },
+});

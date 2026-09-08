@@ -1,0 +1,62 @@
+import { defineTool } from "@lovable.dev/mcp-js";
+import { z } from "zod";
+import {
+  isPermissionError,
+  permissionDeniedResult,
+  queryFailedResult,
+  supabaseForUser,
+  unauthenticatedResult,
+} from "../supabase-user";
+export default defineTool({
+  name: "update_my_profile",
+  title: "Update my EPLUS profile",
+  description:
+    "Update the signed-in customer's existing EPLUS profile, registered address, language, and invoice contact fields. Login email and account security are not changed.",
+  inputSchema: {
+    username: z.string().min(1).max(100).optional(),
+    full_name: z.string().max(150).optional(),
+    phone: z.string().max(50).optional(),
+    preferred_lang: z.enum(["zh", "en"]).optional(),
+    reg_country: z.string().max(100).optional(),
+    reg_province: z.string().max(100).optional(),
+    reg_city: z.string().max(100).optional(),
+    reg_address: z.string().max(300).optional(),
+    reg_postal_code: z.string().max(30).optional(),
+    reg_phone: z.string().max(50).optional(),
+    invoice_title: z.string().max(200).optional(),
+    invoice_phone: z.string().max(50).optional(),
+    invoice_email: z.string().email().max(200).optional(),
+    invoice_address: z.string().max(300).optional(),
+  },
+  annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    if (!ctx.isAuthenticated()) return unauthenticatedResult();
+    const sb = supabaseForUser(ctx);
+    const { data: u } = await sb.auth.getUser();
+    if (!u.user) return unauthenticatedResult();
+    const { data: current, error: ce } = await sb.from("profiles").select("username").eq("id", u.user.id).single();
+    if (ce) return isPermissionError(ce) ? permissionDeniedResult() : queryFailedResult();
+    const patch: any = { ...input };
+    if (input.username !== undefined) {
+      patch.username = input.username.replace(/\s+/g, "");
+      if (patch.username.toLowerCase() !== (current.username ?? "").toLowerCase()) {
+        const { data: available, error } = await sb.rpc("check_username_available", { p_username: patch.username });
+        if (error) return queryFailedResult();
+        if (!available) return { content: [{ type: "text", text: "该登录名已被占用" }], isError: true };
+      }
+    }
+    for (const k of Object.keys(patch)) {
+      if (typeof patch[k] === "string" && k !== "username") patch[k] = patch[k].trim() || null;
+    }
+    const { data, error } = await sb
+      .from("profiles")
+      .update(patch)
+      .eq("id", u.user.id)
+      .select(
+        "id,customer_code,username,full_name,phone,preferred_lang,reg_country,reg_province,reg_city,reg_address,reg_postal_code,reg_phone,invoice_title,invoice_phone,invoice_email,invoice_address,updated_at",
+      )
+      .single();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { profile: data } };
+  },
+});

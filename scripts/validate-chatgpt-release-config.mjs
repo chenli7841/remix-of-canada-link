@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const read=(path)=>readFile(new URL(`../${path}`,import.meta.url),"utf8");
+const[manifestText,mcpSource,consentSource,gitignore,envExample]=await Promise.all([read(".lovable/mcp/manifest.json"),read("src/lib/mcp/index.ts"),read("src/routes/[.]lovable.oauth.consent.tsx"),read(".gitignore"),read(".env.example")]);
+const manifest=JSON.parse(manifestText);
+assert.equal(manifest.path,"/mcp","Release MCP path must be /mcp");
+assert.equal(manifest.auth?.type,"oauth","Release MCP must use OAuth");
+assert.doesNotMatch(manifest.auth?.issuer??"",/project-ref-unset/,"Release manifest must contain a real Supabase project ref");
+assert.match(manifest.auth?.issuer??"",/^https:\/\/[^/]+\.supabase\.co\/auth\/v1$/,"Release OAuth issuer must be Supabase Auth");
+assert.match(gitignore,/^\.env$/m,".env must be ignored");
+assert.match(gitignore,/^!\.env\.example$/m,".env.example must remain trackable");
+assert.doesNotMatch(envExample,/^[^#\n]*(SERVICE_ROLE|OPENAI_API_KEY|GMAIL_APP_PASSWORD)\s*=.+$/mi,"Example file must not contain private secret values");
+assert.doesNotMatch(mcpSource+manifestText,/SUPABASE_SERVICE_ROLE_KEY|OPENAI_API_KEY|GMAIL_APP_PASSWORD/,"MCP source and manifest must not reference private secrets");
+assert.match(consentSource,/不能支付、充值、扣除钱包余额、退款或修改付款状态/,"Consent page must disclose the payment restriction");
+assert.match(consentSource,/不会绕过您的账号权限/,"Consent page must disclose account-scoped permissions");
+for(const route of["src/routes/mcp.ts","src/routes/[.well-known]/oauth-protected-resource.ts","src/routes/[.]lovable.oauth.consent.tsx"])assert.ok((await read(route)).length>0,`Required release route is missing: ${route}`);
+console.log("ChatGPT release configuration validation passed: OAuth routes, consent disclosures, and secret boundaries are present.");

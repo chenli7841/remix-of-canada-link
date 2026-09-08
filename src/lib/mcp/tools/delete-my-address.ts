@@ -1,0 +1,27 @@
+import { defineTool } from "@lovable.dev/mcp-js";
+import { z } from "zod";
+import {
+  isPermissionError,
+  permissionDeniedResult,
+  queryFailedResult,
+  supabaseForUser,
+  unauthenticatedResult,
+} from "../supabase-user";
+export default defineTool({
+  name: "delete_my_address",
+  title: "Delete my delivery address",
+  description: "Delete an address belonging to the signed-in customer after explicit confirmation.",
+  inputSchema: { address_id: z.string().uuid(), confirmation: z.literal("CONFIRM_DELETE_ADDRESS") },
+  annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false },
+  handler: async ({ address_id }, ctx) => {
+    if (!ctx.isAuthenticated()) return unauthenticatedResult();
+    const { error, count } = await supabaseForUser(ctx)
+      .from("addresses")
+      .delete({ count: "exact" })
+      .eq("id", address_id);
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (!count) return permissionDeniedResult();
+    const result = { ok: true, address_id, deleted: true };
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
+  },
+});
