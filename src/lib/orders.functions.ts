@@ -2811,11 +2811,11 @@ async function settleBatchForCustomer(
       operatorId: params.operatorId,
     });
     if (!ens.ok) {
-      // 这三种以前统一收成 "already_paid" 返回，前端一律显示"已结清"——但
-      // no_waybills（按 customer_code 一条订单/集运单都查不到，很可能是
-      // customer_code 跟运单实际归属对不上）和 nothing_to_bill（算出来是
-      // 0 元）跟"真的已经付过"是完全不同的情况，混在一起会让客户和客服都
-      // 误以为已结清、查不出真实原因。这里如实透传，前端各自给出对应提示。
+      // 这几种以前统一收成 "already_paid" 返回，前端一律显示"已结清"——但
+      // no_orders_for_customer/no_matching_waybills_in_batch（按 customer_code 查不到订单，
+      // 或订单跟这一批次的运单对不上）和 nothing_to_bill（算出来是 0 元）跟"真的已经
+      // 付过"是完全不同的情况，混在一起会让客户和客服都误以为已结清、查不出真实原因。
+      // 这里如实透传，前端各自给出对应提示。
       if (ens.reason === "already_paid") {
         return { ok: false, reason: "already_paid" };
       }
@@ -3877,7 +3877,9 @@ async function ensureUnpaidBatchInvoice(
   if (!prof) return { ok: false, reason: "customer_not_found" };
   const userId = (prof as any).id;
 
-  // 该客户在此批次内未付款的运单
+  // 该客户在此批次内未付款的运单。查不到运单不能直接放弃——批次级派送费/检查费
+  // 等费用跟运单无关，柜子里哪怕一票运单都没匹配上，这些费用也该照样出账单，
+  // 所以这里只收集运单，是否"没什么可收"留到最后按 subCny 统一判断。
   const [oR, fR] = await Promise.all([
     admin.from("orders").select("id").eq("customer_code", params.customerCode),
     admin.from("forwarding_orders").select("id").eq("customer_code", params.customerCode),
@@ -3887,16 +3889,18 @@ async function ensureUnpaidBatchInvoice(
   const filters: string[] = [];
   if (oIds.length) filters.push(`order_id.in.(${oIds.join(",")})`);
   if (fIds.length) filters.push(`forwarding_id.in.(${fIds.join(",")})`);
-  if (!filters.length) return { ok: false, reason: "no_waybills" };
-  const { data: wbs } = await admin
-    .from("waybills")
-    .select(
-      "id, waybill_no, order_id, forwarding_id, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, payment_status",
-    )
-    .eq("assigned_batch_id", params.batchId)
-    .or(filters.join(","));
-  const wbList = ((wbs ?? []) as any[]).filter((w) => w.payment_status !== "paid");
-  if (!wbList.length) return { ok: false, reason: "already_paid" };
+  let wbsAll: any[] = [];
+  if (filters.length) {
+    const { data: wbs } = await admin
+      .from("waybills")
+      .select(
+        "id, waybill_no, order_id, forwarding_id, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, payment_status",
+      )
+      .eq("assigned_batch_id", params.batchId)
+      .or(filters.join(","));
+    wbsAll = (wbs ?? []) as any[];
+  }
+  const wbList = wbsAll.filter((w) => w.payment_status !== "paid");
 
   const { buildInvoiceLineMeta } = await import("./duty.server");
   let f = 0,
@@ -3991,7 +3995,18 @@ async function ensureUnpaidBatchInvoice(
     });
   }
 
-  if (subCny <= 0) return { ok: false, reason: "nothing_to_bill" };
+  if (subCny <= 0) {
+    // 细分原因，方便后台排查"该出账单却没出"：
+    // - no_orders_for_customer：这个客户号在系统里查不到订单/集运单，多半是客户号填错或没绑定
+    // - no_matching_waybills_in_batch：客户有订单，但这一柜里没有任何一票运单指向他，多半是装柜/客户号对应出了问题
+    // - already_paid：柜里的运单都已结清，且没有未收的批次级费用
+    // - nothing_to_bill：查到了运单，但费用合计仍是 0（正常情况，比如全免费试运）
+    let reason = "nothing_to_bill";
+    if (!filters.length) reason = "no_orders_for_customer";
+    else if (!wbsAll.length) reason = "no_matching_waybills_in_batch";
+    else if (!wbList.length) reason = "already_paid";
+    return { ok: false, reason };
+  }
 
   const payload = {
     user_id: userId,
@@ -4074,7 +4089,10 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
     let invoice_no: string | null = null;
     let invoice_ok = true;
     let invoice_error: string | null = null;
-    const softInvoiceReasons = ["already_paid", "no_waybills", "nothing_to_bill"];
+    let invoice_warning: string | null = null;
+    // 真的没什么可收（已结清 / 算出来是 0）不用提醒；但"客户号/运单对不上"是数据问题，得提醒后台去查
+    const silentInvoiceReasons = ["already_paid", "nothing_to_bill"];
+    const warnInvoiceReasons = ["no_orders_for_customer", "no_matching_waybills_in_batch"];
     if (data.confirmed) {
       try {
         const r = await ensureUnpaidBatchInvoice(supabaseAdmin, {
@@ -4083,9 +4101,13 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
           operatorId: context.userId,
         });
         invoice_no = r?.invoice_no ?? null;
-        if (!r?.ok && !softInvoiceReasons.includes(r?.reason ?? "")) {
-          invoice_ok = false;
-          invoice_error = r?.reason ?? "invoice_generation_failed";
+        if (!r?.ok) {
+          if (warnInvoiceReasons.includes(r?.reason ?? "")) {
+            invoice_warning = r?.reason ?? null;
+          } else if (!silentInvoiceReasons.includes(r?.reason ?? "")) {
+            invoice_ok = false;
+            invoice_error = r?.reason ?? "invoice_generation_failed";
+          }
         }
       } catch (e: any) {
         invoice_ok = false;
@@ -4119,7 +4141,16 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
         }
       }
     }
-    return { ok: true, confirmed: data.confirmed, invoice_no, invoice_ok, invoice_error, snapshot_ok, snapshot_error };
+    return {
+      ok: true,
+      confirmed: data.confirmed,
+      invoice_no,
+      invoice_ok,
+      invoice_error,
+      invoice_warning,
+      snapshot_ok,
+      snapshot_error,
+    };
   });
 
 // Confirm every customer price in one batch. This does not collect payment.
@@ -4158,7 +4189,10 @@ export const confirmAllBatchPrices = createServerFn({ method: "POST" })
     }
     const invoices: any[] = [];
     const invoice_failed: { customer_code: string; error: string }[] = [];
-    const softInvoiceReasons = ["already_paid", "no_waybills", "nothing_to_bill"];
+    const invoice_warned: { customer_code: string; reason: string }[] = [];
+    // 真的没什么可收（已结清 / 算出来是 0）不用提醒；但"客户号/运单对不上"是数据问题，得提醒后台去查
+    const silentInvoiceReasons = ["already_paid", "nothing_to_bill"];
+    const warnInvoiceReasons = ["no_orders_for_customer", "no_matching_waybills_in_batch"];
     for (const customerCode of customerCodes) {
       try {
         const result = await ensureUnpaidBatchInvoice(supabaseAdmin, {
@@ -4167,8 +4201,12 @@ export const confirmAllBatchPrices = createServerFn({ method: "POST" })
           operatorId: context.userId,
         });
         invoices.push({ customer_code: customerCode, ...result });
-        if (!result?.ok && !softInvoiceReasons.includes(result?.reason ?? "")) {
-          invoice_failed.push({ customer_code: customerCode, error: result?.reason ?? "failed" });
+        if (!result?.ok) {
+          if (warnInvoiceReasons.includes(result?.reason ?? "")) {
+            invoice_warned.push({ customer_code: customerCode, reason: result?.reason ?? "" });
+          } else if (!silentInvoiceReasons.includes(result?.reason ?? "")) {
+            invoice_failed.push({ customer_code: customerCode, error: result?.reason ?? "failed" });
+          }
         }
       } catch (e: any) {
         invoice_failed.push({ customer_code: customerCode, error: e?.message ?? "error" });
@@ -4178,8 +4216,9 @@ export const confirmAllBatchPrices = createServerFn({ method: "POST" })
     return {
       ok: true,
       confirmed_count: customerCodes.length,
-      invoice_ok_count: customerCodes.length - invoice_failed.length,
+      invoice_ok_count: customerCodes.length - invoice_failed.length - invoice_warned.length,
       invoice_failed,
+      invoice_warned,
       invoices,
       snapshot_ok,
       snapshot_error,

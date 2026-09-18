@@ -797,12 +797,13 @@ function BatchesTab({ userId }: { userId: string }) {
       const r: any = await doPay({ data: { batchId, userId, amountCad } });
       if (!r?.ok) {
         // deductWalletForBatch 现在会原样透传 settleBatchForCustomer 的失败原因（不再
-        // throw 内部代码字符串），这里对应给出人话——尤其 no_waybills，很可能是这个
-        // 客户的 customer_code 跟订单/集运单上记录的对不上，需要联系开发排查数据，
-        // 不是"已经付过"，不能用同一句话。
+        // throw 内部代码字符串），这里对应给出人话——尤其 no_orders_for_customer /
+        // no_matching_waybills_in_batch，很可能是这个客户的 customer_code 跟订单/运单
+        // 记录对不上，需要联系开发排查数据，不是"已经付过"，不能用同一句话。
         const REASON_MSG: Record<string, string> = {
           already_paid: "该批次已结清",
-          no_waybills: "按该客户号查不到这个批次下的订单/集运单，可能是客户号跟订单记录对不上，需要排查数据",
+          no_orders_for_customer: "按该客户号查不到订单/集运单，可能是客户号跟订单记录对不上，需要排查数据",
+          no_matching_waybills_in_batch: "该客户有订单，但这一柜里没有任何运单指向他，可能是装柜/客户号对应出了问题",
           nothing_to_bill: "该批次费用计算为 0，无需付款",
           customer_not_found: "客户信息异常",
           no_frozen_invoice: "账单生成异常，请稍后重试",

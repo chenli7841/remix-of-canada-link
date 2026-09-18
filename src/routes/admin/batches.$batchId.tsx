@@ -28,6 +28,7 @@ import {
 } from "@/lib/cartons.functions";
 import { getMyRoles } from "@/lib/admin.functions";
 import { listBatchInvoices } from "@/lib/invoices.functions";
+import { invoiceReasonText } from "@/lib/invoice-reason-text";
 import {
   BATCH_STATUS_LABEL,
   BATCH_STATUS_COLOR,
@@ -238,6 +239,14 @@ function BatchDetail() {
         );
       } else {
         toast.success(`已批量确认 ${result.confirmed_count} 位客户并生成账单，未执行扣款`);
+      }
+      if (result.invoice_warned?.length) {
+        toast.warning(
+          `以下 ${result.invoice_warned.length} 位客户本次未生成账单：${result.invoice_warned
+            .map((w: any) => `${w.customer_code}(${invoiceReasonText(w.reason)})`)
+            .join("、")}`,
+          { duration: 15000 },
+        );
       }
       if (result.snapshot_ok === false) {
         toast.error(`客户端快照刷新失败：${result.snapshot_error ?? "未知错误"}，可点「刷新全部客户快照」重试`, {

@@ -10,6 +10,7 @@ import {
   deductBatchOffline,
   refreshBatchCustomerSnapshot,
 } from "@/lib/orders.functions";
+import { invoiceReasonText } from "@/lib/invoice-reason-text";
 import { X, Truck, Package, Layers, ChevronDown, ChevronRight, Wallet, Save, AlertTriangle } from "lucide-react";
 
 type Props = {
@@ -118,6 +119,9 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
         alert(
           `价格已确认，但账单生成失败：${r.invoice_error ?? "未知错误"}。\n请检查该客户的运单 / 客户号绑定后，取消确认再重新确认。`,
         );
+      }
+      if (next && r?.invoice_warning) {
+        alert(`价格已确认，但未生成账单：${invoiceReasonText(r.invoice_warning)}`);
       }
     } catch (e: any) {
       alert(e.message);
