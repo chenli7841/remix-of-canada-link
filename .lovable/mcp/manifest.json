@@ -808,7 +808,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {
@@ -1035,7 +1035,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {
@@ -1144,7 +1144,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": true,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {

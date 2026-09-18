@@ -13,7 +13,7 @@ for (const tool of tools) {
   }
 }
 assert.equal(byName.get("list_my_support_messages")?.annotations?.readOnlyHint, false, "Reading support messages updates read receipts");
-for (const name of ["send_my_support_message", "send_customer_support_message_admin", "correct_my_pending_tracking"]) {
+for (const name of ["send_my_support_message", "send_customer_support_message_admin", "correct_my_pending_tracking", "save_my_address", "save_my_item", "update_my_profile", "save_forwarding_draft", "update_forwarding_basic_info_owner"]) {
   assert.equal(byName.get(name)?.annotations?.destructiveHint, true, `${name} has irreversible or overwrite effects`);
 }
 

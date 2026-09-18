@@ -1,16 +1,25 @@
 # EPLUS 客服：ChatGPT 公开上架草稿
 
-状态：未提交。2026-09-18 发布者身份已显示 Verified，并已创建门户草稿。名称、简介、说明、网站与 MCP 地址已填写，认证选择 OAuth。最新授权回跳后已扫描出 48 个工具；域名验证文件已在本地准备，尚待部署与平台验证。
+状态：未提交。2026-09-18 发布者身份已显示 Verified，并已创建门户草稿。名称、简介、说明、网站与 MCP 地址已填写，认证选择 OAuth。首次授权回跳后已扫描出 48 个工具；用户已发布本地更新，公开连接检查通过，门户域名验证显示 Domain verified。重新扫描已成功：48 个工具均具备三项显式声明，门户不再提示缺失 destructiveHint。
 
 门户草稿：https://platform.openai.com/plugins/edit/asdk_app_6aad77eb3588819194fa2b6e5ad334d1/asdk_app_v_6aad77ec882881918f9edfdf7e853fe5
 
-最新门户进度：已填写 3 条起始问题、5 条正向测试草稿、3 条不适用场景及发布说明；Global 的允许地区草稿为 CA US CN，尚未确认平台支持范围。最新 OAuth 回跳后门户已显示 Tool justification 和 48 个工具，扫描成功；扫描结果仍是旧工具声明，需上传本地修改后重新扫描。已验证名称显示 eplus，与用户提供的公司完整名称需核对。未勾选法律条款或合规声明，未提交审核。
+用户后续确认：专用测试账号已准备好，由用户直接在 Testing → Test credentials 填写登录资料；本文件不记录密码。客服及隐私申请邮箱更新为 epluscanada001@gmail.com，保留期限和处理时限仍未确定。
+
+2026-09-18 后续审核：门户已填写并保存 141/144 项工具声明说明。逐项检查发现 save_my_item、save_my_address、update_my_profile 的 destructiveHint 仍错误地为 false；这三个工具会覆盖已有数据，本地已改为 true，并将其加入验证断言、重新生成清单且通过 mcp:validate。需用户再次发布后重扫，最后补入这三个 destructive 说明，不能沿用 false 的解释。目录与输入框图标已使用现有 EPLUS 品牌图片转成的 public/eplus-plugin-icon.png（828×828 PNG）上传。
+
+这三个待填说明：
+- save_my_item: The update path overwrites existing saved-item fields, so this is destructive even though the create path is additive.
+- save_my_address: The update path overwrites an existing delivery address and can replace the default-address selection.
+- update_my_profile: Replaces existing personal and invoice-contact values in the customer profile.
+
+最新门户进度：已填写 3 条起始问题、5 条正向测试草稿、3 条不适用场景及发布说明；Global 的允许地区草稿为 CA US CN，尚未确认平台支持范围。最新 OAuth 回跳后门户已显示 Tool justification 和 48 个工具，扫描成功；更新发布后已重新扫描，48 个工具的三项声明均已被门户识别。已验证名称显示 eplus，与用户提供的公司完整名称需核对。未勾选法律条款或合规声明，未提交审核。
 
 门户的 3 条不适用场景是天气查询、机票预订和 Gmail 邮件操作。下面的数据隔离/付款/改单案例仍保留为上线安全回归用例。政策内容待确认项见 chatgpt-policy-content-draft.md。
 
 ## 目录文案草稿
 
-用户确认的运营信息：eplus international service inc.；客服邮箱 epluscanada@gmail.com；公司网站 https://shopper.epluscanada.com；希望开放中国、加拿大、美国（以平台允许的地区为准）。用户确认目前没有政策页面，数据保留/注销删除规则尚未制定。不能将未确定的期限或处理承诺作为已生效政策发布。
+用户确认的运营信息：eplus international service inc.；客服邮箱 epluscanada001@gmail.com；公司网站 https://shopper.epluscanada.com；希望开放中国、加拿大、美国（以平台允许的地区为准）。用户确认目前没有政策页面，数据保留/注销删除规则尚未制定。不能将未确定的期限或处理承诺作为已生效政策发布。
 
 - 名称：EPLUS 客服
 - 简介：连接您的 EPLUS 账号，查询订单与物流、准备集运草稿并联系物流客服。
@@ -36,7 +45,7 @@
 - 服务条款：登录页目前将条款链接指向 /about，不能据此认定已经有可用的正式条款。
 - 上线地区：门户草稿已填 CA US CN，平台实际支持范围仍待核实。
 - 审核账号：准备无真实客户资料的专用测试账号及可重复使用的测试数据。凭证通过提交门户提供，不写进仓库或本文。
-- 域名验证：门户已生成真实 token，保存于 public/.well-known/openai-apps-challenge。发布后确认 https://china-to-canada-connect.lovable.app/.well-known/openai-apps-challenge 返回该纯文本 token，再在门户点击 Verify Domain。该值是公开验证文件内容，不是 OAuth 密钥。
+- 域名验证：门户已生成真实 token，保存于 public/.well-known/openai-apps-challenge。已确认 https://china-to-canada-connect.lovable.app/.well-known/openai-apps-challenge 返回正确 token，并在门户完成 Verify Domain，显示 Domain verified。该值是公开验证文件内容，不是 OAuth 密钥。
 - 工具元数据：本地已补齐显式 destructiveHint；list_my_support_messages 已标记为会更新已读状态；发送留言和覆盖资料类工具已标记 destructiveHint=true。重新生成清单并验证后仍需部署，再在门户扫描线上版本。
 - 实际测试：公开发现接口通过不代表登录、迁移和客户隔离通过；现有 69 条对话用例只是用例定义，尚无完整实测记录。
 

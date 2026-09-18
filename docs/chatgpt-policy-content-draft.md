@@ -1,7 +1,9 @@
 # EPLUS 客服政策内容草稿（未生效、不可直接提交）
 
 运营主体：eplus international service inc.
-联系邮箱：epluscanada@gmail.com
+联系邮箱：epluscanada001@gmail.com
+
+2026-09-18 用户指定上述新邮箱作为客服及隐私申请渠道。查阅、更正、注销/删除申请由工作人员核实身份后处理；保留期限、具体执行流程和处理时限仍待确定，不应补写未经确认的承诺。
 公司网站：https://shopper.epluscanada.com
 
 用户已确认目前尚未制定数据保留及注销/删除规则。本文件用于整理待确认内容，不是法律意见、已生效政策或可直接公开的服务承诺。
