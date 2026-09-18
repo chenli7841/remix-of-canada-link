@@ -12,6 +12,9 @@
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
+- `MCP_PUBLIC_SITE_URL=https://china-to-canada-connect.lovable.app`（公开网站地址；后续换域名时修改）
+
+MCP 构建使用 `supabase/config.toml` 的 `project_id`，防止发布环境缺少变量时生成占位 OAuth issuer。发布检查会核对 MCP issuer 与网页登录使用同一个 Supabase 项目。仅换网站域名不应更改 Supabase 项目。
 
 EPLUS ChatGPT App 本身不需要 `OPENAI_API_KEY`。现有微信 AI 通道如仍保留，使用它自己的 OpenAI/Lovable 配置，和 ChatGPT App 是两条独立通道。
 
@@ -19,17 +22,19 @@ EPLUS ChatGPT App 本身不需要 `OPENAI_API_KEY`。现有微信 AI 通道如�
 
 ## 2. 发布后公开地址
 
-优先使用 EPLUS 正式域名：
+当前使用用户指定的备用项目测试域名：
 
-- MCP：`https://shopper.epluscanada.com/mcp`
-- OAuth 受保护资源元数据：`https://shopper.epluscanada.com/.well-known/oauth-protected-resource`
+- MCP：`https://china-to-canada-connect.lovable.app/mcp`
+- OAuth 受保护资源元数据：`https://china-to-canada-connect.lovable.app/.well-known/oauth-protected-resource`
 - EPLUS 授权确认页：由 Supabase OAuth 流程自动跳转到 `/.lovable/oauth/consent`
 
-如果正式域名尚未指向本次 Lovable 发布，先用 Lovable 给出的实际 HTTPS 预览/发布域名替换上面的域名。不要使用 `localhost` 作为 ChatGPT 的正式连接地址。
+此地址用于测试，后续会变更。不要使用 `localhost` 作为 ChatGPT 的正式连接地址。
 
 ## 3. 发布后连通性检查
 
 先在浏览器访问受保护资源元数据地址，预期返回 JSON，并包含 EPLUS 的 Supabase Auth issuer。访问 `/mcp` 未携带令牌时应返回 OAuth/未授权响应，而不是泄露客户数据。
+
+运行 `npm run mcp:probe` 可检查当前测试域名；换域名后运行 `npm run mcp:probe -- https://新域名`。检查仅访问公开发现接口和未登录 MCP，不调用业务工具，不验证数据库迁移或客户实际登录。
 
 本地生产构建预览使用 `npm run build` 后执行 `npm run preview -- --host 127.0.0.1 --port 4174`。当前为 Nitro/Cloudflare 输出，不要使用旧的 `vite preview` 启动方式。
 
@@ -39,7 +44,7 @@ EPLUS ChatGPT App 本身不需要 `OPENAI_API_KEY`。现有微信 AI 通道如�
 npx @modelcontextprotocol/inspector@latest
 ```
 
-然后输入完整 MCP 地址，包括 `/mcp`。检查能发现 42 个工具、OAuth 可以登录、普通客户只能看到自己的数据。
+然后输入完整 MCP 地址，包括 `/mcp`。当前清单包含 48 个工具（以 `npm run mcp:validate` 输出为准）；检查工具发现、OAuth 登录，以及普通客户只能看到自己的数据。
 
 ## 4. 在 ChatGPT 中连接
 
@@ -48,7 +53,7 @@ npx @modelcontextprotocol/inspector@latest
 1. ChatGPT → Settings → Security and login → 打开 Developer mode。
 2. 进入 ChatGPT Plugins，点击加号。
 3. 名称填写 `EPLUS 客服`，说明填写 `查询和管理 EPLUS 物流业务；所有客户金额均为 CAD；不支持支付。`
-4. Connection 选择公开 MCP 地址，输入 `https://shopper.epluscanada.com/mcp`。
+4. Connection 选择公开 MCP 地址，输入 `https://china-to-canada-connect.lovable.app/mcp`。
 5. 创建连接，检查 ChatGPT 发现的工具和说明。
 6. 点击连接/授权，登录客户自己的 EPLUS 账号，并在 EPLUS 授权页批准。
 7. 新建对话，从工具菜单加入 EPLUS 连接后开始测试。
@@ -90,6 +95,23 @@ Developer mode 是否可用取决于 ChatGPT 账号及工作区策略。若当�
 2. 发布或重启 MCP 服务。
 3. 在 ChatGPT Plugins 中打开 EPLUS 连接并选择 Refresh。
 4. 新建对话，重新执行受影响的测试提示词。
+
+## 9. 后续更换域名
+
+1. 将新域名绑定到同一 Lovable 项目并完成 HTTPS 发布。
+2. 将 `MCP_PUBLIC_SITE_URL` 更新为新网站 origin（例如 `https://新域名`，不带路径），重新发布。
+3. 在 Supabase Auth 中核对 Site URL、登录回跳允许列表及 OAuth 授权确认页地址，确保指向新网站；不要因网站域名变更而更换 Supabase issuer。
+4. 检查新域名下的 `/mcp` 和 `/.well-known/oauth-protected-resource`。元数据的 `resource` 必须使用新域名，`authorization_servers` 必须保持正确的 Supabase 项目地址。
+5. 在 ChatGPT 更新连接地址；若无法编辑则重建连接，并重新授权。重新测试客户账号、只读查询及数据隔离。
+6. 测试完成后再停用旧域名及旧连接。
+
+## 10. 2026-09-18 线上只读检查
+
+- 测试站的 OAuth 资源元数据返回 HTTP 200，资源地址正确。
+- 未登录访问 `/mcp` 返回 HTTP 401，并提供正确的 `WWW-Authenticate` 元数据地址。
+- 线上 issuer 仍为 `https://project-ref-unset.supabase.co/auth/v1`，会阻止正常授权；必须发布本次修复后复测。
+- 当前项目 `wpjfgunrpudznitpqyul` 的 OpenID 与 OAuth 授权服务器发现端点均返回 HTTP 200。这不代表客户登录、动态客户端注册和工具调用已经通过实测。
+- 本地修复及数据库迁移尚未发布或执行；需要完成发布、迁移和双客户隔离测试后才能宣布可用。
 
 OpenAI 官方参考：
 

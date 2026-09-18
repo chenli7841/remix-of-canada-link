@@ -11,6 +11,7 @@
     "mcp:manifest": "lovable-mcp-extract-manifest",
     "mcp:validate": "node scripts/validate-mcp.mjs && node scripts/validate-chatgpt-migrations.mjs && node scripts/validate-chatgpt-release-config.mjs",
     "mcp:check": "npm run mcp:manifest && npm run mcp:validate && npm run build",
+    "mcp:probe": "node scripts/check-chatgpt-connection.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

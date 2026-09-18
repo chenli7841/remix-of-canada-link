@@ -48,7 +48,10 @@ import sendCustomerSupportMessageAdmin from "./tools/send-customer-support-messa
 import diagnoseMyPendingIntake from "./tools/diagnose-my-pending-intake";
 import correctMyPendingTracking from "./tools/correct-my-pending-tracking";
 
-const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID ?? "project-ref-unset";
+const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+if (!projectRef || !/^[a-z0-9]+$/.test(projectRef)) {
+  throw new Error("Missing or invalid Supabase project ID for MCP OAuth");
+}
 
 export default defineMcp({
   name: "sinocargo-mcp",

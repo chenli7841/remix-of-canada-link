@@ -7,7 +7,14 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import type { Plugin } from "vite";
+
+// Keep MCP OAuth on the same project as this Lovable checkout, even when
+// the publishing environment does not provide VITE_SUPABASE_PROJECT_ID.
+const supabaseConfig = readFileSync(new URL("./supabase/config.toml", import.meta.url), "utf8");
+const supabaseProjectId = supabaseConfig.match(/^project_id\s*=\s*"([a-z0-9]+)"\s*$/m)?.[1];
+if (!supabaseProjectId) throw new Error("Missing Supabase project_id for MCP OAuth");
 
 const cloudflareWorkersDevShimPath = fileURLToPath(
   new URL("./src/lib/cloudflare-workers-dev.ts", import.meta.url),
@@ -33,6 +40,9 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    define: {
+      "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(supabaseProjectId),
+    },
     plugins: [cloudflareWorkersDevShim, mcpPlugin()],
   },
 });

@@ -8,7 +8,7 @@
 2. 在 Supabase SQL Editor 中确认当前项目是 EPLUS 正式项目，而不是其他项目。
 3. 备份数据库或确认平台已有可恢复备份。
 4. 不要把 `.env`、Service Role Key、OpenAI Key 或数据库密码粘贴到聊天或提交到 GitHub。
-5. 四个迁移必须按文件名顺序执行；任意一步报错都立即停止，不继续后面的文件。
+5. 下列八个迁移必须按文件名顺序执行；任意一步报错都立即停止，不继续后面的文件。已执行过的迁移不要重复执行，只补尚未应用的文件；项目的其他基础迁移也必须已应用。
 6. 在本地先运行 `npm run mcp:check`，必须同时通过工具清单、迁移静态检查和生产构建。
 
 ## 固定执行顺序
@@ -25,6 +25,16 @@
 4. `20260828120000_chatgpt_waybill_status.sql`
    - 创建员工查看运单及 Owner/Manager 修改运单状态 RPC。
    - 状态修改要求最新记录时间、明确确认、原因和审计记录。
+5. `20260830170000_chatgpt_support_messages.sql`
+   - 创建客服会话、留言表、客户数据隔离策略，以及客户/员工留言 RPC。
+6. `20260830173000_route_item_transport_guidance.sql`
+   - 增加线路允许和禁止运输物品说明。
+7. `20260901120000_chatgpt_pending_intake_diagnosis.sql`
+   - 创建未入库诊断及确认后修正国内单号的 RPC。
+8. `20260918100000_chatgpt_pending_intake_customer_scope.sql`
+   - 修复诊断及单号修正中的滞留包裹归属校验，并拒绝空确认值。
+   - 所有滞留包裹匹配必须属于当前登录客户；未分配客户的包裹需人工核实后再使用自助修正。
+   - 第七步存在旧权限逻辑，必须完成第八步后才能开放诊断及修正工具。
 
 ## 迁移后只读验证
 
@@ -58,7 +68,14 @@ where routine_schema = 'public'
     'chatgpt_admin_get_batch',
     'chatgpt_admin_search_audit_logs',
     'chatgpt_admin_get_audit_log',
-    'chatgpt_manager_set_waybill_status'
+    'chatgpt_manager_set_waybill_status',
+    'is_forwarding_route_visible_to_user',
+    'enforce_forwarding_route_visibility',
+    'chatgpt_send_my_support_message',
+    'chatgpt_list_my_support_messages',
+    'chatgpt_staff_send_support_message',
+    'chatgpt_diagnose_my_pending_intake',
+    'chatgpt_correct_my_pending_tracking'
   )
 order by routine_name;
 
@@ -68,7 +85,7 @@ where schemaname = 'public' and tablename = 'ai_forwarding_drafts'
 order by policyname;
 ```
 
-预期结果：草稿表存在、22 个业务 RPC 和 2 个线路安全辅助函数全部存在、草稿表有读取/新增/更新三条客户 RLS 策略。
+预期结果：草稿表存在、27 个业务 RPC 和 2 个线路安全辅助函数全部存在、草稿表有读取/新增/更新三条客户 RLS 策略。函数存在不代表权限和业务行为已通过验证，还需执行下面的账号隔离测试。
 
 ## 发布后测试顺序
 
@@ -80,6 +97,8 @@ order by policyname;
 6. Owner/Manager 使用各自账号测试后台工具，确认权限与网页后台一致。
 7. 测试删除、取消和状态修改，确认必须先展示记录并再次获得明确确认。
 8. 询问 GPT 支付、充值、扣款或退款，预期只引导到 EPLUS 网页，不调用任何支付工具。
+9. 用两个客户测试滞留包裹：客户 A 不得通过精确或相似单号查看客户 B 的滞留记录，也不得把自己的订单改成客户 B 的滞留单号；未分配客户的滞留记录同样不能返回。
+10. 客户 A 对自己已分配的滞留包裹执行诊断、确认修正，核对审计记录；直接以空确认值调用修正 RPC 必须失败。以上写入测试仅在测试环境和测试订单执行。
 
 ## 停止条件
 

@@ -1,4 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
+import { mcpAccountSetupUrl } from "../site-url";
 import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
@@ -28,7 +29,7 @@ export default defineTool({
       return {
         content: [{
           type: "text",
-          text: "当前登录的 EPLUS 账号尚未建立客户资料。请先打开 https://shopper.epluscanada.com/auth 登录或注册 EPLUS，完成客户资料后返回 ChatGPT 重新连接 EPLUS 客服；不要在对话中发送客户号、密码或验证码。",
+          text: `当前登录的 EPLUS 账号尚未建立客户资料。请先打开 ${mcpAccountSetupUrl()} 登录或注册 EPLUS，完成客户资料后返回 ChatGPT 重新连接 EPLUS 客服；不要在对话中发送客户号、密码或验证码。`,
         }],
         isError: true,
       };

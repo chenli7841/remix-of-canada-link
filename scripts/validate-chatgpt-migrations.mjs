@@ -9,6 +9,7 @@ const migrationFiles = [
   "20260830170000_chatgpt_support_messages.sql",
   "20260830173000_route_item_transport_guidance.sql",
   "20260901120000_chatgpt_pending_intake_diagnosis.sql",
+  "20260918100000_chatgpt_pending_intake_customer_scope.sql",
 ];
 
 const sources = [];
@@ -23,7 +24,10 @@ const created = [...combined.matchAll(/CREATE OR REPLACE FUNCTION\s+public\.([a-
 const revoked = new Set([...combined.matchAll(/REVOKE ALL ON FUNCTION\s+public\.([a-z0-9_]+)\s*\(/gi)].map((m) => m[1]));
 const granted = new Set([...combined.matchAll(/GRANT EXECUTE ON FUNCTION\s+public\.([a-z0-9_]+)\s*\(/gi)].map((m) => m[1]));
 
-assert.equal(new Set(created).size, created.length, "ChatGPT migration function names must be unique");
+for (const { file, source } of sources) {
+  const names = [...source.matchAll(/CREATE OR REPLACE FUNCTION\s+public\.([a-z0-9_]+)\s*\(/gi)].map((m) => m[1]);
+  assert.equal(new Set(names).size, names.length, `${file} must not define a function twice`);
+}
 for (const name of created) {
   if (name === "bump_ai_forwarding_draft_version") continue;
   assert.ok(revoked.has(name), `${name} must revoke PUBLIC/anon execution`);
@@ -72,4 +76,15 @@ for (const ownerOnly of [
 const forbiddenMutationName = /CREATE OR REPLACE FUNCTION\s+public\.[a-z0-9_]*(pay|recharge|topup|refund|deduct)[a-z0-9_]*\s*\(/i;
 assert.doesNotMatch(combined, forbiddenMutationName, "ChatGPT migrations must not create payment mutation RPCs");
 
-console.log(`ChatGPT migration validation passed: ${migrationFiles.length} ordered files, ${created.length - 1} protected database functions.`);
+const scopeFix = sources.at(-1).source;
+const detainedReads = scopeFix.split(/FROM public\.detained_packages dp/i).slice(1);
+assert.equal(detainedReads.length, 3, "Check both diagnosis branches and tracking correction");
+for (const query of detainedReads) {
+  assert.match(query.split(";")[0], /JOIN public\.profiles p ON p\.id = v_uid AND dp\.customer_code = p\.customer_code/, "Every detained-package lookup must enforce authenticated customer ownership");
+}
+assert.match(scopeFix, /_confirmation IS DISTINCT FROM 'CONFIRM_CORRECT_PENDING_TRACKING'/, "NULL confirmation must not bypass the SQL guard");
+assert.match(scopeFix, /FOR UPDATE OF dp/, "Correction must lock the verified detained package");
+const runbook = await readFile(new URL("../docs/chatgpt-app-migration-runbook.md", import.meta.url), "utf8");
+for (const file of migrationFiles) assert.ok(runbook.includes(file), `Migration runbook is missing ${file}`);
+
+console.log(`ChatGPT migration validation passed: ${migrationFiles.length} ordered files, ${new Set(created).size - 1} protected database functions.`);
