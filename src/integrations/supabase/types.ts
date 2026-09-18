@@ -164,7 +164,7 @@ export type Database = {
           request_no?: string | null
           status?: string
           updated_at?: string
-          user_id?: string
+          user_id: string
           version?: number
         }
         Update: {
@@ -180,15 +180,7 @@ export type Database = {
           user_id?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_forwarding_drafts_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       ai_forwarding_requests: {
         Row: {
@@ -227,15 +219,7 @@ export type Database = {
           user_id?: string
           visitor_biz_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_forwarding_requests_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       ai_support_messages: {
         Row: {
@@ -274,15 +258,7 @@ export type Database = {
           source?: string
           thread_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_support_messages_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "ai_support_threads"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       ai_support_threads: {
         Row: {
@@ -366,15 +342,7 @@ export type Database = {
           id?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "batch_settlements_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       batches: {
         Row: {
@@ -617,29 +585,7 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "cartons_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cartons_pallet_id_fkey"
-            columns: ["pallet_id"]
-            isOneToOne: false
-            referencedRelation: "pallets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cartons_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cms_articles: {
         Row: {
@@ -777,15 +723,7 @@ export type Database = {
           redeemed_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
-            columns: ["coupon_id"]
-            isOneToOne: false
-            referencedRelation: "coupons"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       coupons: {
         Row: {
@@ -920,15 +858,7 @@ export type Database = {
           threshold_cad?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "customs_rules_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: true
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       delivery_queue: {
         Row: {
@@ -979,22 +909,7 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_queue_source_batch_id_fkey"
-            columns: ["source_batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_queue_source_receiving_id_fkey"
-            columns: ["source_receiving_id"]
-            isOneToOne: false
-            referencedRelation: "receivings"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       destinations: {
         Row: {
@@ -1111,15 +1026,7 @@ export type Database = {
           unit_price_cad?: number
           unit_price_cny?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "forwarding_items_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       forwarding_orders: {
         Row: {
@@ -1257,36 +1164,7 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "forwarding_orders_address_id_fkey"
-            columns: ["address_id"]
-            isOneToOne: false
-            referencedRelation: "addresses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forwarding_orders_carton_id_fkey"
-            columns: ["carton_id"]
-            isOneToOne: false
-            referencedRelation: "cartons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forwarding_orders_pallet_id_fkey"
-            columns: ["pallet_id"]
-            isOneToOne: false
-            referencedRelation: "pallets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forwarding_orders_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       freight_rules: {
         Row: {
@@ -1409,15 +1287,7 @@ export type Database = {
           volumetric_divisor?: number
           weight_mode?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "freight_rules_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       hs_codes: {
         Row: {
@@ -1570,22 +1440,7 @@ export type Database = {
           variant_id?: string
           warehouse_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_movements_variant_id_fkey"
-            columns: ["variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inventory_movements_warehouse_id_fkey"
-            columns: ["warehouse_id"]
-            isOneToOne: false
-            referencedRelation: "warehouses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_items: {
         Row: {
@@ -1633,36 +1488,7 @@ export type Database = {
           other_cny?: number
           waybill_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_items_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_waybill_id_fkey"
-            columns: ["waybill_id"]
-            isOneToOne: false
-            referencedRelation: "waybills"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoices: {
         Row: {
@@ -1845,15 +1671,7 @@ export type Database = {
           recorded_by?: string | null
           reference?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "offline_payments_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       order_attachments: {
         Row: {
@@ -1949,36 +1767,7 @@ export type Database = {
           variant_id?: string | null
           waybill_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_variant_id_fkey"
-            columns: ["variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_waybill_id_fkey"
-            columns: ["waybill_id"]
-            isOneToOne: false
-            referencedRelation: "waybills"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       orders: {
         Row: {
@@ -2122,36 +1911,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "orders_carton_id_fkey"
-            columns: ["carton_id"]
-            isOneToOne: false
-            referencedRelation: "cartons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_coupon_id_fkey"
-            columns: ["coupon_id"]
-            isOneToOne: false
-            referencedRelation: "coupons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_pallet_id_fkey"
-            columns: ["pallet_id"]
-            isOneToOne: false
-            referencedRelation: "pallets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       oversize_rules: {
         Row: {
@@ -2205,15 +1965,7 @@ export type Database = {
           shipping_method?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "oversize_rules_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pallets: {
         Row: {
@@ -2312,22 +2064,7 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pallets_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pallets_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "shipping_routes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       product_categories: {
         Row: {
@@ -2366,15 +2103,7 @@ export type Database = {
           sort_order?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "product_categories_parent_id_fkey"
-            columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "product_categories"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       product_variants: {
         Row: {
@@ -2443,15 +2172,7 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "product_variants_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       products: {
         Row: {
@@ -2655,15 +2376,7 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "products_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "product_categories"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -2825,15 +2538,7 @@ export type Database = {
           ref_id?: string
           scanned_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "receiving_scans_receiving_id_fkey"
-            columns: ["receiving_id"]
-            isOneToOne: false
-            referencedRelation: "receivings"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       receivings: {
         Row: {
@@ -2872,15 +2577,7 @@ export type Database = {
           updated_at?: string
           warehouse_code?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "receivings_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       shipments: {
         Row: {
@@ -2919,21 +2616,13 @@ export type Database = {
           tracking_no?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "shipments_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       shipping_routes: {
         Row: {
           allowed_items_text: string | null
           blacklist_customer_codes: string[]
-          blacklist_vip_levels: Database["public"]["Enums"]["vip_level"][]
+          blacklist_vip_levels: Database["public"]["Enums"]["vip_level"]
           cargo_type: string
           code: string
           created_at: string
@@ -2963,14 +2652,14 @@ export type Database = {
           updated_at: string
           usage_scope: string
           visible_customer_codes: string[]
-          visible_vip_levels: Database["public"]["Enums"]["vip_level"][]
+          visible_vip_levels: Database["public"]["Enums"]["vip_level"]
           wechat_ai_enabled: boolean
           wechat_ai_price_text: string | null
         }
         Insert: {
           allowed_items_text?: string | null
           blacklist_customer_codes?: string[]
-          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"][]
+          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"]
           cargo_type?: string
           code: string
           created_at?: string
@@ -3000,14 +2689,14 @@ export type Database = {
           updated_at?: string
           usage_scope?: string
           visible_customer_codes?: string[]
-          visible_vip_levels?: Database["public"]["Enums"]["vip_level"][]
+          visible_vip_levels?: Database["public"]["Enums"]["vip_level"]
           wechat_ai_enabled?: boolean
           wechat_ai_price_text?: string | null
         }
         Update: {
           allowed_items_text?: string | null
           blacklist_customer_codes?: string[]
-          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"][]
+          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"]
           cargo_type?: string
           code?: string
           created_at?: string
@@ -3037,26 +2726,11 @@ export type Database = {
           updated_at?: string
           usage_scope?: string
           visible_customer_codes?: string[]
-          visible_vip_levels?: Database["public"]["Enums"]["vip_level"][]
+          visible_vip_levels?: Database["public"]["Enums"]["vip_level"]
           wechat_ai_enabled?: boolean
           wechat_ai_price_text?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "shipping_routes_destination_warehouse_id_fkey"
-            columns: ["destination_warehouse_id"]
-            isOneToOne: false
-            referencedRelation: "warehouses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shipping_routes_origin_warehouse_id_fkey"
-            columns: ["origin_warehouse_id"]
-            isOneToOne: false
-            referencedRelation: "warehouses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       shop_refunds: {
         Row: {
@@ -3089,15 +2763,7 @@ export type Database = {
           reason?: string | null
           status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "shop_refunds_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       surcharges: {
         Row: {
@@ -3145,43 +2811,7 @@ export type Database = {
           updated_at?: string
           waybill_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "surcharges_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "surcharges_carton_id_fkey"
-            columns: ["carton_id"]
-            isOneToOne: false
-            referencedRelation: "cartons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "surcharges_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "surcharges_pallet_id_fkey"
-            columns: ["pallet_id"]
-            isOneToOne: false
-            referencedRelation: "pallets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "surcharges_waybill_id_fkey"
-            columns: ["waybill_id"]
-            isOneToOne: false
-            referencedRelation: "waybills"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       tracking_event_presets: {
         Row: {
@@ -3259,15 +2889,7 @@ export type Database = {
           status_en?: string
           status_zh?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "tracking_events_shipment_id_fkey"
-            columns: ["shipment_id"]
-            isOneToOne: false
-            referencedRelation: "shipments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -3315,22 +2937,7 @@ export type Database = {
           variant_id?: string
           warehouse_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "variant_stocks_variant_id_fkey"
-            columns: ["variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "variant_stocks_warehouse_id_fkey"
-            columns: ["warehouse_id"]
-            isOneToOne: false
-            referencedRelation: "warehouses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wallet_transactions: {
         Row: {
@@ -3573,43 +3180,7 @@ export type Database = {
           weight_snapshot?: Json | null
           width_cm?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "waybills_assigned_batch_id_fkey"
-            columns: ["assigned_batch_id"]
-            isOneToOne: false
-            referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "waybills_carton_id_fkey"
-            columns: ["carton_id"]
-            isOneToOne: false
-            referencedRelation: "cartons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "waybills_forwarding_id_fkey"
-            columns: ["forwarding_id"]
-            isOneToOne: false
-            referencedRelation: "forwarding_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "waybills_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "waybills_pallet_id_fkey"
-            columns: ["pallet_id"]
-            isOneToOne: false
-            referencedRelation: "pallets"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wechat_ai_admin_audit: {
         Row: {
@@ -3702,22 +3273,7 @@ export type Database = {
           total_duration_ms?: number | null
           user_message_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "wechat_ai_agent_runs_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wechat_ai_agent_runs_user_message_id_fkey"
-            columns: ["user_message_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wechat_ai_bind_codes: {
         Row: {
@@ -3852,22 +3408,7 @@ export type Database = {
           text_content?: string | null
           wechat_errcode?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "wechat_ai_messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wechat_ai_messages_reply_to_message_id_fkey"
-            columns: ["reply_to_message_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wechat_ai_tool_runs: {
         Row: {
@@ -3906,22 +3447,7 @@ export type Database = {
           success?: boolean
           tool_name?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "wechat_ai_tool_runs_agent_run_id_fkey"
-            columns: ["agent_run_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_agent_runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wechat_ai_tool_runs_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_conversations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wechat_bind_states: {
         Row: {
@@ -3987,320 +3513,6 @@ export type Database = {
           id?: string
           message_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "wechat_forwarding_draft_events_draft_id_fkey"
-            columns: ["draft_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_forwarding_drafts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wechat_forwarding_draft_events_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      wechat_forwarding_drafts: {
-        Row: {
-          completed_at: string | null
-          conversation_id: string
-          created_at: string
-          created_fw_tracking_no: string | null
-          customer_code: string | null
-          draft_data: Json
-          draft_status: string
-          expires_at: string
-          failure_reason: string | null
-          id: string
-          idempotency_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          completed_at?: string | null
-          conversation_id: string
-          created_at?: string
-          created_fw_tracking_no?: string | null
-          customer_code?: string | null
-          draft_data?: Json
-          draft_status?: string
-          expires_at?: string
-          failure_reason?: string | null
-          id?: string
-          idempotency_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          completed_at?: string | null
-          conversation_id?: string
-          created_at?: string
-          created_fw_tracking_no?: string | null
-          customer_code?: string | null
-          draft_data?: Json
-          draft_status?: string
-          expires_at?: string
-          failure_reason?: string | null
-          id?: string
-          idempotency_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wechat_forwarding_drafts_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "wechat_ai_conversations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      wechat_gpt_session: {
-        Row: {
-          create_order_draft: Json
-          created_at: string
-          current_intent: string | null
-          expires_at: string
-          external_userid: string
-          last_seen_at: string
-          last_tracking_number: string | null
-          open_kfid: string
-          pending_action: string | null
-          updated_at: string
-          welcome_sent: boolean
-        }
-        Insert: {
-          create_order_draft?: Json
-          created_at?: string
-          current_intent?: string | null
-          expires_at?: string
-          external_userid: string
-          last_seen_at?: string
-          last_tracking_number?: string | null
-          open_kfid: string
-          pending_action?: string | null
-          updated_at?: string
-          welcome_sent?: boolean
-        }
-        Update: {
-          create_order_draft?: Json
-          created_at?: string
-          current_intent?: string | null
-          expires_at?: string
-          external_userid?: string
-          last_seen_at?: string
-          last_tracking_number?: string | null
-          open_kfid?: string
-          pending_action?: string | null
-          updated_at?: string
-          welcome_sent?: boolean
-        }
-        Relationships: []
-      }
-      wechat_identity_bindings: {
-        Row: {
-          binding_source: string
-          bound_at: string
-          channel_type: string
-          chat_id: string | null
-          corp_id_hash: string | null
-          created_at: string
-          customer_code: string
-          customer_display_name: string | null
-          display_group_name: string | null
-          external_userid: string | null
-          id: string
-          last_used_at: string | null
-          open_kfid: string | null
-          status: string
-          unbound_at: string | null
-          updated_at: string
-          user_id: string
-          verified: boolean
-          visitor_biz_id: string | null
-        }
-        Insert: {
-          binding_source?: string
-          bound_at?: string
-          channel_type: string
-          chat_id?: string | null
-          corp_id_hash?: string | null
-          created_at?: string
-          customer_code: string
-          customer_display_name?: string | null
-          display_group_name?: string | null
-          external_userid?: string | null
-          id?: string
-          last_used_at?: string | null
-          open_kfid?: string | null
-          status?: string
-          unbound_at?: string | null
-          updated_at?: string
-          user_id: string
-          verified?: boolean
-          visitor_biz_id?: string | null
-        }
-        Update: {
-          binding_source?: string
-          bound_at?: string
-          channel_type?: string
-          chat_id?: string | null
-          corp_id_hash?: string | null
-          created_at?: string
-          customer_code?: string
-          customer_display_name?: string | null
-          display_group_name?: string | null
-          external_userid?: string | null
-          id?: string
-          last_used_at?: string | null
-          open_kfid?: string | null
-          status?: string
-          unbound_at?: string | null
-          updated_at?: string
-          user_id?: string
-          verified?: boolean
-          visitor_biz_id?: string | null
-        }
-        Relationships: []
-      }
-      wechat_kf_cursor: {
-        Row: {
-          cursor: string | null
-          open_kfid: string
-          updated_at: string
-        }
-        Insert: {
-          cursor?: string | null
-          open_kfid: string
-          updated_at?: string
-        }
-        Update: {
-          cursor?: string | null
-          open_kfid?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      wechat_kf_image_cache: {
-        Row: {
-          created_at: string
-          expires_at: string
-          result: Json
-          sha256: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at?: string
-          result: Json
-          sha256: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          result?: Json
-          sha256?: string
-        }
-        Relationships: []
-      }
-      wechat_kf_lock: {
-        Row: {
-          locked_until: string
-          open_kfid: string
-          updated_at: string
-        }
-        Insert: {
-          locked_until?: string
-          open_kfid: string
-          updated_at?: string
-        }
-        Update: {
-          locked_until?: string
-          open_kfid?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      wechat_kf_msg_dedup: {
-        Row: {
-          created_at: string
-          msgid: string
-        }
-        Insert: {
-          created_at?: string
-          msgid: string
-        }
-        Update: {
-          created_at?: string
-          msgid?: string
-        }
-        Relationships: []
-      }
-      wechat_kf_state: {
-        Row: {
-          created_at: string
-          draft: Json
-          expires_at: string
-          external_userid: string
-          open_kfid: string | null
-          state: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          draft?: Json
-          expires_at?: string
-          external_userid: string
-          open_kfid?: string | null
-          state?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          draft?: Json
-          expires_at?: string
-          external_userid?: string
-          open_kfid?: string | null
-          state?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      wechat_kf_token: {
-        Row: {
-          access_token: string
-          expires_at: string
-          id: string
-          updated_at: string
-        }
-        Insert: {
-          access_token: string
-          expires_at: string
-          id: string
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string
-          expires_at?: string
-          id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      wechat_login_states: {
-        Row: {
-          created_at: string
-          state: string
-        }
-        Insert: {
-          created_at?: string
-          state: string
-        }
-        Update: {
-          created_at?: string
-          state?: string
-        }
         Relationships: []
       }
     }
@@ -4308,345 +3520,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      _compute_line_quote:
-        | {
-            Args: {
-              _customs: Database["public"]["Tables"]["customs_rules"]["Row"]
-              _product: Database["public"]["Tables"]["products"]["Row"]
-              _qty: number
-              _route: Database["public"]["Tables"]["shipping_routes"]["Row"]
-              _rule: Database["public"]["Tables"]["freight_rules"]["Row"]
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              _customs: Database["public"]["Tables"]["customs_rules"]["Row"]
-              _mode?: string
-              _product: Database["public"]["Tables"]["products"]["Row"]
-              _qty: number
-              _route: Database["public"]["Tables"]["shipping_routes"]["Row"]
-              _rule: Database["public"]["Tables"]["freight_rules"]["Row"]
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              _customs: Database["public"]["Tables"]["customs_rules"]["Row"]
-              _mode?: string
-              _product: Database["public"]["Tables"]["products"]["Row"]
-              _qty: number
-              _route: Database["public"]["Tables"]["shipping_routes"]["Row"]
-              _rule: Database["public"]["Tables"]["freight_rules"]["Row"]
-              _variant?: Database["public"]["Tables"]["product_variants"]["Row"]
-            }
-            Returns: Json
-          }
-      _product_route_code: {
-        Args: {
-          _method: string
-          _mode: string
-          _p: Database["public"]["Tables"]["products"]["Row"]
-        }
-        Returns: string
-      }
-      admin_change_route: {
-        Args: {
-          _entity_id: string
-          _entity_type: string
-          _new_route_code: string
-          _note?: string
-          _operator_id?: string
-        }
-        Returns: Json
-      }
-      admin_list_users: {
-        Args: {
-          _limit?: number
-          _offset?: number
-          _role?: Database["public"]["Enums"]["app_role"]
-          _search?: string
-          _unpaid_only?: boolean
-          _vip?: Database["public"]["Enums"]["vip_level"]
-        }
-        Returns: Json
-      }
-      admin_ship_shop_order: { Args: { _order_id: string }; Returns: Json }
-      ai_proxy_set_secret: {
-        Args: { _key: string; _value: string }
-        Returns: boolean
-      }
-      award_points_for_spend: {
-        Args: { _amount_cad: number; _user_id: string }
-        Returns: number
-      }
-      batch_payment_status: { Args: { _batch_id: string }; Returns: string }
-      cancel_ai_forwarding_draft: { Args: { _draft_id: string }; Returns: Json }
-      carton_payment_status: { Args: { _carton_id: string }; Returns: string }
-      chatgpt_admin_get_audit_log: { Args: { _log_id: string }; Returns: Json }
-      chatgpt_admin_get_batch: { Args: { _batch_no: string }; Returns: Json }
-      chatgpt_admin_get_customer: {
-        Args: { _customer_code: string }
-        Returns: Json
-      }
-      chatgpt_admin_get_invoice: {
-        Args: { _invoice_no: string }
-        Returns: Json
-      }
-      chatgpt_admin_get_order: { Args: { _order_no: string }; Returns: Json }
-      chatgpt_admin_get_waybill: {
-        Args: { _waybill_no: string }
-        Returns: Json
-      }
-      chatgpt_admin_search_audit_logs: {
-        Args: {
-          _action?: string
-          _date_from?: string
-          _date_to?: string
-          _entity_type?: string
-          _limit?: number
-          _query?: string
-        }
-        Returns: Json
-      }
-      chatgpt_admin_search_batches: {
-        Args: { _limit?: number; _query?: string; _status?: string }
-        Returns: Json
-      }
-      chatgpt_admin_search_forwardings: {
-        Args: { _limit?: number; _query?: string; _status?: string }
-        Returns: Json
-      }
-      chatgpt_admin_search_invoices: {
-        Args: { _limit?: number; _query?: string; _status?: string }
-        Returns: Json
-      }
-      chatgpt_admin_search_orders: {
-        Args: { _limit?: number; _query?: string }
-        Returns: Json
-      }
-      chatgpt_admin_search_waybills: {
-        Args: { _limit?: number; _query?: string; _status?: string }
-        Returns: Json
-      }
-      chatgpt_correct_my_pending_tracking: {
-        Args: {
-          _confirmation: string
-          _expected_tracking_no: string
-          _new_tracking_no: string
-          _order_type: string
-          _reason: string
-          _record_id: string
-        }
-        Returns: Json
-      }
-      chatgpt_diagnose_my_pending_intake: {
-        Args: { _tracking_no: string }
-        Returns: Json
-      }
-      chatgpt_list_my_support_messages: {
-        Args: { _limit?: number }
-        Returns: {
-          body: string
-          created_at: string
-          customer_user_id: string
-          id: string
-          read_by_customer_at: string | null
-          read_by_staff_at: string | null
-          sender_role: string
-          sender_user_id: string | null
-          source: string
-          thread_id: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "ai_support_messages"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      chatgpt_manager_set_waybill_status: {
-        Args: {
-          _confirmation: string
-          _expected_updated_at: string
-          _public_event?: Json
-          _reason: string
-          _status: Database["public"]["Enums"]["waybill_status"]
-          _waybill_no: string
-        }
-        Returns: Json
-      }
-      chatgpt_owner_access: { Args: never; Returns: Json }
-      chatgpt_owner_dashboard: { Args: never; Returns: Json }
-      chatgpt_owner_get_forwarding: {
-        Args: { _request_no: string }
-        Returns: Json
-      }
-      chatgpt_owner_pending_forwardings: {
-        Args: { _limit?: number }
-        Returns: Json
-      }
-      chatgpt_owner_search_customers: {
-        Args: { _limit?: number; _query?: string }
-        Returns: Json
-      }
-      chatgpt_owner_update_forwarding_basic_info: {
-        Args: {
-          _confirmation: string
-          _expected_updated_at: string
-          _patch: Json
-          _reason: string
-          _request_no: string
-        }
-        Returns: Json
-      }
-      chatgpt_send_my_support_message: {
-        Args: { _body: string }
-        Returns: Json
-      }
-      chatgpt_staff_send_support_message: {
-        Args: { _body: string; _customer_code: string }
-        Returns: Json
-      }
-      check_email_available: { Args: { p_email: string }; Returns: boolean }
-      check_phone_available: { Args: { p_phone: string }; Returns: boolean }
-      check_username_available: {
-        Args: { p_username: string }
-        Returns: boolean
-      }
-      confirm_ai_forwarding_draft:
-        | { Args: { _draft_id: string }; Returns: Json }
-        | {
-            Args: { _draft_id: string; _expected_version: number }
-            Returns: Json
-          }
-      current_fx_cny_to_cad: { Args: never; Returns: number }
-      find_by_any_no: { Args: { _input: string }; Returns: Json }
-      gen_customer_code: { Args: never; Returns: string }
-      gen_short_no: {
-        Args: {
-          _at: string
-          _customer_code: string
-          _prefix: string
-          _route_code: string
-        }
-        Returns: string
-      }
-      gen_waybill_no: {
-        Args: {
-          _customer_code?: string
-          _destination_code?: string
-          _route_code?: string
-          _shipping_method?: string
-        }
-        Returns: string
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      infer_material: { Args: { _hs: string; _name: string }; Returns: string }
-      is_forwarding_route_visible_to_user: {
-        Args: { _route_id: string; _user_id: string }
-        Returns: boolean
-      }
-      is_staff: { Args: { _user_id: string }; Returns: boolean }
-      lookup_shipment: { Args: { _tracking_no: string }; Returns: Json }
-      mark_invoices_overdue: { Args: never; Returns: number }
-      normalize_no: { Args: { _input: string }; Returns: string }
-      normalize_phone: { Args: { p_phone: string }; Returns: string }
-      openai_responses_proxy: {
-        Args: { _payload: Json; _token: string }
-        Returns: Json
-      }
-      pallet_payment_status: { Args: { _pallet_id: string }; Returns: string }
-      pay_batch: { Args: { _batch_no: string }; Returns: Json }
-      pay_invoice: { Args: { _invoice_id: string }; Returns: Json }
-      pay_order_items: { Args: { _item_ids: string[] }; Returns: Json }
-      pay_storage_fees: { Args: { _target_user_id?: string }; Returns: Json }
-      place_forwarding: {
-        Args: { _payload: Json; _target_user_id?: string }
-        Returns: Json
-      }
-      place_shop_order: { Args: { _payload: Json }; Returns: Json }
-      preview_storage_fees: {
-        Args: { _target_user_id?: string }
-        Returns: Json
-      }
-      quote_forwarding_cad: {
-        Args: {
-          _declared_cad?: number
-          _direction?: string
-          _route_code: string
-          _volume_cm3?: number
-          _weight_kg: number
-        }
-        Returns: Json
-      }
-      quote_shop_order: { Args: { _payload: Json }; Returns: Json }
-      recompute_mark_nos_for_parent: {
-        Args: { _forwarding_id: string; _order_id: string }
-        Returns: undefined
-      }
-      recompute_parent_status: {
-        Args: { _forwarding_id: string; _order_id: string }
-        Returns: undefined
-      }
-      recompute_waybill_items_summary: {
-        Args: { _waybill_id: string }
-        Returns: undefined
-      }
-      resolve_hs_code_rates: {
-        Args: {
-          p_gst_rate: number
-          p_hs_code: string
-          p_mfn_rate: number
-          p_name_zh: string
-          p_sima_involved: boolean
-          p_unit: string
-        }
-        Returns: Json
-      }
-      resolve_login_email: { Args: { p_identifier: string }; Returns: string }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
-      track_by_any_no: { Args: { _input: string }; Returns: Json }
-      unpaid_batches_summary: {
-        Args: never
-        Returns: {
-          batch_no: string
-          shipping_method: string
-          total_cny: number
-        }[]
-      }
-      validate_coupon: {
-        Args: { _code: string; _subtotal_cny: number }
-        Returns: Json
-      }
-      waybill_status_rank: {
-        Args: { _s: Database["public"]["Enums"]["waybill_status"] }
-        Returns: number
-      }
-      wechat_callback_claim: { Args: { _hash: string }; Returns: boolean }
-      wechat_expire_stale_drafts: { Args: never; Returns: number }
-      wechat_gpt_claim_welcome: {
-        Args: { _external_userid: string; _open_kfid: string }
-        Returns: boolean
-      }
-      wechat_gpt_cleanup: { Args: never; Returns: undefined }
-      wechat_kf_image_cache_get: { Args: { _sha256: string }; Returns: Json }
-      wechat_kf_msg_claim: { Args: { _msgid: string }; Returns: boolean }
-      wechat_kf_release_lock: {
-        Args: { _open_kfid: string }
-        Returns: undefined
-      }
-      wechat_kf_try_lock: {
-        Args: { _open_kfid: string; _ttl_seconds?: number }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       app_role:
