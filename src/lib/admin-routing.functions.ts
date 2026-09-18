@@ -31,6 +31,16 @@ export const adminChangeRoute = createServerFn({ method: "POST" })
       const { recomputeForwardingTotal } = await import("@/lib/orders.functions");
       await recomputeForwardingTotal(supabaseAdmin, data.entityId);
     }
+    // 线路变了 → 关税规则（customs_rules）可能不同，重算关税明细
+    try {
+      const { persistWaybillItemsForParent } = await import("@/lib/duty.server");
+      await persistWaybillItemsForParent(
+        supabaseAdmin,
+        data.entityType === "forwarding" ? { forwarding_id: data.entityId } : { order_id: data.entityId },
+      );
+    } catch (e) {
+      console.error("persistWaybillItemsForParent failed (adminChangeRoute)", e);
+    }
     return result as { ok: boolean; old_no?: string; new_no?: string; waybills_changed?: number; unchanged?: boolean };
   });
 

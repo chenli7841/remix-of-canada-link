@@ -1,18 +1,11 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
   name: "correct_my_pending_tracking",
   title: "Correct my pending domestic tracking number",
-  description:
-    "Correct a domestic tracking number only for the OAuth-signed-in customer's own pending-intake order. First call diagnose_my_pending_intake, show the exact EPLUS order number, current number and detained number, and ask whether the customer authorizes that exact change. Call only after an explicit yes in the current conversation. The server requires an active detained number, checks the current value and status, rejects duplicates, and writes an audit log. This does not intake or release the package.",
+  description: "Correct a domestic tracking number only for the OAuth-signed-in customer's own pending-intake order. First call diagnose_my_pending_intake, show the exact EPLUS order number, current number and detained number, and ask whether the customer authorizes that exact change. Call only after an explicit yes in the current conversation. The server requires an active detained number, checks the current value and status, rejects duplicates, and writes an audit log. This does not intake or release the package.",
   inputSchema: {
     order_type: z.enum(["forwarding", "order"]),
     record_id: z.string().uuid(),

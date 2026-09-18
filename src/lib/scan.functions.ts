@@ -7,8 +7,36 @@ async function assertStaff(supabase: any, userId: string) {
   if (!data) throw new Error("Forbidden");
 }
 
+// 扫码进出批次/箱/托盘会改变计入哪个批次的费用汇总——非致命：标脏失败不该挡住扫码本身，
+// 最坏情况只是客户端快照没能及时标记过期。
+async function safeMarkFeesDirty(admin: any, batchIds: (string | null | undefined)[]) {
+  try {
+    const { markBatchFeesDirtyMany } = await import("./orders.functions");
+    await markBatchFeesDirtyMany(admin, batchIds);
+  } catch (e) {
+    console.error("markBatchFeesDirtyMany failed (scanAddToContainer):", e);
+  }
+}
+
+// 箱号"当前实际所属批次"：在托盘里跟托盘走，否则用箱号自己的 batch_id。
+async function resolveCartonEffectiveBatchId(
+  admin: any,
+  row: { batch_id?: string | null; pallet_id?: string | null } | null | undefined,
+): Promise<string | null> {
+  if (!row) return null;
+  if (row.pallet_id) {
+    const { data: p } = await admin.from("pallets").select("batch_id").eq("id", row.pallet_id).maybeSingle();
+    return (p as any)?.batch_id ?? row.batch_id ?? null;
+  }
+  return row.batch_id ?? null;
+}
+
 // Resolve a scanned code against cartons / pallets / batches / waybills regardless of prefix guess
-async function resolveScanCode(supabaseAdmin: any, code: string, guess: ScanKind): Promise<ScanKind> {
+async function resolveScanCode(
+  supabaseAdmin: any,
+  code: string,
+  guess: ScanKind,
+): Promise<ScanKind> {
   const check = async (kind: ScanKind) => {
     const table =
       kind === "carton" ? "cartons" : kind === "pallet" ? "pallets" : kind === "batch" ? "batches" : "waybills";
@@ -23,6 +51,7 @@ async function resolveScanCode(supabaseAdmin: any, code: string, guess: ScanKind
   }
   return guess;
 }
+
 
 // ====== Unified scan-add: add waybill / carton / pallet code to a batch or pallet container ======
 export const scanAddToContainer = createServerFn({ method: "POST" })
@@ -76,6 +105,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
           .from("waybills")
           .update({ assigned_batch_id: data.containerId, batch_no: b.batch_no })
           .eq("id", w.id);
+        await safeMarkFeesDirty(supabaseAdmin, [w.assigned_batch_id, data.containerId]);
         await writeLog([
           {
             entity_type: "batch",
@@ -102,10 +132,11 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
       if (kind === "carton") {
         const { data: c } = await supabaseAdmin
           .from("cartons")
-          .select("id, carton_no")
+          .select("id, carton_no, batch_id")
           .eq("carton_no", code)
           .maybeSingle();
         if (!c) throw new Error(`箱号 ${code} 不存在`);
+        const oldCartonBatch = c.batch_id ?? null;
         await supabaseAdmin.from("cartons").update({ batch_id: data.containerId }).eq("id", c.id);
         const { data: wbs } = await supabaseAdmin.from("waybills").select("id").eq("carton_id", c.id);
         if (wbs?.length) {
@@ -117,6 +148,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
               wbs.map((w) => w.id),
             );
         }
+        await safeMarkFeesDirty(supabaseAdmin, [oldCartonBatch, data.containerId]);
         await writeLog([
           {
             entity_type: "batch",
@@ -147,11 +179,13 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
       // pallet — 仅挂托盘本身；托盘内子项不单独写入 batch_id
       const { data: p } = await supabaseAdmin
         .from("pallets")
-        .select("id, pallet_no")
+        .select("id, pallet_no, batch_id")
         .eq("pallet_no", code)
         .maybeSingle();
       if (!p) throw new Error(`托盘 ${code} 不存在`);
+      const oldPalletBatch = p.batch_id ?? null;
       await supabaseAdmin.from("pallets").update({ batch_id: data.containerId }).eq("id", p.id);
+      await safeMarkFeesDirty(supabaseAdmin, [oldPalletBatch, data.containerId]);
       await writeLog([
         {
           entity_type: "batch",
@@ -182,7 +216,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
         let w: any = (
           await supabaseAdmin
             .from("waybills")
-            .select("id, pallet_id, waybill_no, order_id, forwarding_id")
+            .select("id, pallet_id, carton_id, assigned_batch_id, waybill_no, order_id, forwarding_id")
             .eq("waybill_no", code)
             .maybeSingle()
         ).data;
@@ -192,7 +226,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
             w = (
               await supabaseAdmin
                 .from("waybills")
-                .select("id, pallet_id, waybill_no, order_id, forwarding_id")
+                .select("id, pallet_id, carton_id, assigned_batch_id, waybill_no, order_id, forwarding_id")
                 .eq("id", (hit as any).id)
                 .maybeSingle()
             ).data;
@@ -203,10 +237,13 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
         assertParityMatch(palletParity, wbParity, `运单 ${w.waybill_no}`);
         const { data: pRow } = await supabaseAdmin
           .from("pallets")
-          .select("pallet_no")
+          .select("pallet_no, batch_id")
           .eq("id", data.containerId)
           .maybeSingle();
+        const { resolveWaybillBatchIds } = await import("./orders.functions");
+        const oldWbBatchIds = await resolveWaybillBatchIds(supabaseAdmin, [w.id]);
         await supabaseAdmin.from("waybills").update({ pallet_id: data.containerId }).eq("id", w.id);
+        await safeMarkFeesDirty(supabaseAdmin, [...oldWbBatchIds, (pRow as any)?.batch_id ?? null]);
         const logs: any[] = [
           {
             entity_type: "pallet",
@@ -260,7 +297,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
       // carton
       const { data: c } = await supabaseAdmin
         .from("cartons")
-        .select("id, carton_no")
+        .select("id, carton_no, batch_id, pallet_id")
         .eq("carton_no", code)
         .maybeSingle();
       if (!c) throw new Error(`箱号 ${code} 不存在`);
@@ -268,10 +305,12 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
       assertParityMatch(palletParity, cParity, `箱号 ${c.carton_no}`);
       const { data: pRow } = await supabaseAdmin
         .from("pallets")
-        .select("pallet_no")
+        .select("pallet_no, batch_id")
         .eq("id", data.containerId)
         .maybeSingle();
+      const oldCartonBatch = await resolveCartonEffectiveBatchId(supabaseAdmin, c);
       await supabaseAdmin.from("cartons").update({ pallet_id: data.containerId }).eq("id", c.id);
+      await safeMarkFeesDirty(supabaseAdmin, [oldCartonBatch, (pRow as any)?.batch_id ?? null]);
       await writeLog([
         {
           entity_type: "pallet",
@@ -300,7 +339,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
     let w: any = (
       await supabaseAdmin
         .from("waybills")
-        .select("id, carton_id, waybill_no, order_id, forwarding_id")
+        .select("id, carton_id, pallet_id, assigned_batch_id, waybill_no, order_id, forwarding_id")
         .eq("waybill_no", code)
         .maybeSingle()
     ).data;
@@ -310,7 +349,7 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
         w = (
           await supabaseAdmin
             .from("waybills")
-            .select("id, carton_id, waybill_no, order_id, forwarding_id")
+            .select("id, carton_id, pallet_id, assigned_batch_id, waybill_no, order_id, forwarding_id")
             .eq("id", (hit as any).id)
             .maybeSingle()
         ).data;
@@ -323,10 +362,14 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
     assertParityMatch(cartonParity, wbParity, `运单 ${w.waybill_no}`);
     const { data: cRow } = await supabaseAdmin
       .from("cartons")
-      .select("carton_no")
+      .select("carton_no, batch_id, pallet_id")
       .eq("id", data.containerId)
       .maybeSingle();
+    const { resolveWaybillBatchIds } = await import("./orders.functions");
+    const oldWbBatchIds = await resolveWaybillBatchIds(supabaseAdmin, [w.id]);
+    const newCartonBatch = await resolveCartonEffectiveBatchId(supabaseAdmin, cRow as any);
     await supabaseAdmin.from("waybills").update({ carton_id: data.containerId }).eq("id", w.id);
+    await safeMarkFeesDirty(supabaseAdmin, [...oldWbBatchIds, newCartonBatch]);
     const logs: any[] = [
       {
         entity_type: "carton",
@@ -754,7 +797,15 @@ export const intakeScanReceiveWaybill = createServerFn({ method: "POST" })
 export const intakeScanCommit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { parentKind: "order" | "forwarding"; parentId: string; boxCount: number; weightPerBox?: number }) => d,
+    (d: {
+      parentKind: "order" | "forwarding";
+      parentId: string;
+      boxCount: number;
+      weightPerBox?: number;
+      // true = 已入库过一次（运单已推进到 pending 之后的状态）的二次触碰场景：
+      // 删掉现有运单，按新填的箱数重新生成，而不是直接复用现有的。
+      overwrite?: boolean;
+    }) => d,
   )
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
@@ -768,11 +819,43 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
     const isStorage = parent.shipping_method === "storage";
 
     // If parent already has waybills → receive existing ones instead of creating duplicates
+    // (除非调用方明确要求 overwrite 覆盖重建)
     const { data: existing } = await supabaseAdmin
       .from("waybills")
-      .select("id, waybill_no, status, order_id, forwarding_id, shipping_method")
+      .select("id, waybill_no, status, order_id, forwarding_id, shipping_method, weight_kg, pallet_id, carton_id, assigned_batch_id")
       .eq(fk, data.parentId);
-    if (existing && existing.length > 0) {
+
+    if (data.overwrite && existing && existing.length > 0) {
+      // 覆盖重建有真实丢数据的风险：任何一张运单只要已经称重/装箱/装托/入批次，
+      // 说明它已经被后续流程实际使用过，拒绝删除，让操作员改用其它方式处理。
+      const blockers = (existing as any[]).filter(
+        (w) => w.weight_kg != null || w.pallet_id != null || w.carton_id != null || w.assigned_batch_id != null,
+      );
+      if (blockers.length) {
+        throw new Error(
+          `无法覆盖重建：运单 ${blockers.map((w) => w.waybill_no).join("、")} 已称重/装箱/装托/入批次，请改用其它方式处理`,
+        );
+      }
+      const { error: delErr } = await supabaseAdmin
+        .from("waybills")
+        .delete()
+        .in(
+          "id",
+          (existing as any[]).map((w) => w.id),
+        );
+      if (delErr) throw new Error(`覆盖重建失败: ${delErr.message}`);
+      const operatorName = await getOperatorName(supabaseAdmin, context.userId);
+      await supabaseAdmin.from("admin_action_logs").insert({
+        entity_type: data.parentKind,
+        entity_id: data.parentId,
+        action: "intake_overwrite_rebuild",
+        after: { removed_waybill_numbers: (existing as any[]).map((w) => w.waybill_no), new_box_count: n },
+        operator_id: context.userId,
+        operator_name: operatorName,
+        note: `入库扫描: 覆盖重建，删除旧运单 ${(existing as any[]).map((w) => w.waybill_no).join("、")}，按 ${n} 箱重新生成`,
+      });
+      // 落到下方"没有已有运单"的生成分支，重新按 n 箱生成。
+    } else if (existing && existing.length > 0) {
       const warehouseName: string | null = (parent as any).warehouse ?? (parent as any).pickup_warehouse ?? null;
       const operatorName = await getOperatorName(supabaseAdmin, context.userId);
       const newStatus = isStorage ? "storage" : "received";
@@ -834,6 +917,12 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
           })
           .eq("domestic_tracking_no", (parent as any).domestic_tracking_no)
           .eq("status", "detained");
+      }
+      try {
+        const { persistWaybillItems } = await import("./duty.server");
+        for (const w of existing as any[]) await persistWaybillItems(supabaseAdmin, w.id);
+      } catch (e) {
+        console.error("persistWaybillItems failed (intakeScanCommit reuse)", e);
       }
       return {
         ok: true,
@@ -987,6 +1076,13 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
         })
         .eq("domestic_tracking_no", parent.domestic_tracking_no)
         .eq("status", "detained");
+    }
+
+    try {
+      const { persistWaybillItems } = await import("./duty.server");
+      for (const w of (ins ?? []) as any[]) await persistWaybillItems(supabaseAdmin, w.id);
+    } catch (e) {
+      console.error("persistWaybillItems failed (intakeScanCommit generate)", e);
     }
 
     return {
@@ -1522,6 +1618,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
     let n = 0;
     const touchedForwardingIds = new Set<string>();
     const touchedOrderIds = new Set<string>();
+    const touchedWaybillIds = new Set<string>();
     for (const it of data.items) {
       const patch: any = {};
       (["length_cm", "width_cm", "height_cm", "weight_kg"] as const).forEach((k) => {
@@ -1533,6 +1630,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         .select("length_cm, width_cm, height_cm, weight_kg, forwarding_id, order_id, waybill_no")
         .eq("id", it.id)
         .maybeSingle();
+      touchedWaybillIds.add(it.id);
       const { error } = await supabaseAdmin.from("waybills").update(patch).eq("id", it.id);
       if (error) throw new Error(error.message);
       await supabaseAdmin.from("admin_action_logs").insert({
@@ -1607,6 +1705,13 @@ export const measureSaveDims = createServerFn({ method: "POST" })
           operator_name: operatorName,
           note: `自动计费失败：${e?.message ?? String(e)}`,
         });
+      }
+      // 关税明细落库（waybill_items + waybills.duty_cad + forwarding_items 回写）
+      try {
+        const { persistWaybillItems } = await import("./duty.server");
+        await persistWaybillItems(supabaseAdmin, it.id);
+      } catch (e) {
+        console.error("persistWaybillItems failed (measureSaveDims)", it.id, e);
       }
       n++;
     }
@@ -1737,6 +1842,17 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         note: "量尺称重后自动生成订单运费快照",
       });
       autoOrderFees.push({ order_id: oid, shipping_cny });
+    }
+
+    // 量尺称重改的是运单自己的重量/尺寸，不改它在哪个箱/托盘/批次——直接按当前所属批次打脏即可。
+    if (touchedWaybillIds.size) {
+      try {
+        const { markBatchFeesDirtyMany, resolveWaybillBatchIds } = await import("./orders.functions");
+        const batchIds = await resolveWaybillBatchIds(supabaseAdmin, Array.from(touchedWaybillIds));
+        await markBatchFeesDirtyMany(supabaseAdmin, batchIds);
+      } catch (e) {
+        console.error("markBatchFeesDirtyMany failed (measureSaveDims):", e);
+      }
     }
 
     return { ok: true, updated: n, autoFees, autoOrderFees };
@@ -2003,6 +2119,12 @@ export const recomputeWaybillFees = createServerFn({ method: "POST" })
           clearance_cad: fees.clearance_cad,
         })
         .eq("id", wb.id);
+      try {
+        const { persistWaybillItems } = await import("./duty.server");
+        await persistWaybillItems(supabaseAdmin, wb.id);
+      } catch (e) {
+        console.error("persistWaybillItems failed (recomputeWaybillFees)", wb.id, e);
+      }
       updated++;
     }
     await supabaseAdmin.from("admin_action_logs").insert({

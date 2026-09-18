@@ -102,9 +102,16 @@ export const scanReceive = createServerFn({ method: "POST" })
 
     // 扫描批次号 → 直接把本次入库匹配到该批次
     if (kind === "batch") {
-      const { data: b } = await supabaseAdmin.from("batches").select("id, batch_no").eq("batch_no", code).maybeSingle();
+      const { data: b } = await supabaseAdmin
+        .from("batches")
+        .select("id, batch_no")
+        .eq("batch_no", code)
+        .maybeSingle();
       if (!b) throw new Error(`批次 ${code} 不存在`);
-      await supabaseAdmin.from("receivings").update({ batch_id: b.id, status: "matched" }).eq("id", data.receivingId);
+      await supabaseAdmin
+        .from("receivings")
+        .update({ batch_id: b.id, status: "matched" })
+        .eq("id", data.receivingId);
       await recordAdminLog(supabaseAdmin, {
         entity_type: "receiving",
         entity_id: data.receivingId,
@@ -354,9 +361,7 @@ export const confirmReceiving = createServerFn({ method: "POST" })
     // 跳过已是终态/下游状态的运单，既不改它们的 status，也不给它们补一条"已到达目的地
     // 仓库"的轨迹——否则一个已经 delivered/in_transit 的运单会在轨迹时间线上凭空多出一条
     // 排在后面的"到达"记录，跟它实际的状态倒挂。
-    const updWbs = (wbs ?? []).filter(
-      (w) => !["delivered", "cancelled", "in_transit", "ready_pickup"].includes(w.status),
-    );
+    const updWbs = (wbs ?? []).filter((w) => !["delivered", "cancelled", "in_transit", "ready_pickup"].includes(w.status));
     if (updWbs.length) {
       const updIds = updWbs.map((w) => w.id);
       await supabaseAdmin.from("waybills").update({ status: "arrived" }).in("id", updIds);

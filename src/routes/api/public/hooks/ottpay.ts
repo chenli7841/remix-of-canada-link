@@ -7,7 +7,7 @@ export const Route = createFileRoute("/api/public/hooks/ottpay")({
     handlers: {
       POST: async ({ request }) => {
         const { decryptOttCallback, ottCallbackMd5Matches, OTT_SUCCESS_STATES } = await import("@/lib/ottpay.server");
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
 
         let payload: any;
         try {
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/api/public/hooks/ottpay")({
 
         const { data: tx } = await supabaseAdmin
           .from("wallet_transactions")
-          .select("id, status, amount_cad, note")
+          .select("id, status, amount_cad, provider_payment_id")
           .eq("ref_no", reference)
           .maybeSingle();
         if (!tx) return new Response("SUCCESS");
@@ -65,12 +65,17 @@ export const Route = createFileRoute("/api/public/hooks/ottpay")({
           return new Response("SUCCESS");
         }
 
-        const patch: Record<string, any> = { status: paid ? "completed" : "failed" };
-        if (info.order_id && !/pid=/.test(tx.note ?? "")) patch.note = `${tx.note ?? ""} · pid=${info.order_id}`;
+        const patch: Record<string, any> = {
+          status: paid ? "completed" : "failed",
+          verified_at: new Date().toISOString(),
+        };
+        if (info.order_id && !tx.provider_payment_id) patch.provider_payment_id = String(info.order_id);
+        // 只改还在 pending 的行——已被对账/客户端 poll 处理过的不再翻，触发器也只加一次余额
         await supabaseAdmin
           .from("wallet_transactions")
           .update(patch as any)
-          .eq("id", tx.id);
+          .eq("id", tx.id)
+          .eq("status", "pending");
 
         return new Response("SUCCESS");
       },

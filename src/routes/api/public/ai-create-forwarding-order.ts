@@ -56,6 +56,8 @@ const fail = (result_code: string, message: string, extra: Record<string, unknow
 
 const CARGO_ZH: Record<string, string> = { general: "普货", sensitive: "敏货" };
 
+
+
 export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
   server: {
     handlers: {
@@ -73,10 +75,8 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
         const externalUserid = str(body.external_userid);
         const chatId = str(body.chat_id) || str(body.open_chat_id);
         if (!visitorBizId && !externalUserid && !chatId)
-          return fail(
-            "invalid_channel_identity",
-            "缺少可用的渠道身份（chat_id / external_userid / visitor_biz_id 至少一个）",
-          );
+          return fail("invalid_channel_identity", "缺少可用的渠道身份（chat_id / external_userid / visitor_biz_id 至少一个）");
+
 
         const confirm = body.confirm === true || body.confirm === "true";
         const idempotencyKey = str(body.idempotency_key);
@@ -117,9 +117,7 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
           .eq("id", userId)
           .maybeSingle();
         if (!profile?.customer_code) {
-          return fail("customer_not_found", "绑定的客户资料不存在或缺少客户号，请联系人工客服", {
-            customer_bound: true,
-          });
+          return fail("customer_not_found", "绑定的客户资料不存在或缺少客户号，请联系人工客服", { customer_bound: true });
         }
 
         // ---------- 2. 幂等 ----------
@@ -148,12 +146,8 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
         }
 
         // ---------- 3. 必填校验 ----------
-        if (!routeIdIn)
-          return fail("required_field_missing", "缺少线路 route_id（须来自 ai-forwarding-options 接口）", {
-            customer_bound: true,
-          });
-        if (!domestic)
-          return fail("required_field_missing", "缺少国内快递单号 domestic_tracking_no", { customer_bound: true });
+        if (!routeIdIn) return fail("required_field_missing", "缺少线路 route_id（须来自 ai-forwarding-options 接口）", { customer_bound: true });
+        if (!domestic) return fail("required_field_missing", "缺少国内快递单号 domestic_tracking_no", { customer_bound: true });
         if (!itemName) return fail("required_field_missing", "缺少物品名称 item_name", { customer_bound: true });
         if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity))
           return fail("invalid_field", "件数 quantity 必须为大于 0 的整数", { customer_bound: true });
@@ -163,8 +157,9 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
           return fail("invalid_field", "币种 currency 仅支持 CNY 或 CAD", { customer_bound: true });
 
         // ---------- 4. 线路二次校验（只信 route_id，不信名称/客户号） ----------
-        const { listWechatAiRoutes, getDefaultAddress, shippingMethodZh } =
-          await import("@/lib/wechat-ai-routes.server");
+        const { listWechatAiRoutes, getDefaultAddress, shippingMethodZh } = await import(
+          "@/lib/wechat-ai-routes.server"
+        );
         const vip = String((profile as any).vip_level ?? "normal");
         const code = String((profile as any).customer_code);
         const { warehouse, routes: aiRoutes } = await listWechatAiRoutes(supabaseAdmin, {
@@ -183,15 +178,13 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
         // 线路要求的逐项必填字段（item_field_required）——AI 单物品录单只能满足
         // name / quantity / unit_price，其它（hscode、材质、箱数…）必须走网站。
         const req = (route.item_field_required ?? {}) as Record<string, boolean>;
-        const unsupported = Object.keys(req).filter((f) => req[f] && !["name", "quantity", "unit_price"].includes(f));
+        const unsupported = Object.keys(req).filter(
+          (f) => req[f] && !["name", "quantity", "unit_price"].includes(f),
+        );
         if (unsupported.length)
-          return fail(
-            "invalid_field",
-            `线路 ${route.code} 需要填写 ${unsupported.join("、")} 等资料，请客户在网站录单或联系人工客服`,
-            {
-              customer_bound: true,
-            },
-          );
+          return fail("invalid_field", `线路 ${route.code} 需要填写 ${unsupported.join("、")} 等资料，请客户在网站录单或联系人工客服`, {
+            customer_bound: true,
+          });
         if (req.unit_price && unitPrice === null)
           return fail("required_field_missing", `线路 ${route.code} 要求填写单价 unit_price`, {
             customer_bound: true,
@@ -204,6 +197,7 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
             customer_bound: true,
           });
         const addressId = String(address.id);
+
 
         // ---------- 6. 国内单号查重（本人或他人均视为重复） ----------
         const { data: dupFo } = await supabaseAdmin
@@ -244,6 +238,7 @@ export const Route = createFileRoute("/api/public/ai-create-forwarding-order")({
           remark ? `备注：${remark}` : null,
         ].filter(Boolean);
         const confirmationText = `请确认以下录单资料：\n${lines.join("\n")}\n确认无误请回复「确认创建」。`;
+
 
         if (!confirm) {
           return json({

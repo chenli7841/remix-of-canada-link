@@ -53,7 +53,10 @@ export function decryptHosted(payload: { data: string; md5: string }): Record<st
   const key = aesKeyFrom(String(payload.md5), cfg.signKey);
   const decipher = crypto.createDecipheriv("aes-128-ecb", Buffer.from(key, "utf8"), Buffer.alloc(0));
   decipher.setAutoPadding(true);
-  const out = Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]).toString("utf8");
+  const out = Buffer.concat([
+    decipher.update(Buffer.from(payload.data, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
   return JSON.parse(out);
 }
 
@@ -103,12 +106,4 @@ export async function hostedPost(action: string, version: string, data: Record<s
 }
 
 export const HOSTED_PAID_STATES = new Set(["success", "paid", "trade_success", "captured", "authorised", "authorized"]);
-export const HOSTED_FAILED_STATES = new Set([
-  "fail",
-  "failure",
-  "closed",
-  "orderclosed",
-  "cancelled",
-  "canceled",
-  "revoked",
-]);
+export const HOSTED_FAILED_STATES = new Set(["fail", "failure", "closed", "orderclosed", "cancelled", "canceled", "revoked"]);

@@ -1,12 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
   name: "list_forwarding_routes",
@@ -35,61 +29,34 @@ export default defineTool({
     const [{ data: profile, error: profileError }, { data, error }] = await Promise.all([
       sb.from("profiles").select("customer_code, vip_level").eq("id", authData.user.id).single(),
       sb
-        .from("shipping_routes")
-        .select(
-          "id, code, name_zh, name_en, shipping_method, cargo_type, destination_code, transit_days_min, transit_days_max, item_field_required, allowed_items_text, prohibited_items_text, usage_scope, is_bidirectional, visible_vip_levels, visible_customer_codes, blacklist_vip_levels, blacklist_customer_codes",
-        )
-        .eq("is_active", true)
-        .eq("origin_warehouse_id", warehouse.id)
-        .in("usage_scope", ["forwarding", "both"])
-        .order("sort_order", { ascending: true }),
+      .from("shipping_routes")
+      .select(
+        "id, code, name_zh, name_en, shipping_method, cargo_type, destination_code, transit_days_min, transit_days_max, item_field_required, allowed_items_text, prohibited_items_text, usage_scope, is_bidirectional, visible_vip_levels, visible_customer_codes, blacklist_vip_levels, blacklist_customer_codes",
+      )
+      .eq("is_active", true)
+      .eq("origin_warehouse_id", warehouse.id)
+      .in("usage_scope", ["forwarding", "both"])
+      .order("sort_order", { ascending: true }),
     ]);
     if (profileError || error) {
       console.error("MCP list_forwarding_routes failed", { code: (profileError ?? error)?.code });
       const failure = profileError ?? error;
       return failure && isPermissionError(failure) ? permissionDeniedResult() : queryFailedResult();
     }
-    const customerCode = String(profile?.customer_code ?? "")
-      .trim()
-      .toUpperCase();
+    const customerCode = String(profile?.customer_code ?? "").trim().toUpperCase();
     const vip = String(profile?.vip_level ?? "");
-    const routes = (data ?? [])
-      .filter((route: any) => {
-        if ((direction ?? "forward") === "reverse" && !route.is_bidirectional) return false;
-        const blackCodes = (route.blacklist_customer_codes ?? []).map((code: unknown) =>
-          String(code).trim().toUpperCase(),
-        );
-        if (customerCode && blackCodes.includes(customerCode)) return false;
-        if (vip && (route.blacklist_vip_levels ?? []).includes(vip)) return false;
-        const visibleCodes = (route.visible_customer_codes ?? []).map((code: unknown) =>
-          String(code).trim().toUpperCase(),
-        );
-        const visibleVips = route.visible_vip_levels ?? [];
-        if (!visibleCodes.length && !visibleVips.length) return true;
-        return (customerCode && visibleCodes.includes(customerCode)) || (vip && visibleVips.includes(vip));
-      })
-      .map(
-        ({
-          usage_scope,
-          is_bidirectional,
-          visible_vip_levels,
-          visible_customer_codes,
-          blacklist_vip_levels,
-          blacklist_customer_codes,
-          ...route
-        }: any) => route,
-      );
+    const routes = (data ?? []).filter((route: any) => {
+      if ((direction ?? "forward") === "reverse" && !route.is_bidirectional) return false;
+      const blackCodes = (route.blacklist_customer_codes ?? []).map((code: unknown) => String(code).trim().toUpperCase());
+      if (customerCode && blackCodes.includes(customerCode)) return false;
+      if (vip && (route.blacklist_vip_levels ?? []).includes(vip)) return false;
+      const visibleCodes = (route.visible_customer_codes ?? []).map((code: unknown) => String(code).trim().toUpperCase());
+      const visibleVips = route.visible_vip_levels ?? [];
+      if (!visibleCodes.length && !visibleVips.length) return true;
+      return (customerCode && visibleCodes.includes(customerCode)) || (vip && visibleVips.includes(vip));
+    }).map(({ usage_scope, is_bidirectional, visible_vip_levels, visible_customer_codes, blacklist_vip_levels, blacklist_customer_codes, ...route }: any) => route);
     return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { currency: "CAD", warehouse: warehouse.code, direction: direction ?? "forward", routes },
-            null,
-            2,
-          ),
-        },
-      ],
+      content: [{ type: "text", text: JSON.stringify({ currency: "CAD", warehouse: warehouse.code, direction: direction ?? "forward", routes }, null, 2) }],
       structuredContent: { currency: "CAD", warehouse: warehouse.code, direction: direction ?? "forward", routes },
     };
   },

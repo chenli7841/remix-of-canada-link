@@ -8,14 +8,11 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
     return await next();
   } catch (error) {
-    // h3 wraps a disconnected Node request in an HTTPError with statusCode=500,
-    // while preserving the original ECONNRESET/"aborted" error as `cause`.
-    // Detect that chain before rethrowing status errors, otherwise harmless
-    // client disconnects reach Vite's error overlay and appear as a blank page.
-    if (isAbortError(error)) return new Response(null, { status: 499 });
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
     }
+    // 客户端断开连接：静默返回，不渲染错误页。
+    if (isAbortError(error)) return new Response(null, { status: 499 });
     console.error(error);
     return new Response(renderErrorPage(), {
       status: 500,

@@ -1,0 +1,1 @@
+grant execute on function public.admin_list_users(text, app_role, vip_level, boolean, int, int) to postgres;

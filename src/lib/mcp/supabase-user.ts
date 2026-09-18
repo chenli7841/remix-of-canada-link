@@ -45,10 +45,5 @@ export function permissionDeniedResult() {
 
 export function isPermissionError(error: { message?: string; code?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? "";
-  return (
-    error?.code === "42501" ||
-    message.includes("access required") ||
-    message.includes("forbidden") ||
-    message.includes("permission")
-  );
+  return error?.code === "42501" || message.includes("access required") || message.includes("forbidden") || message.includes("permission");
 }

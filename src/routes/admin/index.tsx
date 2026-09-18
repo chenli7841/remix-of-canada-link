@@ -3,42 +3,16 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboard } from "@/lib/dashboard.functions";
 import {
-  Boxes,
-  Truck,
-  Package,
-  AlertTriangle,
-  FileText,
-  DollarSign,
-  Users,
-  Loader2,
-  ScanLine,
-  ArrowRight,
-  Wallet,
+  Boxes, Truck, Package, AlertTriangle, FileText, DollarSign, Users, Loader2, ScanLine, ArrowRight, Wallet,
 } from "lucide-react";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 
 export const Route = createFileRoute("/admin/")({ component: AdminIndex });
 
-const METHOD_LABEL: Record<string, string> = {
-  air: "空运",
-  sea: "海运",
-  express: "快递",
-  truck: "陆运",
-  storage: "仓储",
-  unknown: "未指定",
-};
+const METHOD_LABEL: Record<string, string> = { air: "空运", sea: "海运", express: "快递", truck: "陆运", storage: "仓储", unknown: "未指定" };
 const PIE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4"];
 
 function AdminIndex() {
@@ -46,12 +20,7 @@ function AdminIndex() {
   const q = useQuery({ queryKey: ["admin-dashboard"], queryFn: () => fetchDash(), refetchInterval: 60_000 });
   const d = q.data;
 
-  if (q.isLoading)
-    return (
-      <div className="grid h-[60vh] place-items-center">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-      </div>
-    );
+  if (q.isLoading) return <div className="grid h-[60vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-slate-500"/></div>;
   if (q.isError) return <div className="p-6 text-rose-400">{(q.error as Error).message}</div>;
   if (!d) return null;
 
@@ -70,18 +39,8 @@ function AdminIndex() {
         <KPI icon={Truck} label="今日运单" value={d.kpi.waybillsToday} accent="from-emerald-500 to-teal-500" />
         <KPI icon={Package} label="在途运单" value={d.kpi.inTransit} accent="from-violet-500 to-fuchsia-500" />
         <KPI icon={ScanLine} label="待入库" value={d.kpi.pendingIntake} accent="from-amber-500 to-orange-500" />
-        <KPI
-          icon={FileText}
-          label="待收 CNY"
-          value={`¥${d.kpi.unpaidCNY.toLocaleString()}`}
-          accent="from-rose-500 to-pink-500"
-        />
-        <KPI
-          icon={DollarSign}
-          label="本月营收 CAD"
-          value={`$${d.kpi.monthRevenueCAD.toLocaleString()}`}
-          accent="from-emerald-500 to-lime-500"
-        />
+        <KPI icon={FileText} label="待收 CNY" value={`¥${d.kpi.unpaidCNY.toLocaleString()}`} accent="from-rose-500 to-pink-500" />
+        <KPI icon={DollarSign} label="本月营收 CAD" value={`$${d.kpi.monthRevenueCAD.toLocaleString()}`} accent="from-emerald-500 to-lime-500" />
         <KPI icon={AlertTriangle} label="滞留单号" value={d.kpi.detained} accent="from-rose-500 to-amber-500" />
         <KPI icon={Users} label="总用户数" value={d.kpi.users} accent="from-sky-500 to-indigo-500" />
       </div>
@@ -93,11 +52,11 @@ function AdminIndex() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={d.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} />
-                <Tooltip contentStyle={{ background: "#0E1626", border: "1px solid #1e293b", borderRadius: 8 }} />
-                <Line type="monotone" dataKey="waybills" stroke="#3B82F6" strokeWidth={2} dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b"/>
+                <XAxis dataKey="date" stroke="#64748b" fontSize={11}/>
+                <YAxis stroke="#64748b" fontSize={11}/>
+                <Tooltip contentStyle={{ background: "#0E1626", border: "1px solid #1e293b", borderRadius: 8 }}/>
+                <Line type="monotone" dataKey="waybills" stroke="#3B82F6" strokeWidth={2} dot={false}/>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -107,18 +66,11 @@ function AdminIndex() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={d.routeDistribution.map((r) => ({ ...r, name: METHOD_LABEL[r.name] ?? r.name }))}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={70}
-                >
-                  {d.routeDistribution.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
+                <Pie data={d.routeDistribution.map(r => ({ ...r, name: METHOD_LABEL[r.name] ?? r.name }))} dataKey="value" nameKey="name" outerRadius={70}>
+                  {d.routeDistribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]}/>)}
                 </Pie>
-                <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
-                <Tooltip contentStyle={{ background: "#0E1626", border: "1px solid #1e293b", borderRadius: 8 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }}/>
+                <Tooltip contentStyle={{ background: "#0E1626", border: "1px solid #1e293b", borderRadius: 8 }}/>
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -133,16 +85,21 @@ function AdminIndex() {
               <Wallet className="h-4 w-4 text-blue-400" />
               本月钱包流水
             </div>
-            <Link
-              to="/admin/wallet-ledger"
-              className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
-            >
+            <Link to="/admin/wallet-ledger" className="inline-flex items-center gap-1 text-xs text-brand hover:underline">
               查看完整流水 <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <WalletLedgerMini title="充值" accentClass="text-emerald-300" summary={d.walletLedger.month_recharge} />
-            <WalletLedgerMini title="扣款" accentClass="text-rose-300" summary={d.walletLedger.month_spend} />
+            <WalletLedgerMini
+              title="充值"
+              accentClass="text-emerald-300"
+              summary={d.walletLedger.month_recharge}
+            />
+            <WalletLedgerMini
+              title="扣款"
+              accentClass="text-rose-300"
+              summary={d.walletLedger.month_spend}
+            />
           </div>
         </div>
       )}
@@ -151,9 +108,7 @@ function AdminIndex() {
       <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold">最近操作</div>
-          <Link to="/admin/logs" className="inline-flex items-center gap-1 text-xs text-brand hover:underline">
-            查看全部 <ArrowRight className="h-3 w-3" />
-          </Link>
+          <Link to="/admin/logs" className="inline-flex items-center gap-1 text-xs text-brand hover:underline">查看全部 <ArrowRight className="h-3 w-3"/></Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -167,13 +122,7 @@ function AdminIndex() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-300">
-              {d.recentLogs.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-4 text-center text-slate-500">
-                    暂无
-                  </td>
-                </tr>
-              )}
+              {d.recentLogs.length === 0 && <tr><td colSpan={5} className="py-4 text-center text-slate-500">暂无</td></tr>}
               {d.recentLogs.map((l: any) => (
                 <tr key={l.id}>
                   <td className="py-1.5 pr-3 text-slate-500">{new Date(l.created_at).toLocaleString("zh-CN")}</td>
@@ -198,28 +147,17 @@ function WalletLedgerMini({
 }: {
   title: string;
   accentClass: string;
-  summary: {
-    total_count: number;
-    total_amount_cad: number;
-    by_channel: { key: string; label: string; count: number; amount_cad: number }[];
-  };
+  summary: { total_count: number; total_amount_cad: number; by_channel: { key: string; label: string; count: number; amount_cad: number }[] };
 }) {
   return (
     <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
       <div className="flex items-baseline justify-between">
-        <span className="text-xs text-slate-400">
-          {title}（{summary.total_count} 笔）
-        </span>
-        <span className={`font-display text-lg font-bold ${accentClass}`}>
-          ${summary.total_amount_cad.toLocaleString()}
-        </span>
+        <span className="text-xs text-slate-400">{title}（{summary.total_count} 笔）</span>
+        <span className={`font-display text-lg font-bold ${accentClass}`}>${summary.total_amount_cad.toLocaleString()}</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
         {summary.by_channel.map((c) => (
-          <span
-            key={c.key}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-slate-400"
-          >
+          <span key={c.key} className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-slate-400">
             {c.label} {c.count} 笔 · ${c.amount_cad.toLocaleString()}
           </span>
         ))}

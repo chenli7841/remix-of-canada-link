@@ -1,37 +1,4 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
-export default defineTool({
-  name: "search_audit_logs_admin",
-  title: "Search admin audit logs",
-  description:
-    "Search EPLUS admin audit summaries using the signed-in owner's permission. Read-only. Do not bulk-display logs; summarize results over 5 and ask for a narrower date, operator, entity or action.",
-  inputSchema: {
-    query: z.string().max(100).optional(),
-    entity_type: z.string().max(50).optional(),
-    action: z.string().max(80).optional(),
-    date_from: z.string().date().optional(),
-    date_to: z.string().date().optional(),
-    limit: z.number().int().min(1).max(50).optional(),
-  },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ query, entity_type, action, date_from, date_to, limit }, ctx) => {
-    if (!ctx.isAuthenticated()) return unauthenticatedResult();
-    const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_search_audit_logs", {
-      _query: query ?? "",
-      _entity_type: entity_type ?? null,
-      _action: action ?? null,
-      _date_from: date_from ?? null,
-      _date_to: date_to ?? null,
-      _limit: limit ?? 20,
-    });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
-  },
-});
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
+export default defineTool({name:"search_audit_logs_admin",title:"Search admin audit logs",description:"Search EPLUS admin audit summaries using the signed-in owner's permission. Read-only. Do not bulk-display logs; summarize results over 5 and ask for a narrower date, operator, entity or action.",inputSchema:{query:z.string().max(100).optional(),entity_type:z.string().max(50).optional(),action:z.string().max(80).optional(),date_from:z.string().date().optional(),date_to:z.string().date().optional(),limit:z.number().int().min(1).max(50).optional()},annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false},handler:async({query,entity_type,action,date_from,date_to,limit},ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();const{data,error}=await supabaseForUser(ctx).rpc("chatgpt_admin_search_audit_logs",{_query:query??"",_entity_type:entity_type??null,_action:action??null,_date_from:date_from??null,_date_to:date_to??null,_limit:limit??20});if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();return{content:[{type:"text",text:JSON.stringify(data,null,2)}],structuredContent:{result:data}};}});

@@ -1,23 +1,4 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
-export default defineTool({
-  name: "get_batch_admin",
-  title: "Get shipping batch details with staff permissions",
-  description:
-    "Read one EPLUS batch and its waybill summary using normal staff permissions. Read-only, CAD-only, and cannot charge customers or change batch status.",
-  inputSchema: { batch_no: z.string().min(1).max(100) },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ batch_no }, ctx) => {
-    if (!ctx.isAuthenticated()) return unauthenticatedResult();
-    const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_batch", { _batch_no: batch_no });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
-  },
-});
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
+export default defineTool({name:"get_batch_admin",title:"Get shipping batch details with staff permissions",description:"Read one EPLUS batch and its waybill summary using normal staff permissions. Read-only, CAD-only, and cannot charge customers or change batch status.",inputSchema:{batch_no:z.string().min(1).max(100)},annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false},handler:async({batch_no},ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();const{data,error}=await supabaseForUser(ctx).rpc("chatgpt_admin_get_batch",{_batch_no:batch_no});if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();return{content:[{type:"text",text:JSON.stringify(data,null,2)}],structuredContent:{result:data}};}});

@@ -24,13 +24,10 @@ type Waybill = {
 };
 
 function chargeableKg(w: Waybill) {
+  // 服务端已按线路运费规则算好计费重（体积除数 + 计费方式），直接用；
+  // 缺失时只按实重兜底，不用写死的体积除数瞎猜。
   if (w.chargeable_weight_kg != null) return Number(w.chargeable_weight_kg);
-  const wt = Number(w.weight_kg ?? 0);
-  const L = Number(w.length_cm ?? 0),
-    W = Number(w.width_cm ?? 0),
-    H = Number(w.height_cm ?? 0);
-  const vol = L && W && H ? (L * W * H) / 6000 : 0;
-  return Math.max(wt, vol);
+  return Number(w.weight_kg ?? 0);
 }
 function totalCad(w: Waybill) {
   if (w.total_cad != null) return Number(w.total_cad);
@@ -44,17 +41,8 @@ function totalCad(w: Waybill) {
 }
 
 function PaymentTag({ v }: { v?: string | null }) {
-  if (v === "paid")
-    return (
-      <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
-        已付款
-      </span>
-    );
-  return (
-    <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">
-      未付款
-    </span>
-  );
+  if (v === "paid") return <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">已付款</span>;
+  return <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">未付款</span>;
 }
 
 export function WaybillCompactList({
@@ -89,45 +77,23 @@ export function WaybillCompactList({
             const colSpan = onKick ? 6 : 5;
             return (
               <Fragment key={w.id}>
-                <tr
-                  className="cursor-pointer hover:bg-white/[0.03]"
-                  onClick={() => setOpen((o) => ({ ...o, [w.id]: !o[w.id] }))}
-                >
-                  <td className="px-2">
-                    {isOpen ? (
-                      <ChevronDown className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3 text-slate-400" />
-                    )}
-                  </td>
+                <tr className="cursor-pointer hover:bg-white/[0.03]" onClick={() => setOpen((o) => ({ ...o, [w.id]: !o[w.id] }))}>
+                  <td className="px-2">{isOpen ? <ChevronDown className="h-3 w-3 text-slate-400"/> : <ChevronRight className="h-3 w-3 text-slate-400"/>}</td>
                   <td className="py-2">
-                    <Link
-                      to="/admin/waybills/$waybillId"
-                      params={{ waybillId: w.id }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-mono text-xs text-brand"
-                    >
+                    <Link to="/admin/waybills/$waybillId" params={{ waybillId: w.id }} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-brand">
                       {w.waybill_no}
                     </Link>
                   </td>
                   <td className="font-mono text-xs text-slate-300">{w.customer_code ?? "—"}</td>
-                  <td>
-                    <StatusBadge map={WAYBILL_STATUS_LABEL} color={WAYBILL_STATUS_COLOR} value={w.status ?? ""} />
-                  </td>
-                  <td>
-                    <PaymentTag v={w.payment_status} />
-                  </td>
+                  <td><StatusBadge map={WAYBILL_STATUS_LABEL} color={WAYBILL_STATUS_COLOR} value={w.status ?? ""}/></td>
+                  <td><PaymentTag v={w.payment_status}/></td>
                   <td className="font-mono text-xs text-amber-300">{ck ? ck.toFixed(3) : "—"} kg</td>
                   <td className="text-right font-mono text-xs font-semibold text-emerald-300">CA${total.toFixed(2)}</td>
                   {onKick && (
                     <td className="text-right">
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (confirm(`确认将运单 ${w.waybill_no} 踢出？`)) await onKick(w);
-                        }}
-                        className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10"
-                      >
+                        onClick={async (e) => { e.stopPropagation(); if (confirm(`确认将运单 ${w.waybill_no} 踢出？`)) await onKick(w); }}
+                        className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10">
                         踢出
                       </button>
                     </td>
@@ -138,20 +104,13 @@ export function WaybillCompactList({
                     <td></td>
                     <td colSpan={colSpan} className="px-2 py-3">
                       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-[11px]">
-                        <D label="运费" v={`CA$${Number(w.freight_cad ?? 0).toFixed(2)}`} />
-                        <D label="关税" v={`CA$${Number(w.duty_cad ?? 0).toFixed(2)}`} />
-                        <D label="保险" v={`CA$${Number(w.insurance_cad ?? 0).toFixed(2)}`} />
-                        <D label="清关费" v={`CA$${Number(w.clearance_cad ?? 0).toFixed(2)}`} />
-                        <D label="附加费" v={`CA$${Number(w.surcharge_cad ?? 0).toFixed(2)}`} />
-                        <D label="实重" v={w.weight_kg != null ? `${Number(w.weight_kg).toFixed(2)} kg` : "—"} />
-                        <D
-                          label="尺寸 cm"
-                          v={
-                            w.length_cm && w.width_cm && w.height_cm
-                              ? `${w.length_cm}×${w.width_cm}×${w.height_cm}`
-                              : "—"
-                          }
-                        />
+                        <D label="运费"    v={`CA$${Number(w.freight_cad ?? 0).toFixed(2)}`}/>
+                        <D label="关税"    v={`CA$${Number(w.duty_cad ?? 0).toFixed(2)}`}/>
+                        <D label="保险"    v={`CA$${Number(w.insurance_cad ?? 0).toFixed(2)}`}/>
+                        <D label="清关费"  v={`CA$${Number(w.clearance_cad ?? 0).toFixed(2)}`}/>
+                        <D label="附加费"  v={`CA$${Number(w.surcharge_cad ?? 0).toFixed(2)}`}/>
+                        <D label="实重"    v={w.weight_kg != null ? `${Number(w.weight_kg).toFixed(2)} kg` : "—"}/>
+                        <D label="尺寸 cm" v={w.length_cm && w.width_cm && w.height_cm ? `${w.length_cm}×${w.width_cm}×${w.height_cm}` : "—"}/>
                       </div>
                     </td>
                   </tr>
@@ -215,46 +174,22 @@ export function CartonCompactList({
           const colSpan = onKick ? 6 : 5;
           return (
             <Fragment key={c.id}>
-              <tr
-                className="cursor-pointer hover:bg-white/[0.03]"
-                onClick={() => setOpen((o) => ({ ...o, [c.id]: !o[c.id] }))}
-              >
-                <td className="px-2">
-                  {isOpen ? (
-                    <ChevronDown className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
-                  )}
-                </td>
+              <tr className="cursor-pointer hover:bg-white/[0.03]" onClick={() => setOpen((o) => ({ ...o, [c.id]: !o[c.id] }))}>
+                <td className="px-2">{isOpen ? <ChevronDown className="h-3 w-3 text-slate-400"/> : <ChevronRight className="h-3 w-3 text-slate-400"/>}</td>
                 <td className="py-2">
                   {c.display_name && <div className="text-xs font-semibold text-slate-200">{c.display_name}</div>}
-                  <Link
-                    to="/admin/cartons/$cartonId"
-                    params={{ cartonId: c.id }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="font-mono text-xs text-brand"
-                  >
-                    {c.carton_no}
-                  </Link>
+                  <Link to="/admin/cartons/$cartonId" params={{ cartonId: c.id }} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-brand">{c.carton_no}</Link>
                 </td>
                 <td className="font-mono text-xs text-slate-300">{c.customer_code ?? "—"}</td>
                 <td className="text-xs">{c.status ?? "—"}</td>
-                <td>
-                  <PaymentTag v={c.payment_status} />
-                </td>
-                <td className="font-mono text-xs text-amber-300">
-                  {c.chargeable_weight_kg != null ? `${Number(c.chargeable_weight_kg).toFixed(3)} kg` : "—"}
-                </td>
+                <td><PaymentTag v={c.payment_status}/></td>
+                <td className="font-mono text-xs text-amber-300">{c.chargeable_weight_kg != null ? `${Number(c.chargeable_weight_kg).toFixed(3)} kg` : "—"}</td>
                 <td className="text-right font-mono text-xs font-semibold text-emerald-300">CA${total.toFixed(2)}</td>
                 {onKick && (
                   <td className="text-right">
                     <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (confirm(`确认将箱号 ${c.carton_no} 踢出？`)) await onKick(c);
-                      }}
-                      className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10"
-                    >
+                      onClick={async (e) => { e.stopPropagation(); if (confirm(`确认将箱号 ${c.carton_no} 踢出？`)) await onKick(c); }}
+                      className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10">
                       踢出
                     </button>
                   </td>
@@ -265,13 +200,13 @@ export function CartonCompactList({
                   <td></td>
                   <td colSpan={colSpan} className="px-2 py-3">
                     <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-[11px]">
-                      <D label="自身运费" v={`CA$${Number(c.self_freight_cad ?? 0).toFixed(2)}`} />
-                      <D label="下属运费之和" v={`CA$${Number(c.child_freight_cad ?? 0).toFixed(2)}`} />
-                      <D label="关税之和" v={`CA$${Number(c.child_customs_cad ?? 0).toFixed(2)}`} />
-                      <D label="保险之和" v={`CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)}`} />
-                      <D label="清关费" v={`CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}`} />
-                      <D label="附加费" v={`CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}`} />
-                      <D label="方案" v={c.customer_code ? "A · 合并" : "B · 不合并"} />
+                      <D label="自身运费"    v={`CA$${Number(c.self_freight_cad ?? 0).toFixed(2)}`}/>
+                      <D label="下属运费之和" v={`CA$${Number(c.child_freight_cad ?? 0).toFixed(2)}`}/>
+                      <D label="关税之和"    v={`CA$${Number(c.child_customs_cad ?? 0).toFixed(2)}`}/>
+                      <D label="保险之和"    v={`CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)}`}/>
+                      <D label="清关费"      v={`CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}`}/>
+                      <D label="附加费"      v={`CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}`}/>
+                      <D label="方案"        v={c.customer_code ? "A · 合并" : "B · 不合并"}/>
                     </div>
                   </td>
                 </tr>
@@ -338,58 +273,30 @@ export function PalletCompactList({
           const colSpan = hasActions ? 6 : 5;
           return (
             <Fragment key={p.id}>
-              <tr
-                className="cursor-pointer hover:bg-white/[0.03]"
-                onClick={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}
-              >
-                <td className="px-2">
-                  {isOpen ? (
-                    <ChevronDown className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
-                  )}
-                </td>
+              <tr className="cursor-pointer hover:bg-white/[0.03]" onClick={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}>
+                <td className="px-2">{isOpen ? <ChevronDown className="h-3 w-3 text-slate-400"/> : <ChevronRight className="h-3 w-3 text-slate-400"/>}</td>
                 <td className="py-2">
                   {p.display_name && <div className="text-xs font-semibold text-slate-200">{p.display_name}</div>}
-                  <Link
-                    to="/admin/pallets/$palletId"
-                    params={{ palletId: p.id }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="font-mono text-xs text-brand"
-                  >
-                    {p.pallet_no}
-                  </Link>
+                  <Link to="/admin/pallets/$palletId" params={{ palletId: p.id }} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-brand">{p.pallet_no}</Link>
                 </td>
                 <td className="font-mono text-xs text-slate-300">{p.customer_code ?? "—"}</td>
                 <td className="text-xs">{p.status ?? "—"}</td>
-                <td>
-                  <PaymentTag v={p.payment_status} />
-                </td>
-                <td className="font-mono text-xs text-amber-300">
-                  {p.chargeable_weight_kg != null ? `${Number(p.chargeable_weight_kg).toFixed(3)} kg` : "—"}
-                </td>
+                <td><PaymentTag v={p.payment_status}/></td>
+                <td className="font-mono text-xs text-amber-300">{p.chargeable_weight_kg != null ? `${Number(p.chargeable_weight_kg).toFixed(3)} kg` : "—"}</td>
                 <td className="text-right font-mono text-xs font-semibold text-emerald-300">CA${total.toFixed(2)}</td>
                 {hasActions && (
                   <td className="text-right whitespace-nowrap">
                     {onSplit && (
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await onSplit(p);
-                        }}
-                        className="mr-1 rounded-md border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300 hover:bg-amber-500/10"
-                      >
+                        onClick={async (e) => { e.stopPropagation(); await onSplit(p); }}
+                        className="mr-1 rounded-md border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300 hover:bg-amber-500/10">
                         拆分
                       </button>
                     )}
                     {onKick && (
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (confirm(`确认将托盘 ${p.pallet_no} 踢出？`)) await onKick(p);
-                        }}
-                        className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10"
-                      >
+                        onClick={async (e) => { e.stopPropagation(); if (confirm(`确认将托盘 ${p.pallet_no} 踢出？`)) await onKick(p); }}
+                        className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10">
                         踢出
                       </button>
                     )}
@@ -401,14 +308,14 @@ export function PalletCompactList({
                   <td></td>
                   <td colSpan={colSpan} className="px-2 py-3">
                     <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-[11px]">
-                      <D label="自身运费" v={`CA$${Number(p.self_freight_cad ?? 0).toFixed(2)}`} />
-                      <D label="下属运费 A" v={`CA$${Number(p.child_freight_cad_a ?? 0).toFixed(2)}`} />
-                      <D label="下属运费 B" v={`CA$${Number(p.child_freight_cad_b ?? 0).toFixed(2)}`} />
-                      <D label="关税之和" v={`CA$${Number(p.child_customs_cad ?? 0).toFixed(2)}`} />
-                      <D label="保险之和" v={`CA$${Number(p.child_insurance_cad ?? 0).toFixed(2)}`} />
-                      <D label="清关费" v={`CA$${Number(p.clearance_fee_cad ?? 0).toFixed(2)}`} />
-                      <D label="附加费" v={`CA$${Number(p.surcharge_cad ?? 0).toFixed(2)}`} />
-                      <D label="方案" v={p.customer_code ? "A · 合并" : "B · 不合并"} />
+                      <D label="自身运费"       v={`CA$${Number(p.self_freight_cad ?? 0).toFixed(2)}`}/>
+                      <D label="下属运费 A"    v={`CA$${Number(p.child_freight_cad_a ?? 0).toFixed(2)}`}/>
+                      <D label="下属运费 B"    v={`CA$${Number(p.child_freight_cad_b ?? 0).toFixed(2)}`}/>
+                      <D label="关税之和"      v={`CA$${Number(p.child_customs_cad ?? 0).toFixed(2)}`}/>
+                      <D label="保险之和"      v={`CA$${Number(p.child_insurance_cad ?? 0).toFixed(2)}`}/>
+                      <D label="清关费"        v={`CA$${Number(p.clearance_fee_cad ?? 0).toFixed(2)}`}/>
+                      <D label="附加费"        v={`CA$${Number(p.surcharge_cad ?? 0).toFixed(2)}`}/>
+                      <D label="方案"          v={p.customer_code ? "A · 合并" : "B · 不合并"}/>
                     </div>
                   </td>
                 </tr>

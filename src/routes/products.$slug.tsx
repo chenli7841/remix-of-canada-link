@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/lib/i18n";
 import { useCart } from "@/lib/cart";
 
@@ -17,6 +17,9 @@ import {
   PackageCheck,
   Clock,
   Anchor,
+  Layers,
+  Tag,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicProduct, listPublicRoutes } from "@/lib/shop-public.functions";
@@ -101,7 +104,7 @@ export const Route = createFileRoute("/products/$slug")({
       </Link>
     </div>
   ),
-  errorComponent: ({ error }) => <div className="p-10 text-center text-destructive">{error.message}</div>,
+  errorComponent: ({ error }) => <div className="p-10 text-center text-destructive">{error instanceof Error ? error.message : String(error)}</div>,
   component: ProductDetail,
 });
 
@@ -112,9 +115,21 @@ function ProductDetail() {
 
   const dp = data.product as any;
   const product = adaptProduct(dp);
-  const variants = (data as any).variants ?? [];
+  const rawVariants = (data as any).variants as any[] | undefined;
   const related = ((data as any).related ?? []) as any[];
   const stock = dp.total_stock;
+
+  // 规格按价格从低到高排——服务端已经 order 过一次，这里再做一次稳定排序兜底
+  // （不依赖数据库返回顺序）。同价按建单时间，没有 created_at 就保持原始顺序。
+  const variants = useMemo(() => {
+    return [...(rawVariants ?? [])].sort((a: any, b: any) => {
+      const priceDiff = Number(a.price_cny ?? 0) - Number(b.price_cny ?? 0);
+      if (priceDiff !== 0) return priceDiff;
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return ta - tb;
+    });
+  }, [rawVariants]);
 
   const allowPersonal = dp.allow_personal ?? dp.purchase_type === "personal";
   const allowBusiness = dp.allow_business ?? dp.purchase_type === "business";
@@ -147,19 +162,76 @@ function ProductDetail() {
   useEffect(() => {
     if (qty < minQty) setQty(minQty);
   }, [minQty]);
-  const [selVariantId, setSelVariantId] = useState<string | null>(variants[0]?.id ?? null);
+  // 默认选中排序后第一个"有库存的启用规格"；如果没有任何规格有库存，退回排序后第一个启用规格。
+  // variants 已经是启用 (is_active=true) + 按价格从低到高排过的了。
+  const defaultVariantId = useMemo(() => {
+    const inStock = variants.find((v: any) => Number(v.stock ?? 0) > 0);
+    return (inStock ?? variants[0])?.id ?? null;
+  }, [variants]);
+  const [selVariantId, setSelVariantId] = useState<string | null>(defaultVariantId);
   const selVariant = variants.find((v: any) => v.id === selVariantId) ?? null;
-  const effectivePriceCNY = selVariant?.price_cny ?? product.priceCNY;
+  // Supabase 的 numeric 列过来是字符串（保精度），不显式转成 Number 的话，formatPrice 里的
+  // toLocaleString 在字符串上不会真正格式化——选规格后价格看着"没变"或小数位不对，就是这个。
+  const effectivePriceCNY = selVariant?.price_cny != null ? Number(selVariant.price_cny) : product.priceCNY;
+  const effectiveStock = selVariant ? Number(selVariant.stock ?? 0) : stock;
+
+  // 规格/产品重量、尺寸、包装数据的取值优先级：选中规格 > 商品默认值。
+  // 0 是合法的规格重量/尺寸吗？不是——0 说明这个字段没真正填过，按"空"处理去看下一级。
+  // 严禁 `variant.weight_kg || product.weight_kg`：weight_kg = 0 会被 || 误判成"没有"从而错误回退。
+  const hasNum = (v: any) => v != null && Number(v) > 0;
+  const pickField = (variantVal: any, productVal: any): number | null => {
+    if (hasNum(variantVal)) return Number(variantVal);
+    if (hasNum(productVal)) return Number(productVal);
+    return null;
+  };
+
+  // 单件/销售单位——只有规格上有，商品级别没有对应字段可回退（products 表没有 length_cm 等列）
+  const unitWeightKg = hasNum(selVariant?.weight_kg)
+    ? Number(selVariant.weight_kg)
+    : hasNum(dp.weight_kg)
+      ? Number(dp.weight_kg)
+      : null;
+  const unitLengthCm = hasNum(selVariant?.length_cm) ? Number(selVariant.length_cm) : null;
+  const unitWidthCm = hasNum(selVariant?.width_cm) ? Number(selVariant.width_cm) : null;
+  const unitHeightCm = hasNum(selVariant?.height_cm) ? Number(selVariant.height_cm) : null;
+
+  // 包装件数/重量/尺寸/体积——规格 > 商品默认值
+  const packQty = pickField(selVariant?.pack_qty, dp.pack_qty) ?? 1;
+  const packWeightKg = pickField(selVariant?.pack_weight_kg, dp.pack_weight_kg);
+  const packLengthCm = pickField(selVariant?.pack_length_cm, dp.pack_length_cm);
+  const packWidthCm = pickField(selVariant?.pack_width_cm, dp.pack_width_cm);
+  const packHeightCm = pickField(selVariant?.pack_height_cm, dp.pack_height_cm);
+  const packVolumeM3 = pickField(selVariant?.pack_volume_m3, dp.pack_volume_m3);
+
+  // 价格卡 / 运费试算展示用哪套数据，按当前采购模式切：个人 = 单件，商业 = 整包
+  const displayWeightKg = mode === "business" ? packWeightKg : unitWeightKg;
+  const displayDims =
+    mode === "business"
+      ? packLengthCm && packWidthCm && packHeightCm
+        ? `${packLengthCm}×${packWidthCm}×${packHeightCm} cm${packVolumeM3 ? ` · ${packVolumeM3}m³` : ""}`
+        : packVolumeM3
+          ? `${packVolumeM3}m³`
+          : null
+      : unitLengthCm && unitWidthCm && unitHeightCm
+        ? `${unitLengthCm}×${unitWidthCm}×${unitHeightCm} cm`
+        : null;
 
   const gallery = [dp.cover_url, ...(Array.isArray(dp.images) ? dp.images : [])].filter(Boolean) as string[];
   const [activeImg, setActiveImg] = useState(0);
   const currentImg = gallery[activeImg];
+  // 选中的 SKU 有自己的图就优先显示；没有就还是走商品封面/画廊那一套，不受影响。
+  const displayImg = selVariant?.image_url || currentImg;
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const totalCustomsRate =
     Number(dp.customs_mfn_rate ?? 0) + Number(dp.customs_gst_rate ?? 0) + Number(dp.customs_antidumping_rate ?? 0);
 
   const otherPrice =
     currency === "CNY" ? `≈ CA$${cnyToCad(effectivePriceCNY).toFixed(2)}` : `≈ ¥${effectivePriceCNY.toFixed(0)}`;
+
+  // Supabase numeric 列过来是字符串——原样塞进购物车会让下游的加总/运费计算变成字符串拼接
+  // 而不是数字相加。undefined 保持 undefined（字段真的没填），非空一律转成 Number。
+  const numOrUndef = (v: any): number | undefined => (v == null ? undefined : Number(v));
 
   const handleAdd = () => {
     if (qty < minQty) return;
@@ -168,16 +240,16 @@ function ProductDetail() {
           id: selVariant.id,
           sku: selVariant.sku,
           label: [selVariant.attrs?.color, selVariant.attrs?.size].filter(Boolean).join(" / ") || selVariant.sku,
-          priceCNY: selVariant.price_cny,
-          weightKg: selVariant.weight_kg,
-          lengthCm: selVariant.length_cm,
-          widthCm: selVariant.width_cm,
-          heightCm: selVariant.height_cm,
-          packQty: selVariant.pack_qty,
-          packWeightKg: selVariant.pack_weight_kg,
-          packLengthCm: selVariant.pack_length_cm,
-          packWidthCm: selVariant.pack_width_cm,
-          packHeightCm: selVariant.pack_height_cm,
+          priceCNY: effectivePriceCNY,
+          weightKg: numOrUndef(selVariant.weight_kg),
+          lengthCm: numOrUndef(selVariant.length_cm),
+          widthCm: numOrUndef(selVariant.width_cm),
+          heightCm: numOrUndef(selVariant.height_cm),
+          packQty: numOrUndef(selVariant.pack_qty),
+          packWeightKg: numOrUndef(selVariant.pack_weight_kg),
+          packLengthCm: numOrUndef(selVariant.pack_length_cm),
+          packWidthCm: numOrUndef(selVariant.pack_width_cm),
+          packHeightCm: numOrUndef(selVariant.pack_height_cm),
         }
       : undefined;
     add(product, qty, cartVariant);
@@ -236,12 +308,21 @@ function ProductDetail() {
         <span className="text-foreground">{product.name[lang]}</span>
       </nav>
 
-      <div className="grid gap-10 lg:grid-cols-2">
-        {/* Gallery */}
-        <div>
+      <div className="grid gap-8 lg:grid-cols-[42fr_58fr]">
+        {/* Left: gallery + compact info — sticky on desktop, scoped to this row only
+            (the sticky box's own height matches the row via grid stretch, so it stops
+            exactly where the row ends — never overlaps "商品详情" below). */}
+        <div className="lg:sticky lg:top-24">
           <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-accent via-surface to-accent">
-            {currentImg ? (
-              <img src={currentImg} alt={product.name[lang]} className="aspect-square h-full w-full object-cover" />
+            {displayImg ? (
+              <button
+                type="button"
+                onClick={() => setLightboxSrc(displayImg)}
+                className="block aspect-square h-full w-full cursor-zoom-in"
+                title={lang === "zh" ? "点击放大" : "Click to enlarge"}
+              >
+                <img src={displayImg} alt={product.name[lang]} className="h-full w-full object-cover" />
+              </button>
             ) : (
               <div className="grid aspect-square place-items-center text-[12rem]">{product.image}</div>
             )}
@@ -259,44 +340,57 @@ function ProductDetail() {
               ))}
             </div>
           )}
+
+          {/* Compact info panel — pack note / origin / packaging / material / HS code.
+              Reads existing fields only; anything empty just doesn't render. */}
+          {(packQty > 1 || originLocation || hasPackagingInfo || dp.material || dp.hs_code) && (
+            <div className="mt-4 rounded-2xl border border-border bg-surface p-4 space-y-3">
+              {packQty > 1 && (
+                <InfoRow
+                  icon={<PackageCheck className="h-3.5 w-3.5" />}
+                  label={lang === "zh" ? `${packQty} 个/包` : `${packQty}/pack`}
+                  value={
+                    lang === "zh" ? "价格、重量、体积均按整包计算" : "Price, weight & volume shown per pack"
+                  }
+                />
+              )}
+              {originLocation && (
+                <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={lang === "zh" ? "货源地" : "Sourced from"} value={originLocation} />
+              )}
+              {packagingNote && (
+                <InfoRow icon={<PackageCheck className="h-3.5 w-3.5" />} label={lang === "zh" ? "包装规格" : "Packaging"} value={packagingNote} />
+              )}
+              {leadTimeNote && (
+                <InfoRow icon={<Clock className="h-3.5 w-3.5" />} label={lang === "zh" ? "生产周期" : "Lead time"} value={leadTimeNote} />
+              )}
+              {originPortNote && (
+                <InfoRow icon={<Anchor className="h-3.5 w-3.5" />} label={lang === "zh" ? "起运地" : "Origin port"} value={originPortNote} />
+              )}
+              {dp.material && (
+                <InfoRow icon={<Layers className="h-3.5 w-3.5" />} label={lang === "zh" ? "材质" : "Material"} value={dp.material} />
+              )}
+              {dp.hs_code && <InfoRow icon={<Tag className="h-3.5 w-3.5" />} label="HS Code" value={dp.hs_code} mono />}
+            </div>
+          )}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            {allowPersonal && allowBusiness ? (
-              <div className="inline-flex rounded-full border border-border bg-surface p-0.5 text-[11px] font-semibold uppercase tracking-wider">
-                <button
-                  onClick={() => setMode("personal")}
-                  className={`rounded-full px-2.5 py-0.5 transition ${mode === "personal" ? "bg-foreground text-background" : "text-ink-soft"}`}
-                >
-                  {t("ptype.personal")}
-                </button>
-                <button
-                  onClick={() => setMode("business")}
-                  className={`rounded-full px-2.5 py-0.5 transition ${mode === "business" ? "bg-foreground text-background" : "text-ink-soft"}`}
-                >
-                  {t("ptype.business")}
-                </button>
-              </div>
-            ) : (
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
-                  mode === "business" ? "bg-foreground text-background" : "bg-accent text-ink-soft"
-                }`}
-              >
-                {mode === "business" ? t("ptype.business") : t("ptype.personal")}
-              </span>
-            )}
             {mode === "business" && (
               <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                 MOQ {dp.moq}
               </span>
             )}
             <span className="text-xs text-ink-soft">
-              {lang === "zh" ? "库存" : "Stock"}: {stock}
+              {lang === "zh" ? "库存" : "Stock"}: {effectiveStock}
             </span>
           </div>
           <h1 className="font-display text-3xl font-bold sm:text-4xl">{product.name[lang]}</h1>
+          {dp.brand && (
+            <div className="mt-1 text-sm text-ink-soft">
+              {lang === "zh" ? "品牌" : "Brand"}: {dp.brand}
+            </div>
+          )}
           <p className="mt-3 text-ink-soft">{product.description[lang]}</p>
           <div className="mt-4">
             <ShareButtons
@@ -317,7 +411,9 @@ function ProductDetail() {
               )}
             </div>
             <div className="mt-2 text-xs text-ink-soft">
-              {t("product.from")} · {t("product.weight")} {product.weightKg}kg
+              {t("product.from")}
+              {displayWeightKg != null && ` · ${t("product.weight")} ${displayWeightKg}kg`}
+              {displayDims && ` · ${displayDims}`}
             </div>
             {totalCustomsRate > 0 && (
               <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
@@ -332,6 +428,32 @@ function ProductDetail() {
               </div>
             )}
           </div>
+
+          {/* Purchase mode — switches which variant/pack data feeds price, weight, dims & freight quote above/below */}
+          {allowPersonal && allowBusiness ? (
+            <div className="mt-4 inline-flex rounded-full border border-border bg-surface p-0.5 text-[11px] font-semibold uppercase tracking-wider">
+              <button
+                onClick={() => setMode("personal")}
+                className={`rounded-full px-3 py-1 transition ${mode === "personal" ? "bg-foreground text-background" : "text-ink-soft"}`}
+              >
+                {t("ptype.personal")}
+              </button>
+              <button
+                onClick={() => setMode("business")}
+                className={`rounded-full px-3 py-1 transition ${mode === "business" ? "bg-foreground text-background" : "text-ink-soft"}`}
+              >
+                {t("ptype.business")}
+              </button>
+            </div>
+          ) : (
+            <span
+              className={`mt-4 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                mode === "business" ? "bg-foreground text-background" : "bg-accent text-ink-soft"
+              }`}
+            >
+              {mode === "business" ? t("ptype.business") : t("ptype.personal")}
+            </span>
+          )}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             {allowedRoutes.length === 0 ? (
@@ -359,35 +481,58 @@ function ProductDetail() {
             )}
           </div>
 
+          {/* SKU selection — sorted cheapest-first, compact 2-col grid, capped height + internal scroll */}
           {variants.length > 0 && (
             <div className="mt-6 rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-3 text-sm font-display font-bold">{lang === "zh" ? "规格选择" : "Choose variant"}</div>
-              <div className="flex flex-wrap gap-2">
+              <div className="mb-3 flex items-center justify-between text-sm font-display font-bold">
+                <span>{lang === "zh" ? "规格选择" : "Choose variant"}</span>
+                {selVariant && (
+                  <span className="font-mono text-[11px] font-normal text-ink-soft">SKU {selVariant.sku}</span>
+                )}
+              </div>
+              <div
+                className="grid grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2"
+                style={{ maxHeight: 360 }}
+              >
                 {variants.map((v: any) => {
-                  const label = [v.attrs?.color, v.attrs?.size].filter(Boolean).join(" / ") || v.sku;
+                  const label = [v.attrs?.color, v.attrs?.size].filter(Boolean).join(" / ");
                   const active = v.id === selVariantId;
-                  const out = (v.stock ?? 0) <= 0;
+                  const vStock = Number(v.stock ?? 0);
+                  const out = vStock <= 0;
                   return (
                     <button
                       key={v.id}
                       onClick={() => !out && setSelVariantId(v.id)}
                       disabled={out}
-                      className={`rounded-full border px-3 py-1.5 text-xs transition ${active ? "border-brand bg-brand/10 font-semibold text-brand" : "border-border hover:border-brand/40"} ${out ? "opacity-40 line-through" : ""}`}
+                      className={`flex flex-col gap-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                        active ? "border-brand bg-brand/5" : "border-border hover:border-brand/40"
+                      } ${out ? "cursor-not-allowed opacity-40" : ""}`}
                     >
-                      {label}
-                      {v.price_cny != null && Number(v.price_cny) !== Number(product.priceCNY) && (
-                        <span className="ml-1 text-[10px] text-ink-soft">· {formatPrice(Number(v.price_cny))}</span>
-                      )}
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="truncate font-mono text-[10px] text-ink-soft">{v.sku}</span>
+                        {active && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
+                      </div>
+                      {label && <span className="truncate font-medium">{label}</span>}
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="font-display font-bold text-brand-gradient">
+                          {formatPrice(Number(v.price_cny ?? 0))}
+                        </span>
+                        {out ? (
+                          <span className="shrink-0 text-[10px] text-rose-500">
+                            {lang === "zh" ? "缺货" : "Out"}
+                          </span>
+                        ) : (
+                          vStock <= 10 && (
+                            <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400">
+                              {lang === "zh" ? `余${vStock}` : `${vStock} left`}
+                            </span>
+                          )
+                        )}
+                      </div>
                     </button>
                   );
                 })}
               </div>
-              {selVariant && (
-                <div className="mt-2 text-[11px] text-ink-soft">
-                  SKU: <span className="font-mono">{selVariant.sku}</span> · {lang === "zh" ? "库存" : "Stock"}{" "}
-                  {selVariant.stock}
-                </div>
-              )}
             </div>
           )}
 
@@ -409,11 +554,11 @@ function ProductDetail() {
             </div>
             <button
               onClick={handleAdd}
-              disabled={stock <= 0 || qty < minQty}
+              disabled={effectiveStock <= 0 || qty < minQty}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-cta-gradient px-6 py-4 text-sm font-semibold text-cta-foreground shadow-elevated transition hover:brightness-110 disabled:opacity-50"
             >
               <ShoppingCart className="h-4 w-4" />
-              {stock <= 0
+              {effectiveStock <= 0
                 ? lang === "zh"
                   ? "暂时缺货"
                   : "Out of stock"
@@ -499,78 +644,6 @@ function ProductDetail() {
             </div>
           )}
 
-          {/* Origin / sourcing info — only shown when set in admin */}
-          {originLocation && (
-            <div className="mt-6 flex items-center gap-3 rounded-2xl border border-border bg-surface p-5">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-brand">
-                <MapPin className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="text-sm font-semibold">{lang === "zh" ? "货源地" : "Sourced from"}</div>
-                <div className="text-xs text-ink-soft">{originLocation}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Specs */}
-          <div className="mt-6 rounded-2xl border border-border bg-surface p-5 text-sm">
-            <div className="mb-3 font-display font-bold">{lang === "zh" ? "商品规格" : "Specifications"}</div>
-            <dl className="grid grid-cols-2 gap-y-2 text-xs">
-              {dp.brand && <SpecRow k={lang === "zh" ? "品牌" : "Brand"} v={dp.brand} />}
-              {/* manufacturer hidden from frontend per business rule */}
-              {dp.hs_code && <SpecRow k="HS Code" v={dp.hs_code} />}
-              {dp.pack_qty && <SpecRow k={lang === "zh" ? "每包装件数" : "Pcs/Pack"} v={String(dp.pack_qty)} />}
-              {dp.pack_weight_kg && (
-                <SpecRow k={lang === "zh" ? "包装重量" : "Pack weight"} v={`${dp.pack_weight_kg} kg`} />
-              )}
-              {dp.pack_length_cm && (
-                <SpecRow
-                  k={lang === "zh" ? "包装尺寸" : "Pack size"}
-                  v={`${dp.pack_length_cm}×${dp.pack_width_cm}×${dp.pack_height_cm} cm`}
-                />
-              )}
-              {dp.pack_volume_m3 && (
-                <SpecRow k={lang === "zh" ? "包装体积" : "Pack volume"} v={`${dp.pack_volume_m3} m³`} />
-              )}
-            </dl>
-          </div>
-
-          {/* Packaging & shipping — only the fields set in admin show up */}
-          {hasPackagingInfo && (
-            <div className="mt-6 rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-3 font-display font-bold">{lang === "zh" ? "包装与发货" : "Packaging & shipping"}</div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                {packagingNote && (
-                  <div className="flex gap-2.5">
-                    <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-                    <div>
-                      <div className="text-xs font-semibold">{lang === "zh" ? "包装规格" : "Packaging"}</div>
-                      <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{packagingNote}</p>
-                    </div>
-                  </div>
-                )}
-                {leadTimeNote && (
-                  <div className="flex gap-2.5">
-                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-                    <div>
-                      <div className="text-xs font-semibold">{lang === "zh" ? "生产周期" : "Lead time"}</div>
-                      <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{leadTimeNote}</p>
-                    </div>
-                  </div>
-                )}
-                {originPortNote && (
-                  <div className="flex gap-2.5">
-                    <Anchor className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-                    <div>
-                      <div className="text-xs font-semibold">{lang === "zh" ? "起运地" : "Origin port"}</div>
-                      <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{originPortNote}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {trustPoints.length > 0 && (
             <ul className="mt-6 space-y-2 text-sm text-ink-soft">
               {trustPoints.map((line: string, i: number) => (
@@ -584,21 +657,40 @@ function ProductDetail() {
         </div>
       </div>
 
-      {/* Detail blocks */}
+      {/* Detail blocks — full page width, below the two-column fold. Images keep their
+          original order and each other's relative order to text/video blocks (text/video
+          span the full row; consecutive images pack into the grid: 1/row on phones,
+          2/row from sm, 4/row from lg). object-contain so tall spec/pricing images never
+          get their text or dimensions cropped. */}
       {Array.isArray(dp.detail_blocks) && dp.detail_blocks.length > 0 && (
         <section className="mt-16">
           <h2 className="mb-6 font-display text-2xl font-bold">{lang === "zh" ? "商品详情" : "Product Details"}</h2>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {dp.detail_blocks.map((b: any, i: number) => {
               if (b.type === "image" && b.url)
-                return <img key={i} src={b.url} alt="" className="w-full rounded-2xl border border-border" />;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setLightboxSrc(b.url)}
+                    className="cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-surface"
+                    title={lang === "zh" ? "点击放大" : "Click to enlarge"}
+                  >
+                    <img src={b.url} alt="" className="aspect-[3/4] w-full object-contain" />
+                  </button>
+                );
               if (b.type === "video" && b.url)
                 return (
-                  <video key={i} src={b.url} controls className="w-full rounded-2xl border border-border bg-black" />
+                  <video
+                    key={i}
+                    src={b.url}
+                    controls
+                    className="col-span-full w-full rounded-2xl border border-border bg-black"
+                  />
                 );
               if (b.type === "text" && b.content)
                 return (
-                  <p key={i} className="whitespace-pre-wrap text-base leading-relaxed text-foreground">
+                  <p key={i} className="col-span-full whitespace-pre-wrap text-base leading-relaxed text-foreground">
                     {lang === "en" ? b.content_en || b.content : b.content}
                   </p>
                 );
@@ -662,16 +754,21 @@ function ProductDetail() {
           </div>
         </section>
       )}
+
+      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   );
 }
 
-function SpecRow({ k, v }: { k: string; v: string }) {
+function InfoRow({ icon, label, value, mono }: { icon: ReactNode; label: string; value: string; mono?: boolean }) {
   return (
-    <>
-      <dt className="text-ink-soft">{k}</dt>
-      <dd className="text-right font-medium">{v}</dd>
-    </>
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-accent text-brand">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold text-foreground">{label}</div>
+        <div className={`mt-0.5 text-[11px] leading-relaxed text-ink-soft ${mono ? "font-mono" : ""}`}>{value}</div>
+      </div>
+    </div>
   );
 }
 function QRow({ k, v }: { k: string; v: string }) {
@@ -679,6 +776,42 @@ function QRow({ k, v }: { k: string; v: string }) {
     <div>
       <dt className="text-[10px] uppercase tracking-wider text-ink-soft">{k}</dt>
       <dd className="font-semibold">{v}</dd>
+    </div>
+  );
+}
+
+// 简单遮罩放大图——不支持拖拽/滚轮缩放，图片按屏幕大小自适应铺满，点遮罩/右上角
+// X/Esc 关闭。SKU 主图和"商品详情"图片区都用它，同一个组件。
+function Lightbox({ src, onClose }: { src: string | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!src) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [src, onClose]);
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <img
+        src={src}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[90vw] cursor-default rounded-lg object-contain"
+      />
     </div>
   );
 }

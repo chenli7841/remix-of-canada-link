@@ -10,6 +10,7 @@ import {
   setUserFeeScheme,
   getMyRoles,
   adjustUserWallet,
+  walletTxReceipt,
   type AppRole,
 } from "@/lib/admin.functions";
 import { ROLE_LABEL, ROLE_COLOR, ASSIGNABLE_ROLES } from "@/lib/admin-roles";
@@ -34,6 +35,8 @@ import {
   Receipt,
   ExternalLink,
   Ban,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/users/$userId")({
@@ -265,6 +268,9 @@ function UserDetailPage() {
           {/* Wallet balance editor */}
           <WalletCard userId={userId} currentCad={Number(d.wallet?.balance_cad ?? 0)} canEdit={canEdit} />
 
+          {/* Wallet transaction ledger — same wallet_transactions source as the customer's 我的钱包 */}
+          <WalletLedgerCard txs={(d as any).walletTx ?? []} userId={userId} canEdit={canEdit} />
+
           {/* Blacklist */}
           <BlacklistCard
             userId={userId}
@@ -284,6 +290,7 @@ function UserDetailPage() {
 
           {/* Customer HS library */}
           <CustomerHsCard userId={userId} canEdit={canEdit} />
+
         </div>
 
         {/* Right: role panel */}
@@ -989,6 +996,236 @@ function WalletCard({ userId, currentCad, canEdit }: { userId: string; currentCa
   );
 }
 
+// Wallet transaction ledger — mirrors the customer-facing 我的钱包 list in account.tsx
+// (same wallet_transactions rows), so staff see exactly what the customer sees. Staff
+// view shows every status; the customer only sees completed. Refreshes with the page
+// query, so a manual balance adjustment above updates this list immediately.
+// Staff can attach an 操作回执 (reason + result) that flips one row to 已充值 / 已无效
+// and keeps the record — balance impact + audit handled server-side.
+function WalletLedgerCard({ txs, userId, canEdit }: { txs: any[]; userId: string; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const receipt = useServerFn(walletTxReceipt);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [rNew, setRNew] = useState<"completed" | "cancelled">("completed");
+  const [rReason, setRReason] = useState("");
+  const [rBusy, setRBusy] = useState(false);
+  const [rMsg, setRMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const POS = new Set(["recharge", "refund", "adjust"]);
+  const typeLabel = (t: string) =>
+    (({ recharge: "充值", spend: "消费", refund: "退款", adjust: "调整" }) as Record<string, string>)[t] ?? t;
+  const channelLabel = (c: string) =>
+    (
+      ({
+        card: "信用卡",
+        wechat: "微信支付",
+        alipay: "支付宝",
+        paypal: "PayPal",
+        admin: "管理员",
+        wallet: "钱包",
+        shop: "电商",
+        batch: "集运",
+        storage: "仓储",
+        emt: "邮件转账",
+        cash: "现金",
+      }) as Record<string, string>
+    )[c] ?? c;
+  const statusLabel = (s: string) =>
+    (({ pending: "待处理", completed: "已充值", failed: "失败", cancelled: "已无效" }) as Record<string, string>)[s] ?? s;
+
+  const openReceipt = (id: string, current: string) => {
+    setOpenId(id);
+    setRNew(current === "completed" ? "cancelled" : "completed");
+    setRReason("");
+    setRMsg(null);
+  };
+
+  const submitReceipt = async (t: any) => {
+    if (!rReason.trim()) {
+      setRMsg({ kind: "err", text: "请填写操作回执原因" });
+      return;
+    }
+    setRBusy(true);
+    setRMsg(null);
+    try {
+      const r: any = await receipt({ data: { txId: t.id, newStatus: rNew, reason: rReason.trim() } });
+      const delta = Number(r?.balance_delta_cad ?? 0);
+      const deltaTxt =
+        Math.abs(delta) > 0.005
+          ? `，钱包余额 ${delta > 0 ? "+" : "-"}CA$${Math.abs(delta).toFixed(2)}`
+          : "，未影响余额";
+      setRMsg({
+        kind: "ok",
+        text: `已改为「${rNew === "completed" ? "已充值" : "已无效"}」${deltaTxt}`,
+      });
+      await qc.invalidateQueries({ queryKey: ["admin-user-detail", userId] });
+      setTimeout(() => {
+        setOpenId(null);
+        setRMsg(null);
+      }, 1500);
+    } catch (e: any) {
+      setRMsg({ kind: "err", text: e?.message ?? "操作失败" });
+    } finally {
+      setRBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+      <h2 className="font-display text-base font-bold inline-flex items-center gap-2">
+        <Receipt className="h-4 w-4 text-emerald-400" />
+        钱包流水
+        <span className="text-xs font-normal text-slate-500">（近 {txs.length} 条 · 与客户端「我的钱包」同源）</span>
+      </h2>
+      {txs.length === 0 ? (
+        <p className="py-6 text-center text-xs text-slate-500">暂无流水</p>
+      ) : (
+        <ul className="mt-3 max-h-[460px] divide-y divide-white/5 overflow-y-auto pr-1">
+          {txs.map((t) => {
+            const positive = POS.has(t.type);
+            const cad = Number(t.amount_cad ?? 0);
+            const cny = t.amount_cny != null ? Number(t.amount_cny) : null;
+            const offline = t.channel === "emt" || t.channel === "cash";
+            const dim = t.status !== "completed";
+            const isOpen = openId === t.id;
+            return (
+              <li key={t.id} className={`py-2.5 ${dim && !isOpen ? "opacity-60" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                      positive ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+                    }`}
+                  >
+                    {positive ? <ArrowDownCircle className="h-4 w-4" /> : <ArrowUpCircle className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-medium text-slate-100">{typeLabel(t.type)}</span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                          t.status === "cancelled" || t.status === "failed"
+                            ? "bg-rose-500/10 text-rose-300"
+                            : t.status === "completed"
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : "bg-white/5 text-slate-400"
+                        }`}
+                      >
+                        {statusLabel(t.status)}
+                      </span>
+                      {t.channel && (
+                        <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400">
+                          {channelLabel(t.channel)}
+                        </span>
+                      )}
+                      {offline && (
+                        <span className="rounded-full bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300">
+                          线下 · 不影响余额
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {new Date(t.created_at).toLocaleString("zh-CN", { hour12: false })}
+                      {t.ref_no ? ` · ${t.ref_no}` : ""}
+                    </div>
+                    {t.note && <div className="mt-0.5 truncate text-[10px] text-slate-500">{t.note}</div>}
+                    {t.receipt_reason && (
+                      <div className="mt-0.5 text-[10px] text-amber-300/90">
+                        回执：{t.receipt_reason}
+                        {t.receipt_at ? ` · ${new Date(t.receipt_at).toLocaleDateString("zh-CN")}` : ""}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div
+                      className={`font-mono text-sm font-bold ${positive ? "text-emerald-300" : "text-slate-200"}`}
+                    >
+                      {positive ? "+" : "-"}CA${Math.abs(cad).toFixed(2)}
+                    </div>
+                    {cny != null && (
+                      <div className="text-[10px] font-normal text-slate-500">≈¥{Math.abs(cny).toFixed(2)}</div>
+                    )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => (isOpen ? setOpenId(null) : openReceipt(t.id, t.status))}
+                        className="mt-1 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-white/5"
+                      >
+                        {isOpen ? "收起" : "操作回执"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isOpen && (
+                  <div className="mt-2 rounded-lg border border-brand/30 bg-[#0E1626] p-2.5">
+                    <div className="mb-1.5 flex gap-1.5">
+                      {(
+                        [
+                          ["completed", "已充值"],
+                          ["cancelled", "已无效"],
+                        ] as const
+                      ).map(([v, l]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setRNew(v)}
+                          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                            rNew === v
+                              ? v === "completed"
+                                ? "bg-emerald-600 text-white"
+                                : "bg-rose-600 text-white"
+                              : "border border-white/10 bg-white/5 text-slate-300"
+                          }`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={rReason}
+                      onChange={(e) => setRReason(e.target.value)}
+                      rows={2}
+                      placeholder="操作回执原因（必填）—— 例如：已核实转账到账 / 凭证不符，作废"
+                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      改为「已充值」会按该流水的金额与方向计入钱包余额；「已无效」会撤销已计入的影响。
+                    </p>
+                    {rMsg && (
+                      <div
+                        className={`mt-1.5 text-[11px] ${rMsg.kind === "ok" ? "text-emerald-300" : "text-rose-300"}`}
+                      >
+                        {rMsg.text}
+                      </div>
+                    )}
+                    <div className="mt-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        disabled={rBusy || !rReason.trim()}
+                        onClick={() => submitReceipt(t)}
+                        className="flex-1 rounded bg-brand px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand/90 disabled:opacity-40"
+                      >
+                        {rBusy ? "处理中…" : "确认回执"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOpenId(null)}
+                        className="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-300"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 // ============================================================
 // 客户 HS 编码库
 // ============================================================
@@ -1133,11 +1370,7 @@ function CustomerHsCard({ userId, canEdit }: { userId: string; canEdit: boolean 
                         onClick={() => onDelete(r)}
                         className="ml-1 rounded px-1.5 py-0.5 text-[11px] text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
                       >
-                        {busyId === r.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3 w-3" />
-                        )}
+                        {busyId === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                       </button>
                     </td>
                   )}
@@ -1228,67 +1461,36 @@ function HsEditDialog({
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <label className="col-span-1">
             <div className="mb-1 text-[10px] uppercase text-slate-400">SKU</div>
-            <input
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={sku} onChange={(e) => setSku(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
           <label className="col-span-1">
             <div className="mb-1 text-[10px] uppercase text-slate-400">HS 编码</div>
-            <input
-              value={hs}
-              onChange={(e) => setHs(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono"
-            />
+            <input value={hs} onChange={(e) => setHs(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono" />
           </label>
           <label className="col-span-2">
             <div className="mb-1 text-[10px] uppercase text-slate-400">品名 *</div>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
           <label>
             <div className="mb-1 text-[10px] uppercase text-slate-400">单价 CAD</div>
-            <input
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
           <label>
             <div className="mb-1 text-[10px] uppercase text-slate-400">内件数</div>
-            <input
-              value={ipc}
-              onChange={(e) => setIpc(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={ipc} onChange={(e) => setIpc(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
           <label>
             <div className="mb-1 text-[10px] uppercase text-slate-400">箱数</div>
-            <input
-              value={ctns}
-              onChange={(e) => setCtns(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={ctns} onChange={(e) => setCtns(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
           <label className="col-span-2">
             <div className="mb-1 text-[10px] uppercase text-slate-400">备注</div>
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5"
-            />
+            <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5" />
           </label>
         </div>
         {err && <div className="mt-3 text-xs text-rose-400">{err}</div>}
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5"
-          >
+          <button onClick={onClose} className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5">
             取消
           </button>
           <button
@@ -1373,8 +1575,7 @@ function ImportDialog({
       >
         <h3 className="font-display text-lg font-bold">批量导入 HS 物品</h3>
         <p className="mt-1 text-xs text-slate-400">
-          每行一条，字段用 <span className="text-slate-200">Tab</span> 或 <span className="text-slate-200">逗号</span>{" "}
-          分隔：
+          每行一条，字段用 <span className="text-slate-200">Tab</span> 或 <span className="text-slate-200">逗号</span> 分隔：
           <span className="font-mono ml-1">SKU, 品名, 单价, 内件数, 箱数, HS编码</span>。可直接从 Excel 复制粘贴。
         </p>
         <textarea
@@ -1385,20 +1586,12 @@ function ImportDialog({
           className="mt-3 w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-2 text-xs font-mono text-slate-100 focus:border-brand outline-none"
         />
         <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
-          <input
-            type="checkbox"
-            checked={replace}
-            onChange={(e) => setReplace(e.target.checked)}
-            className="h-4 w-4 accent-brand"
-          />
+          <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="h-4 w-4 accent-brand" />
           替换该客户现有全部数据
         </label>
         {err && <div className="mt-2 text-xs text-rose-400">{err}</div>}
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5"
-          >
+          <button onClick={onClose} className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5">
             取消
           </button>
           <button
@@ -1413,3 +1606,4 @@ function ImportDialog({
     </div>
   );
 }
+

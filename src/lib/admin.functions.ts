@@ -182,12 +182,38 @@ export const getUserDetail = createServerFn({ method: "POST" })
         .limit(50),
     ]);
     if (!profile) throw new Error("User not found");
-    const unpaidAmountCad = (unpaidInvoices ?? []).reduce((sum: number, inv: any) => {
-      const fx = Number(inv.fx_rate ?? 0.19);
-      const totalCad = Number(inv.total_cny ?? 0) * fx;
-      const paidCad = Number(inv.paid_cad ?? 0) > 0 ? Number(inv.paid_cad) : Number(inv.paid_cny ?? 0) * fx;
-      return sum + Math.max(0, totalCad - paidCad);
-    }, 0);
+
+    // 钱包流水 —— 与客户端「我的钱包」读同一张表。receipt_* 列由 20260909150000 迁移新增；
+    // 迁移未应用时降级到不含这两列的查询，避免整页 500。
+    let walletTx: any[] = [];
+    {
+      const full = await supabaseAdmin
+        .from("wallet_transactions")
+        .select("id, type, status, channel, amount_cad, amount_cny, note, ref_no, created_at, receipt_reason, receipt_at")
+        .eq("user_id", data.userId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (full.error) {
+        const base = await supabaseAdmin
+          .from("wallet_transactions")
+          .select("id, type, status, channel, amount_cad, amount_cny, note, ref_no, created_at")
+          .eq("user_id", data.userId)
+          .order("created_at", { ascending: false })
+          .limit(100);
+        walletTx = base.data ?? [];
+      } else {
+        walletTx = full.data ?? [];
+      }
+    }
+    const unpaidAmountCad = (unpaidInvoices ?? []).reduce(
+      (sum: number, inv: any) => {
+        const fx = Number(inv.fx_rate ?? 0.19);
+        const totalCad = Number(inv.total_cny ?? 0) * fx;
+        const paidCad = Number(inv.paid_cad ?? 0) > 0 ? Number(inv.paid_cad) : Number(inv.paid_cny ?? 0) * fx;
+        return sum + Math.max(0, totalCad - paidCad);
+      },
+      0,
+    );
     return {
       profile,
       roles: (roles ?? []).map((r: any) => r.role as AppRole),
@@ -197,6 +223,7 @@ export const getUserDetail = createServerFn({ method: "POST" })
       unpaidOrders: unpaidOrders ?? [],
       unpaidForwardings: unpaidForwardings ?? [],
       unpaidAmountCad: +unpaidAmountCad.toFixed(2),
+      walletTx: walletTx ?? [],
     };
   });
 
@@ -324,6 +351,31 @@ export const adjustUserWallet = createServerFn({ method: "POST" })
     return { ok: true, balance_cad: next };
   });
 
+// 后台钱包流水「操作回执」：填写原因，把一条流水改成 completed（已充值）或 cancelled（已无效）。
+// 余额影响、审计、回执记录全在 wallet_tx_admin_receipt 事务里完成。
+export const walletTxReceipt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { txId: string; newStatus: "completed" | "cancelled"; reason: string }) => d)
+  .handler(async ({ data, context }) => {
+    const level = await getCallerLevel(context.supabase, context.userId);
+    if (level === "none") throw new Error("Forbidden: owner or manager only");
+    if (!data.reason?.trim()) throw new Error("请填写操作回执原因");
+    const { data: res, error } = await (context.supabase as any).rpc("wallet_tx_admin_receipt", {
+      _payload: { tx_id: data.txId, new_status: data.newStatus, reason: data.reason.trim() },
+    });
+    if (error) throw new Error(error.message);
+    if (res && res.ok === false) {
+      throw new Error(res.reason === "no_change" ? "该流水已是目标状态" : (res.reason ?? "操作失败"));
+    }
+    return res as {
+      ok: true;
+      tx_id: string;
+      old_status: string;
+      new_status: string;
+      balance_delta_cad: number;
+    };
+  });
+
 export const setUserRoles = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string; roles: AppRole[] }) => d)
@@ -357,7 +409,9 @@ export const setUserRoles = createServerFn({ method: "POST" })
     const desired = Array.from(new Set([...data.roles, "customer"])) as AppRole[];
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     const rows = desired.map((role) => ({ user_id: data.userId, role }));
-    const { error } = await supabaseAdmin.from("user_roles").insert(rows);
+    // sales_rep 还没进生成的 types.ts（新枚举值），insert 类型推断会拒绝它——转 any
+    // 绕过，数据库这边枚举已经加了这个值（见 20260914110000 迁移）。
+    const { error } = await supabaseAdmin.from("user_roles").insert(rows as any);
     if (error) throw new Error(error.message);
     await recordAdminLog(supabaseAdmin, {
       entity_type: "user",

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
-import { getDefaultLabelSize, setDefaultLabelSize, LABEL_SIZES, type LabelSize } from "@/lib/label-size";
+import {
+  getDefaultLabelSize,
+  setDefaultLabelSize,
+  LABEL_SIZES,
+  type LabelSize,
+} from "@/lib/label-size";
 
 /**
  * Inline segmented control for the account's default label size. Used where
@@ -43,7 +48,9 @@ export function LabelSizeToggle({
             onClick={() => pick(s.value)}
             aria-pressed={size === s.value}
             className={`px-2 py-1 font-semibold transition-colors ${
-              size === s.value ? "bg-brand text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"
+              size === s.value
+                ? "bg-brand text-white"
+                : "bg-white/5 text-slate-300 hover:bg-white/10"
             }`}
           >
             {s.short}

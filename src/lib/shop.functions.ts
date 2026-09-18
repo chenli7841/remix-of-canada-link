@@ -142,17 +142,19 @@ export const saveProduct = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       pid = inserted!.id;
     }
-    if (Array.isArray(variants)) {
+    // Variants are managed row-by-row via saveVariant / deleteVariant once the product
+    // exists. Only a brand-new product seeds its initial rows here, so the "create product
+    // + first swatches in one click" flow keeps working — and every insert is now checked.
+    if (!id && Array.isArray(variants) && variants.length > 0) {
       for (const v of variants) {
-        const { id: vid, ...vrest } = v;
-        if (vid && !String(vid).startsWith("new_")) {
-          await supabaseAdmin
-            .from("product_variants")
-            .update({ ...vrest, product_id: pid })
-            .eq("id", vid);
-        } else {
-          await supabaseAdmin.from("product_variants").insert({ ...vrest, product_id: pid });
-        }
+        const { id: _vid, created_at: _vc, updated_at: _vu, ...vrest } = v;
+        void _vid;
+        void _vc;
+        void _vu;
+        const { error: verr } = await supabaseAdmin
+          .from("product_variants")
+          .insert({ ...vrest, product_id: pid });
+        if (verr) throw new Error(`规格「${v.sku ?? ""}」保存失败：${verr.message}`);
       }
     }
     await recordAdminLog(supabaseAdmin, {
@@ -163,11 +165,208 @@ export const saveProduct = createServerFn({ method: "POST" })
         name: rest.name,
         sku: rest.sku,
         status: rest.status,
-        variant_count: Array.isArray(variants) ? variants.length : 0,
+        ...(id ? {} : { seeded_variant_count: Array.isArray(variants) ? variants.length : 0 }),
       },
       operator_id: context.userId,
     });
     return { ok: true, id: pid };
+  });
+
+// ---- Per-variant CRUD -------------------------------------------------------------------
+// Each call touches exactly one product_variants row, so it's atomic on its own — no more
+// "product saved OK but some variants silently didn't write". Every write leaves an
+// admin_action_logs entry (entity_type = "shop_variant").
+
+export const saveVariant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // stock lives on the 库存流水 page, never written from the product editor
+    const { id, product_id, created_at, updated_at, stock, ...rest } = data;
+    void created_at;
+    void updated_at;
+    void stock;
+    if (!product_id) throw new Error("缺少 product_id，请先保存商品");
+    const isNewRow = !id || String(id).startsWith("new_");
+
+    if (isNewRow) {
+      const { data: ins, error } = await supabaseAdmin
+        .from("product_variants")
+        .insert({ ...rest, product_id })
+        .select("*")
+        .single();
+      if (error) throw new Error(error.message);
+      await recordAdminLog(supabaseAdmin, {
+        entity_type: "shop_variant",
+        entity_id: ins!.id,
+        action: "create",
+        after: { product_id, sku: ins!.sku, price_cny: ins!.price_cny, attrs: ins!.attrs },
+        operator_id: context.userId,
+      });
+      return { ok: true, variant: ins };
+    }
+
+    const { data: before } = await supabaseAdmin
+      .from("product_variants")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (!before) throw new Error("规格不存在，可能已被删除，请刷新页面");
+    const { data: upd, error } = await supabaseAdmin
+      .from("product_variants")
+      .update({ ...rest, product_id })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "shop_variant",
+      entity_id: id,
+      action: "update",
+      before,
+      after: upd,
+      operator_id: context.userId,
+    });
+    return { ok: true, variant: upd };
+  });
+
+export const deleteVariant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: before } = await supabaseAdmin
+      .from("product_variants")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!before) return { ok: true, mode: "noop" as const };
+
+    // A variant any order line or stock movement points at can't be hard-deleted without
+    // losing that history — deactivate it instead (front-end hides is_active=false).
+    const [{ count: orderRefs }, { count: moveRefs }] = await Promise.all([
+      supabaseAdmin.from("order_items").select("id", { count: "exact", head: true }).eq("variant_id", data.id),
+      supabaseAdmin
+        .from("inventory_movements")
+        .select("id", { count: "exact", head: true })
+        .eq("variant_id", data.id),
+    ]);
+    const referenced = (orderRefs ?? 0) > 0 || (moveRefs ?? 0) > 0;
+
+    if (referenced) {
+      const { error } = await supabaseAdmin
+        .from("product_variants")
+        .update({ is_active: false })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+    } else {
+      await supabaseAdmin.from("variant_stocks").delete().eq("variant_id", data.id);
+      const { error } = await supabaseAdmin.from("product_variants").delete().eq("id", data.id);
+      if (error) throw new Error(error.message);
+    }
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "shop_variant",
+      entity_id: data.id,
+      action: referenced ? "soft_delete" : "delete",
+      before,
+      operator_id: context.userId,
+      note: referenced ? "已被订单/库存流水引用，改为停用 is_active=false" : "硬删除",
+    });
+    return { ok: true, mode: referenced ? ("soft" as const) : ("hard" as const) };
+  });
+
+// ============ SHOP CARTS (后端预下单购物车) ============
+// 读用 supabaseAdmin（看所有客户的车）；改价走 shop_cart_admin_adjust RPC，
+// 必须用带用户 JWT 的 context.supabase，否则 RPC 里 auth.uid() 为空、is_staff 失败。
+
+export const listShopCarts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { page?: number; pageSize?: number; status?: string; q?: string } = {}) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // shop_carts / shop_cart_items ship in migration 20260909120000 — not in the
+    // generated types until that's applied and types are regenerated.
+    const admin = supabaseAdmin as any;
+    const page = Math.max(1, data.page ?? 1);
+    const pageSize = Math.min(100, data.pageSize ?? 20);
+    const { data: rows, error, count } = await admin
+      .from("shop_carts")
+      .select("*", { count: "exact" })
+      .eq("status", data.status || "active")
+      .order("updated_at", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+    if (error) throw new Error(error.message);
+    const cartIds = (rows ?? []).map((r: any) => r.id);
+    const userIds = Array.from(new Set((rows ?? []).map((r: any) => r.user_id).filter(Boolean)));
+    const [profsR, itemsR] = await Promise.all([
+      userIds.length
+        ? admin.from("profiles").select("id, full_name, email, customer_code").in("id", userIds)
+        : Promise.resolve({ data: [] as any[] }),
+      cartIds.length
+        ? admin.from("shop_cart_items").select("cart_id, override_unit_price_cny").in("cart_id", cartIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const profMap: Record<string, any> = {};
+    for (const p of (profsR.data ?? []) as any[]) profMap[p.id] = p;
+    const lineCount: Record<string, number> = {};
+    const lineOverride: Record<string, boolean> = {};
+    for (const it of (itemsR.data ?? []) as any[]) {
+      lineCount[it.cart_id] = (lineCount[it.cart_id] ?? 0) + 1;
+      if (it.override_unit_price_cny != null) lineOverride[it.cart_id] = true;
+    }
+    const items = (rows ?? []).map((r: any) => ({
+      ...r,
+      user: profMap[r.user_id] ?? null,
+      line_count: lineCount[r.id] ?? 0,
+      has_override: r.override_total_cny != null || !!lineOverride[r.id],
+    }));
+    return { items, total: count ?? 0, page, pageSize };
+  });
+
+export const getShopCart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = supabaseAdmin as any;
+    const { data: cart } = await admin.from("shop_carts").select("*").eq("id", data.id).maybeSingle();
+    if (!cart) throw new Error("Not found");
+    const { data: cartItems } = await admin
+      .from("shop_cart_items")
+      .select("*")
+      .eq("cart_id", data.id)
+      .order("created_at");
+    const logIds = [data.id, ...((cartItems ?? []).map((i: any) => i.id))];
+    const [userR, logsR] = await Promise.all([
+      admin
+        .from("profiles")
+        .select("id, full_name, email, customer_code")
+        .eq("id", cart.user_id)
+        .maybeSingle(),
+      admin
+        .from("admin_action_logs")
+        .select("*")
+        .in("entity_id", logIds)
+        .order("created_at", { ascending: false })
+        .limit(80),
+    ]);
+    return { cart, items: cartItems ?? [], user: userR.data ?? null, logs: logsR.data ?? [] };
+  });
+
+export const adjustShopCart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { data: res, error } = await (context.supabase as any).rpc("shop_cart_admin_adjust", { _payload: data });
+    if (error) throw new Error(error.message);
+    if (res && res.ok === false) throw new Error(res.reason ?? "调整失败");
+    return res as any;
   });
 
 export const setProductStatus = createServerFn({ method: "POST" })

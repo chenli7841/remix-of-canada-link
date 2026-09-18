@@ -1,0 +1,1 @@
+ALTER TABLE public.shipments ALTER COLUMN order_id DROP NOT NULL;

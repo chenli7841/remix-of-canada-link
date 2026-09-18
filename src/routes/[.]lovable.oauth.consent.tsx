@@ -12,7 +12,9 @@ type AuthorizationDetails = {
   redirect_to?: string | null;
 };
 type OAuthApi = {
-  getAuthorizationDetails: (id: string) => Promise<{ data: AuthorizationDetails | null; error: Error | null }>;
+  getAuthorizationDetails: (
+    id: string,
+  ) => Promise<{ data: AuthorizationDetails | null; error: Error | null }>;
   approveAuthorization: (
     id: string,
   ) => Promise<{ data: { redirect_url?: string; redirect_to?: string } | null; error: Error | null }>;

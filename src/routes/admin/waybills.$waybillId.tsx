@@ -199,24 +199,14 @@ function WaybillDetail() {
                       <th className="py-1 pr-2">数量/箱</th>
                       <th className="py-1 pr-2">单价 CAD</th>
                       <th className="py-1 pr-2">申报价</th>
-                      <th className="py-1 pr-2">税率(mfn+gst+反倾销+附加+消费)</th>
+                      <th className="py-1 pr-2">税率(mfn+gst+反倾销)</th>
                       <th className="py-1 pr-2">关税</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(detailQ.data as any).items_breakdown.map((it: any, i: number) => (
                       <tr key={i} className="border-b border-white/5 text-slate-200">
-                        <td className="py-1 pr-2">
-                          <div>{it.name}</div>
-                          <div className="mt-0.5 flex flex-wrap gap-1">
-                            {it.requires_permit && <span className="rounded bg-amber-500/15 px-1 text-[10px] text-amber-300">需许可</span>}
-                            {it.is_hazmat && <span className="rounded bg-rose-500/15 px-1 text-[10px] text-rose-300">危险品</span>}
-                            {it.contains_battery && <span className="rounded bg-sky-500/15 px-1 text-[10px] text-sky-300">含电池</span>}
-                            {(it.import_control ?? []).map((c: string, k: number) => (
-                              <span key={k} className="rounded bg-white/10 px-1 text-[10px] text-slate-300">{c}</span>
-                            ))}
-                          </div>
-                        </td>
+                        <td className="py-1 pr-2">{it.name}</td>
                         <td className="py-1 pr-2">
                           <HsCell item={it} onChanged={() => qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] })} />
                         </td>
@@ -232,14 +222,8 @@ function WaybillDetail() {
                         <td className="py-1 pr-2 text-slate-400">
                           {(it.mfn_rate * 100).toFixed(1)}%+{(it.gst_rate * 100).toFixed(1)}%
                           {it.anti_dumping_rate > 0 && <>+<span className="text-rose-400">{(it.anti_dumping_rate * 100).toFixed(1)}%</span></>}
-                          {Number(it.surtax_rate ?? 0) > 0 && <>+<span className="text-amber-300">{(it.surtax_rate * 100).toFixed(1)}%</span></>}
-                          {Number(it.excise_rate ?? 0) > 0 && <>+<span className="text-violet-300">{(it.excise_rate * 100).toFixed(1)}%</span></>}
                           <span className="ml-1 text-slate-500">= {(it.tax_rate * 100).toFixed(1)}%</span>
-                          {it.mfn_text && /[¢$]|per |\/kg/i.test(it.mfn_text) && (
-                            <div className="text-[10px] text-amber-300" title="复合税率，需人工核算">{it.mfn_text}</div>
-                          )}
                         </td>
-
                         <td className="py-1 pr-2 text-slate-100">{fmtCAD(it.duty_cad)}</td>
                       </tr>
                     ))}

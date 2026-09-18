@@ -1,5 +1,5 @@
 // 关税计算 · 统一入口
-// - 全部按 HS 编码逐项税率计算 (mfn + gst + anti_dumping + surtax 附加税 + excise 消费税)
+// - 全部按 HS 编码逐项税率计算 (mfn + gst + anti_dumping)
 // - customs_rules.rate_pct 已弃用；只用 customs_rules.enabled 决定该线路是否征税
 // - 匹配优先级: forwarding_items.hs_code (manual) → name_zh/name_en 精确 → aliases 精确 → 包含
 // - 声明价 = unit_price_cad × 每张运单的数量
@@ -24,20 +24,10 @@ export type DutyItemRow = {
   mfn_rate: number;
   gst_rate: number;
   anti_dumping_rate: number;
-  surtax_rate: number; // 附加税（如中国钢铝/电动车加征）
-  excise_rate: number; // 消费税（酒/烟/燃油等）
   tax_rate: number;
   duty_cad: number;
   duty_applied: boolean; // customs_rules.enabled && 达到免税额
-  mfn_text: string | null; // 复合税率原文（如 2.5¢/kg + 5%）
-  parent_description: string | null;
-  requires_permit: boolean;
-  import_control: string[];
-  is_hazmat: boolean;
-  contains_battery: boolean;
 };
-
-export type DutyAlert = { name: string; hs_code: string | null; reasons: string[] };
 
 export type DutyBreakdown = {
   items: DutyItemRow[];
@@ -46,38 +36,8 @@ export type DutyBreakdown = {
   customs_enabled: boolean;
   threshold_cad: number;
   unmatched_names: string[];
-  alerts: DutyAlert[]; // 需许可 / 危险品 / 含电池 / 复合税率需人工复核
   route_id: string | null;
 };
-
-// 一条 HS 记录 → 该品名的合规提示
-export function hsAlertReasons(hs: {
-  requires_permit?: boolean | null;
-  import_control?: string[] | null;
-  is_hazmat?: boolean | null;
-  contains_battery?: boolean | null;
-  mfn_text?: string | null;
-  mfn_rate?: number | null;
-}): string[] {
-  const out: string[] = [];
-  if (hs.requires_permit) out.push("需进口许可/OGD 审批");
-  for (const c of hs.import_control ?? []) out.push(`管制：${c}`);
-  if (hs.is_hazmat) out.push("危险品");
-  if (hs.contains_battery) out.push("含电池");
-  const t = (hs.mfn_text ?? "").trim();
-  if (t && !/^free$/i.test(t) && /[¢$]|per |\/kg|but not less/i.test(t)) out.push(`复合税率需人工核算：${t}`);
-  return out;
-}
-
-const EMPTY_HS_META = {
-  mfn_text: null as string | null,
-  parent_description: null as string | null,
-  requires_permit: false,
-  import_control: [] as string[],
-  is_hazmat: false,
-  contains_battery: false,
-};
-
 
 function toFraction(x: number): {
   value: number;
@@ -116,20 +76,29 @@ type HsRow = {
   mfn_rate: number | null;
   gst_rate: number | null;
   anti_dumping_rate: number | null;
-  surtax_rate?: number | null;
-  excise_rate?: number | null;
-  mfn_text?: string | null;
-  parent_description?: string | null;
-  requires_permit?: boolean | null;
-  import_control?: string[] | null;
-  is_hazmat?: boolean | null;
-  contains_battery?: boolean | null;
 };
 
-// 所有关税计算读取的 HS 字段（各调用点保持一致）
-export const HS_SELECT =
-  "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate, surtax_rate, excise_rate, mfn_text, parent_description, requires_permit, import_control, is_hazmat, contains_battery";
-
+// PostgREST 单次请求默认最多返回 max-rows 条（这个项目上是 1000）——裸 select 不分页的话，
+// hs_codes 一旦超过这个数，后面的编码在报关自动匹配里会被静默漏掉（不报错，只是那些品名
+// 匹配不上、少算/漏算关税）。全量匹配场景一律走这个分页拉全表，而不是不限量的裸 select。
+export async function loadAllHsCodes(admin: any, cols: string, opts?: { activeOnly?: boolean }): Promise<any[]> {
+  const pageSize = 1000;
+  const out: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    let q = admin
+      .from("hs_codes")
+      .select(cols)
+      .order("hs_code", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (opts?.activeOnly) q = q.eq("is_active", true);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return out;
+}
 
 export function buildHsIndex(rows: HsRow[]) {
   const byCode = new Map<string, HsRow>();
@@ -187,23 +156,21 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
     customs_enabled: false,
     threshold_cad: 0,
     unmatched_names: [],
-    alerts: [],
     route_id: null,
   };
   if (!wb?.forwarding_id) return empty;
 
-  const [{ data: fo }, { data: fi }, { data: hs }] = await Promise.all([
+  const [{ data: fo }, { data: fi }, hs] = await Promise.all([
     admin.from("forwarding_orders").select("id, box_count, route_id").eq("id", wb.forwarding_id).maybeSingle(),
     admin
       .from("forwarding_items")
       .select("id, name, quantity, unit_price_cad, unit_price_cny, extras, hs_code")
       .eq("forwarding_id", wb.forwarding_id),
-    admin.from("hs_codes").select(HS_SELECT),
+    loadAllHsCodes(admin, "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate"),
   ]);
   const route_id = fo?.route_id ?? null;
   const boxCount = Math.max(Number(fo?.box_count ?? 1) || 1, 1);
   const index = buildHsIndex((hs ?? []) as HsRow[]);
-
 
   // customs_rules —— 只读 enabled + threshold_cad；rate_pct 已废弃
   let customs_enabled = false,
@@ -237,7 +204,6 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
 
   const items: DutyItemRow[] = [];
   const unmatched = new Set<string>();
-  const alerts: DutyAlert[] = [];
   let declared_total = 0;
 
   for (const it of (fi ?? []) as any[]) {
@@ -266,13 +232,7 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
     const mfn = Number(hsRow?.mfn_rate ?? 0);
     const gst = Number(hsRow?.gst_rate ?? 0);
     const ad = Number(hsRow?.anti_dumping_rate ?? 0);
-    const surtax = Number(hsRow?.surtax_rate ?? 0);
-    const excise = Number(hsRow?.excise_rate ?? 0);
-    const rate = mfn + gst + ad + surtax + excise;
-    if (hsRow) {
-      const reasons = hsAlertReasons(hsRow);
-      if (reasons.length) alerts.push({ name: it.name ?? "", hs_code: hsRow.hs_code, reasons });
-    }
+    const rate = mfn + gst + ad;
 
     items.push({
       forwarding_item_id: it.id,
@@ -290,20 +250,11 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
       mfn_rate: mfn,
       gst_rate: gst,
       anti_dumping_rate: ad,
-      surtax_rate: surtax,
-      excise_rate: excise,
       tax_rate: rate,
       duty_cad: 0, // 下面按线路开关统一置位
       duty_applied: false,
-      mfn_text: hsRow?.mfn_text ?? null,
-      parent_description: hsRow?.parent_description ?? null,
-      requires_permit: !!hsRow?.requires_permit,
-      import_control: hsRow?.import_control ?? [],
-      is_hazmat: !!hsRow?.is_hazmat,
-      contains_battery: !!hsRow?.contains_battery,
     });
   }
-
 
   const applies = customs_enabled && declared_total >= threshold_cad;
   let duty_total = 0;
@@ -322,9 +273,7 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
     customs_enabled,
     threshold_cad,
     unmatched_names: [...unmatched],
-    alerts,
     route_id,
-
   };
 }
 
@@ -342,10 +291,8 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
     customs_enabled: false,
     threshold_cad: 0,
     unmatched_names: [],
-    alerts: [],
     route_id: null,
   };
-
   if (!wb?.order_id) return empty;
 
   const { data: ord } = await admin.from("orders").select("id, route_id").eq("id", wb.order_id).maybeSingle();
@@ -372,20 +319,11 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
   if (productIds.length) {
     const { data } = await admin
       .from("products")
-      .select("id, hs_code, customs_mfn_rate, customs_gst_rate, customs_antidumping_rate")
+      .select("id, customs_mfn_rate, customs_gst_rate, customs_antidumping_rate")
       .in("id", productIds);
     products = data ?? [];
   }
   const productMap = new Map(products.map((p: any) => [p.id, p]));
-
-  // 商品绑定的 HS 编码 → 附加税/消费税/管制标识（商品自带的 mfn/gst/反倾销保持优先）
-  const hsCodesNeeded = Array.from(new Set(products.map((p: any) => p.hs_code).filter(Boolean)));
-  const hsMetaMap = new Map<string, HsRow>();
-  if (hsCodesNeeded.length) {
-    const { data: hsRows } = await admin.from("hs_codes").select(HS_SELECT).in("hs_code", hsCodesNeeded);
-    for (const h of (hsRows ?? []) as HsRow[]) hsMetaMap.set(h.hs_code, h);
-  }
-
 
   let fx = 0.19;
   try {
@@ -409,29 +347,20 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
   }
 
   const rows: DutyItemRow[] = [];
-  const alerts: DutyAlert[] = [];
   let declared_total = 0;
   for (const it of items) {
     const qty = Number(it.quantity ?? 1) || 1;
     const valueCad = +(Number(it.subtotal_cny ?? 0) * fx).toFixed(2);
     declared_total += valueCad;
     const prod = it.product_id ? productMap.get(it.product_id) : null;
-    const hsMeta = prod?.hs_code ? hsMetaMap.get(prod.hs_code) : undefined;
-    const mfn = Number(prod?.customs_mfn_rate ?? hsMeta?.mfn_rate ?? 0);
-    const gst = Number(prod?.customs_gst_rate ?? hsMeta?.gst_rate ?? 0);
-    const ad = Number(prod?.customs_antidumping_rate ?? hsMeta?.anti_dumping_rate ?? 0);
-    const surtax = Number(hsMeta?.surtax_rate ?? 0);
-    const excise = Number(hsMeta?.excise_rate ?? 0);
-    const name = it.name_zh || it.name_en || "—";
-    if (hsMeta) {
-      const reasons = hsAlertReasons(hsMeta);
-      if (reasons.length) alerts.push({ name, hs_code: hsMeta.hs_code, reasons });
-    }
+    const mfn = Number(prod?.customs_mfn_rate ?? 0);
+    const gst = Number(prod?.customs_gst_rate ?? 0);
+    const ad = Number(prod?.customs_antidumping_rate ?? 0);
     rows.push({
       forwarding_item_id: null,
-      name,
-      hs_code: hsMeta?.hs_code ?? prod?.hs_code ?? null,
-      hs_matched: hsMeta ? "manual" : "none",
+      name: it.name_zh || it.name_en || "—",
+      hs_code: null,
+      hs_matched: "none",
       box_count: 1,
       quantity_total: qty,
       quantity_per_waybill: qty,
@@ -443,17 +372,9 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
       mfn_rate: mfn,
       gst_rate: gst,
       anti_dumping_rate: ad,
-      surtax_rate: surtax,
-      excise_rate: excise,
-      tax_rate: mfn + gst + ad + surtax + excise,
+      tax_rate: mfn + gst + ad,
       duty_cad: 0,
       duty_applied: false,
-      mfn_text: hsMeta?.mfn_text ?? EMPTY_HS_META.mfn_text,
-      parent_description: hsMeta?.parent_description ?? EMPTY_HS_META.parent_description,
-      requires_permit: !!hsMeta?.requires_permit,
-      import_control: hsMeta?.import_control ?? [],
-      is_hazmat: !!hsMeta?.is_hazmat,
-      contains_battery: !!hsMeta?.contains_battery,
     });
   }
 
@@ -474,10 +395,106 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
     customs_enabled,
     threshold_cad,
     unmatched_names: [],
-    alerts,
     route_id,
   };
+}
 
+// ============================================================
+// Phase 1 · 把一条运单的关税明细持久化到 waybill_items
+// ============================================================
+// - 复用 computeAnyWaybillDutyBreakdown（已验证的拆分 + HS 匹配 + 关税逻辑）
+// - waybill_items 按 waybill_id delete-then-insert（幂等）
+// - 汇总 duty_cad 回写 waybills.duty_cad
+// - 匹配到的 hs_code / 税率 / hs_confirmed 回写父 forwarding_items 行
+// 在运单被创建 / 改尺寸 / 改物品 / HS 变动时调用（见 Phase 1 触发点）。
+export async function persistWaybillItems(
+  admin: any,
+  wbOrId: any,
+): Promise<{ items: number; duty_cad: number }> {
+  let row = wbOrId;
+  if (typeof wbOrId === "string" || !wbOrId?.id) {
+    const id = typeof wbOrId === "string" ? wbOrId : wbOrId?.id;
+    if (!id) return { items: 0, duty_cad: 0 };
+    const { data } = await admin
+      .from("waybills")
+      .select("id, waybill_no, forwarding_id, order_id, items_summary, weight_kg, length_cm, width_cm, height_cm")
+      .eq("id", id)
+      .maybeSingle();
+    if (!data) return { items: 0, duty_cad: 0 };
+    row = data;
+  }
+
+  const br = await computeAnyWaybillDutyBreakdown(admin, row);
+
+  const rows = br.items.map((it) => ({
+    waybill_id: row.id,
+    forwarding_item_id: it.forwarding_item_id ?? null,
+    order_item_id: null as string | null, // 电商侧 order_item 关联在 Phase 2 补
+    name: it.name ?? "",
+    hs_code: it.hs_code ?? null,
+    hs_matched: it.hs_matched ?? "none",
+    hs_confirmed: it.hs_matched === "manual",
+    quantity: it.quantity_per_waybill ?? 0,
+    unit_price_cad: it.unit_price_cad ?? null,
+    declared_value_cad: it.declared_value_cad ?? null,
+    mfn_rate: it.mfn_rate ?? null,
+    gst_rate: it.gst_rate ?? null,
+    anti_dumping_rate: it.anti_dumping_rate ?? null,
+    tax_rate: it.tax_rate ?? null,
+    duty_cad: it.duty_cad ?? null,
+    duty_applied: !!it.duty_applied,
+  }));
+
+  await admin.from("waybill_items").delete().eq("waybill_id", row.id);
+  if (rows.length) {
+    const { error } = await admin.from("waybill_items").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+
+  const dutyTotal = +Number(br.duty_cad ?? 0).toFixed(2);
+  await admin.from("waybills").update({ duty_cad: dutyTotal }).eq("id", row.id);
+
+  // 回写父 forwarding_items（HS 匹配是逐品名的，与运单拆分无关）
+  for (const it of br.items) {
+    if (!it.forwarding_item_id) continue;
+    await admin
+      .from("forwarding_items")
+      .update({
+        hs_code: it.hs_code ?? null,
+        hs_matched: it.hs_matched ?? "none",
+        hs_confirmed: it.hs_matched === "manual",
+        mfn_rate: it.mfn_rate ?? null,
+        gst_rate: it.gst_rate ?? null,
+        anti_dumping_rate: it.anti_dumping_rate ?? null,
+      })
+      .eq("id", it.forwarding_item_id);
+  }
+
+  return { items: rows.length, duty_cad: dutyTotal };
+}
+
+// 批量：一个集运单 / 电商订单下的所有运单
+export async function persistWaybillItemsForParent(
+  admin: any,
+  parent: { forwarding_id?: string | null; order_id?: string | null },
+): Promise<number> {
+  let q = admin
+    .from("waybills")
+    .select("id, waybill_no, forwarding_id, order_id, items_summary, weight_kg, length_cm, width_cm, height_cm");
+  if (parent.forwarding_id) q = q.eq("forwarding_id", parent.forwarding_id);
+  else if (parent.order_id) q = q.eq("order_id", parent.order_id);
+  else return 0;
+  const { data: wbs } = await q;
+  let n = 0;
+  for (const wb of (wbs ?? []) as any[]) {
+    try {
+      await persistWaybillItems(admin, wb);
+      n++;
+    } catch (e) {
+      console.error("persistWaybillItems failed for waybill", wb.id, e);
+    }
+  }
+  return n;
 }
 
 // Dispatches to whichever of the two above applies to this waybill.
@@ -491,9 +508,7 @@ export async function computeAnyWaybillDutyBreakdown(admin: any, wb: any): Promi
     customs_enabled: false,
     threshold_cad: 0,
     unmatched_names: [],
-    alerts: [],
     route_id: null,
-
   };
 }
 
@@ -578,14 +593,9 @@ export async function buildInvoiceLineMeta(admin: any, wb: any): Promise<Invoice
   ]);
 
   const duty_items = duty.items
-    .filter(
-      (it) =>
-        it.duty_applied &&
-        (it.mfn_rate + it.anti_dumping_rate + it.surtax_rate + it.excise_rate > 0 || it.gst_rate > 0),
-    )
+    .filter((it) => it.duty_applied && (it.mfn_rate + it.anti_dumping_rate > 0 || it.gst_rate > 0))
     .map((it) => {
-      // 关税 = MFN + 反倾销 + 附加税(surtax) + 消费税(excise)，GST 单列
-      const customsRate = it.mfn_rate + it.anti_dumping_rate + it.surtax_rate + it.excise_rate;
+      const customsRate = it.mfn_rate + it.anti_dumping_rate;
       return {
         name: it.name,
         value_cad: it.declared_value_cad,
@@ -595,7 +605,6 @@ export async function buildInvoiceLineMeta(admin: any, wb: any): Promise<Invoice
         gst_cad: +(it.declared_value_cad * it.gst_rate).toFixed(2),
       };
     });
-
 
   const freight = freightMeta ? { ...freightMeta, amount_cad: +Number(wb.freight_cad ?? 0).toFixed(2) } : null;
 

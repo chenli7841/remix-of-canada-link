@@ -303,6 +303,10 @@ export const updateInvoiceStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: cur } = await supabaseAdmin.from("invoices").select("status").eq("id", data.id).maybeSingle();
+    if ((cur as any)?.status === "paid") {
+      throw new Error("账单已付款，已冻结，不可更改。如需更正请另行处理退款。");
+    }
     const patch: any = { status: data.status };
     if (data.note !== undefined) patch.note = data.note;
     if (data.status === "paid") patch.paid_at = new Date().toISOString();
@@ -326,6 +330,9 @@ export const deleteInvoice = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin.from("invoices").select("*").eq("id", data.id).maybeSingle();
+    if ((before as any)?.status === "paid") {
+      throw new Error("账单已付款，不可删除。");
+    }
     const { error } = await supabaseAdmin.from("invoices").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     await recordAdminLog(supabaseAdmin, {
@@ -353,11 +360,7 @@ export const financeSummary = createServerFn({ method: "POST" })
     if (data.userId) q = q.eq("user_id", data.userId);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    let totalCny = 0,
-      paidCny = 0,
-      unpaidCny = 0,
-      overdueCny = 0,
-      total = 0,
+    let total = 0,
       paid = 0,
       unpaid = 0,
       overdue = 0,
@@ -365,24 +368,15 @@ export const financeSummary = createServerFn({ method: "POST" })
       paidCount = 0;
     for (const r of rows ?? []) {
       const fx = Number(r.fx_rate ?? 0.19);
-      const totalC = Number(r.total_cny ?? 0);
-      const paidC = Number(r.paid_cny ?? 0);
-      const totalCad = totalC * fx;
-      const paidCad = Number(r.paid_cad ?? 0) > 0 ? Number(r.paid_cad) : paidC * fx;
-      totalCny += totalC;
+      const totalCad = Number(r.total_cny ?? 0) * fx;
+      const paidCad = Number(r.paid_cad ?? 0) > 0 ? Number(r.paid_cad) : Number(r.paid_cny ?? 0) * fx;
       total += totalCad;
       count++;
       if (r.status === "paid") {
-        paidCny += paidC;
         paid += paidCad > 0 ? paidCad : totalCad;
         paidCount++;
-      } else if (r.status === "overdue") {
-        overdueCny += totalC;
-        overdue += totalCad;
-      } else if (r.status === "unpaid") {
-        unpaidCny += totalC;
-        unpaid += totalCad;
-      }
+      } else if (r.status === "overdue") overdue += totalCad;
+      else if (r.status === "unpaid") unpaid += totalCad;
     }
     return {
       currency: "CAD",
@@ -390,10 +384,6 @@ export const financeSummary = createServerFn({ method: "POST" })
       paid_cad: +paid.toFixed(2),
       unpaid_cad: +unpaid.toFixed(2),
       overdue_cad: +overdue.toFixed(2),
-      total_cny: +totalCny.toFixed(2),
-      paid_cny: +paidCny.toFixed(2),
-      unpaid_cny: +unpaidCny.toFixed(2),
-      overdue_cny: +overdueCny.toFixed(2),
       count,
       paid_count: paidCount,
     };

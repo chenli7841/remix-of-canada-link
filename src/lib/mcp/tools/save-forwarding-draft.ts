@@ -1,12 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 const itemSchema = z.object({
   name: z.string().min(1),
@@ -49,12 +43,7 @@ export default defineTool({
       }
       if (!defaultAddress) {
         return {
-          content: [
-            {
-              type: "text",
-              text: "No default EPLUS delivery address is configured. Ask the customer to create or select a saved address before saving the draft.",
-            },
-          ],
+          content: [{ type: "text", text: "No default EPLUS delivery address is configured. Ask the customer to create or select a saved address before saving the draft." }],
           structuredContent: { order_created: false, draft_saved: false, reason: "default_address_required" },
           isError: true,
         };

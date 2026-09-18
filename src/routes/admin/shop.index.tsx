@@ -79,6 +79,7 @@ function ShopHome() {
           <div className="grid grid-cols-2 gap-2">
             <QuickLink to="/admin/shop/products" label="商品管理" icon={Package}/>
             <QuickLink to="/admin/shop/categories" label="分类管理" icon={ShoppingBag}/>
+            <QuickLink to="/admin/shop/carts" label="客户购物车" icon={ShoppingBag}/>
             <QuickLink to="/admin/orders" label="电商订单" icon={Truck}/>
             <QuickLink to="/admin/shop/inventory" label="库存流水" icon={AlertTriangle}/>
             <QuickLink to="/admin/shop/coupons" label="优惠券" icon={DollarSign}/>

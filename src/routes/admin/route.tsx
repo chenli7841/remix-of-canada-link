@@ -38,6 +38,7 @@ import {
   UserSearch,
   Bot,
   Wallet,
+  KeyRound,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -91,6 +92,7 @@ const NAV_ICONS: Record<string, any> = {
   ShieldCheck,
   Bot,
   Wallet,
+  KeyRound,
 };
 
 // Fallback only — used before admin_nav_items has loaded (or if it's ever
@@ -158,7 +160,7 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
         to: "/admin/customer-view",
         label: "客户视图",
         icon: UserSearch,
-        roles: ["owner", "warehouse_cn", "warehouse_ca", "support", "sales"],
+        roles: ["owner", "warehouse_cn", "warehouse_ca", "support", "sales", "sales_rep"],
       },
       { to: "/admin/users", label: "用户管理", icon: Users },
       { to: "/admin/messages", label: "留言信息", icon: Mail },
@@ -174,6 +176,7 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
       { to: "/admin/hs-codes", label: "HS 编码库", icon: BookText },
       { to: "/admin/nav-settings", label: "菜单权限设置", icon: ShieldCheck, roles: ["owner"] },
       { to: "/admin/wallet-ledger", label: "钱包流水", icon: Wallet },
+      { to: "/admin/api-tokens", label: "API 凭证管理", icon: KeyRound, roles: ["owner"] },
     ],
   },
 ];

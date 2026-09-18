@@ -88,7 +88,8 @@ function renderOrderOrForwarding(d: LabelData, m: SizeMeta): string {
       .join(", ") || "—";
   // Destination on order/forwarding labels comes from the RECIPIENT ADDRESS,
   // not from the shipping route (the route may be re-mapped later).
-  const destCode = addr.destination_code ?? addr.destination ?? (d.meta as any)?.address_destination_code ?? "—";
+  const destCode =
+    addr.destination_code ?? addr.destination ?? (d.meta as any)?.address_destination_code ?? "—";
   const list = d.waybills?.length ? d.waybills : [{ waybill_no: "—" } as WaybillEntry];
   const xx = String(d.total || list.length).padStart(2, "0");
   const entityLabel = d.entityType === "order" ? "订单" : "集运单";
@@ -197,7 +198,10 @@ function renderContainer(d: LabelData, m: SizeMeta): string {
     const left: [string, any][] = [
       ["重量（实重）", meta.weight_kg != null ? `${meta.weight_kg} kg` : "—"],
       ["体积", meta.volume_m3 != null ? `${meta.volume_m3} m³` : "—"],
-      ["件数", `${counts.waybills ?? 0} 单 · ${counts.cartons ?? 0} 箱 · ${counts.pallets ?? 0} 托`],
+      [
+        "件数",
+        `${counts.waybills ?? 0} 单 · ${counts.cartons ?? 0} 箱 · ${counts.pallets ?? 0} 托`,
+      ],
     ];
     const right: [string, any][] = [
       ["运输方式", meta.shipping_method ?? "—"],
@@ -378,6 +382,10 @@ export function renderLabel(d: LabelData | LabelData[], opts?: { size?: LabelSiz
     } catch (e) { /* storage blocked */ }
   };
   window.__applyLabelSize(current);
+  // 面单内容（含条码 SVG）在写入这个窗口前已经在父页面同步生成好了，不需要等图片/字体，
+  // 打开就直接弹打印对话框，不用操作员再点一次"打印全部"；按钮留着，供打印对话框被浏览器
+  // 拦截、或需要重打时手动触发。
+  setTimeout(function(){ window.print(); }, 60);
 })();
 </script>
 </body></html>`;

@@ -1,24 +1,4 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
-export default defineTool({
-  name: "delete_my_item",
-  title: "Delete one of my saved items",
-  description: "Delete one item from the signed-in customer's existing My Items feature after explicit confirmation.",
-  inputSchema: { item_id: z.string().uuid(), confirmation: z.literal("CONFIRM_DELETE_ITEM") },
-  annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false },
-  handler: async ({ item_id }, ctx) => {
-    if (!ctx.isAuthenticated()) return unauthenticatedResult();
-    const { error, count } = await supabaseForUser(ctx).from("my_items").delete({ count: "exact" }).eq("id", item_id);
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
-    if (!count) return permissionDeniedResult();
-    const result = { ok: true, item_id, deleted: true };
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
-  },
-});
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
+export default defineTool({name:"delete_my_item",title:"Delete one of my saved items",description:"Delete one item from the signed-in customer's existing My Items feature after explicit confirmation.",inputSchema:{item_id:z.string().uuid(),confirmation:z.literal("CONFIRM_DELETE_ITEM")},annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:true,openWorldHint:false},handler:async({item_id},ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();const{error,count}=await supabaseForUser(ctx).from("my_items").delete({count:"exact"}).eq("id",item_id);if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();if(!count)return permissionDeniedResult();const result={ok:true,item_id,deleted:true};return{content:[{type:"text",text:JSON.stringify(result,null,2)}],structuredContent:result};}});

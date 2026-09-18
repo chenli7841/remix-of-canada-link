@@ -3,6 +3,7 @@ import React from "react";
 const WECHAT_BIND_ENABLED = false;
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useApp } from "@/lib/i18n";
@@ -49,6 +50,10 @@ import {
   ChevronDown,
   Copy,
 } from "lucide-react";
+
+// 总览页和"我的批次"页都要读 listMyBatches——共用同一个 query key，切 tab 不用重新拉一遍，
+// 付款成功后 invalidate 一次两边都会刷新。
+const MY_BATCHES_QK = ["my-batches"] as const;
 
 export const Route = createFileRoute("/_authenticated/account")({
   head: () => ({ meta: [{ title: "我的账户 / My Account — SinoCargo" }] }),
@@ -314,8 +319,20 @@ function OverviewTab({
   const [totalOrders, setTotalOrders] = useState<number | null>(null);
   const [inTransit, setInTransit] = useState<number>(0);
   const [unwarehoused, setUnwarehoused] = useState<number>(0);
-  const [batchCount, setBatchCount] = useState<number>(0);
-  const [unpaidBatches, setUnpaidBatches] = useState<UnpaidBatch[]>([]);
+
+  const { data: batchesData } = useQuery({
+    queryKey: MY_BATCHES_QK,
+    queryFn: () => fetchMyBatches(),
+  });
+  const allBatches = ((batchesData as any)?.batches ?? []) as any[];
+  const batchCount = allBatches.length;
+  const unpaidBatches: UnpaidBatch[] = allBatches
+    .filter((b) => !b.is_paid)
+    .map((b) => ({
+      batch_no: b.batch_no,
+      total_cad: b.subtotal_cad,
+      shipping_method: b.shipping_method,
+    }));
 
   useEffect(() => {
     sb.from("wallets")
@@ -326,19 +343,6 @@ function OverviewTab({
       .select("customer_code")
       .maybeSingle()
       .then(({ data }: any) => setCustomerCode(data?.customer_code ?? null));
-    fetchMyBatches().then((r: any) => {
-      const all = (r?.batches ?? []) as any[];
-      setBatchCount(all.length);
-      setUnpaidBatches(
-        all
-          .filter((b) => !b.is_paid)
-          .map((b) => ({
-            batch_no: b.batch_no,
-            total_cad: b.subtotal_cad,
-            shipping_method: b.shipping_method,
-          })),
-      );
-    });
     Promise.all([
       sb.from("orders").select("id,status,batch_no"),
       sb.from("forwarding_orders").select("id,status,batch_no"),
@@ -354,6 +358,7 @@ function OverviewTab({
     });
   }, []);
 
+  // total_cad 为 null 表示未确认/快照还没就绪——不计入"待付合计"，避免把 null 当 0 误导
   const unpaidTotalCad = unpaidBatches.reduce((s, b) => s + (b.total_cad ?? 0), 0);
 
   return (
@@ -489,13 +494,9 @@ function OverviewTab({
                 </span>
                 <span className="font-mono text-xs font-semibold">{b.batch_no}</span>
                 <span className="ml-auto text-right font-display text-base font-bold text-foreground">
-                  {b.total_cad == null ? (
-                    <span className="text-xs font-medium text-amber-600">
-                      {tr("等待客服确认费用", "Awaiting fee confirmation")}
-                    </span>
-                  ) : (
-                    `CA$${b.total_cad.toFixed(2)}`
-                  )}
+                  {b.total_cad == null
+                    ? <span className="text-xs font-medium text-amber-600">{tr("等待客服确认费用", "Awaiting fee confirmation")}</span>
+                    : `CA$${b.total_cad.toFixed(2)}`}
                 </span>
               </li>
             ))}
@@ -931,6 +932,7 @@ function AccountSecurityCard({ profile, setProfile }: { profile: Profile; setPro
     setPw2("");
   };
 
+
   const startBind = useServerFn(startWechatBind);
   const doUnbind = useServerFn(unbindWechat);
   const [wechatBusy, setWechatBusy] = useState(false);
@@ -1067,6 +1069,7 @@ function AccountSecurityCard({ profile, setProfile }: { profile: Profile; setPro
           </button>
         </div>
 
+
         <div className="border-t border-border pt-6">
           <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
             <Mail className="h-4 w-4 text-ink-soft" />
@@ -1106,37 +1109,38 @@ function AccountSecurityCard({ profile, setProfile }: { profile: Profile; setPro
         </div>
 
         {WECHAT_BIND_ENABLED && (
-          <div className="border-t border-border pt-6">
-            <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
-              <MessageCircle className="h-4 w-4 text-ink-soft" />
-              {tr("绑定微信", "Bind WeChat")}
-            </div>
-            {p.wechat_openid ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1.5 text-xs font-semibold text-success">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {tr(`已绑定：${p.wechat_nickname ?? "微信用户"}`, `Linked: ${p.wechat_nickname ?? "WeChat user"}`)}
-                </span>
-                <button
-                  onClick={unbindWx}
-                  disabled={wechatBusy}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft hover:border-destructive hover:text-destructive disabled:opacity-50"
-                >
-                  {wechatBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
-                  {tr("解绑", "Unbind")}
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={bindWechat}
-                disabled={wechatBusy}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-brand hover:text-brand disabled:opacity-50"
-              >
-                {wechatBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {tr("绑定微信", "Bind WeChat")}
-              </button>
-            )}
+        <div className="border-t border-border pt-6">
+
+          <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
+            <MessageCircle className="h-4 w-4 text-ink-soft" />
+            {tr("绑定微信", "Bind WeChat")}
           </div>
+          {p.wechat_openid ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1.5 text-xs font-semibold text-success">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {tr(`已绑定：${p.wechat_nickname ?? "微信用户"}`, `Linked: ${p.wechat_nickname ?? "WeChat user"}`)}
+              </span>
+              <button
+                onClick={unbindWx}
+                disabled={wechatBusy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft hover:border-destructive hover:text-destructive disabled:opacity-50"
+              >
+                {wechatBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
+                {tr("解绑", "Unbind")}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={bindWechat}
+              disabled={wechatBusy}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              {wechatBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {tr("绑定微信", "Bind WeChat")}
+            </button>
+          )}
+        </div>
         )}
 
         <div className="border-t border-border pt-6">
@@ -1386,10 +1390,11 @@ function AddressTab() {
 }
 
 // ===================== Batches (merged: orders + forwarding) =====================
-// Batch visibility + amounts are sourced from listMyBatches() (src/lib/orders.functions.ts),
-// which reuses computeBatchFeeSummary — the exact same computation staff see in
-// the admin "扣款" screens — filtered down to this customer's own bucket. A batch
-// only shows up once staff move it to shipped/arrived/closed.
+// Batch visibility + amounts come from listMyBatches() (src/lib/orders.functions.ts):
+// it reads the per-(batch × customer) snapshot in batch_settlements (written when
+// staff lock / confirm the batch) — the same figures the admin "扣款" screens show —
+// and only falls back to a full computeBatchFeeSummary when that snapshot is missing
+// or stale, re-writing it afterwards. A batch appears once it's shipped/arrived/closed.
 interface BatchItem {
   kind: "order" | "forwarding";
   id: string;
@@ -1397,6 +1402,28 @@ interface BatchItem {
   status: string;
   tracking_no: string | null;
   payment_status: string;
+}
+interface BatchFeeLines {
+  freight_cad: number;
+  insurance_cad: number;
+  customs_cad: number;
+  clearance_cad: number;
+  surcharge_cad: number;
+  delivery_cad: number;
+  inspection_cad: number;
+  discount_cad: number;
+}
+interface BatchDutyItem {
+  name: string;
+  hs_code: string | null;
+  tax_rate: number;
+  mfn_rate: number;
+  gst_rate: number;
+  anti_dumping_rate: number;
+  unit_price_cad: number;
+  quantity: number;
+  declared_value_cad: number;
+  duty_cad: number;
 }
 interface Batch {
   batch_id: string;
@@ -1406,7 +1433,12 @@ interface Batch {
   status: "shipped" | "arrived" | "closed";
   items: BatchItem[];
   subtotal_cad: number | null;
+  fee_lines?: BatchFeeLines | null;
+  duty_items?: BatchDutyItem[] | null;
+  duty_unmatched_hs?: string[] | null;
   price_confirmed?: boolean;
+  // 已确认但快照还没就绪（异常情况，比如后台改动没来得及回写）——不是"未确认"也不是"算好了"
+  snapshot_pending?: boolean;
   is_paid: boolean;
   intl_tracking_nos: string[];
 }
@@ -1423,16 +1455,15 @@ function BatchesTab({ onJump }: { onJump: (t: Tab) => void }) {
   const navigate = useNavigate();
   const fetchMyBatches = useServerFn(listMyBatches);
   const doPay = useServerFn(payMyBatch);
-  const [batches, setBatches] = useState<Batch[] | null>(null);
+  const qc = useQueryClient();
   const [paying, setPaying] = useState<string | null>(null);
 
-  const load = async () => {
-    const r: any = await fetchMyBatches();
-    setBatches((r?.batches ?? []) as Batch[]);
-  };
-  useEffect(() => {
-    load();
-  }, []);
+  const { data: batchesData } = useQuery({
+    queryKey: MY_BATCHES_QK,
+    queryFn: () => fetchMyBatches(),
+  });
+  const batches = batchesData ? ((batchesData as any).batches as Batch[]) : null;
+  const load = () => qc.invalidateQueries({ queryKey: MY_BATCHES_QK });
 
   const pay = async (batchId: string, batchNo: string, amountCad: number) => {
     if (
@@ -1466,7 +1497,36 @@ function BatchesTab({ onJump }: { onJump: (t: Tab) => void }) {
         load();
         return;
       }
-      return toast.error(tr("付款失败", "Payment failed"));
+      // 除了上面两种，payMyBatch 链路还会返回好几种别的失败原因（customer_not_found /
+      // no_frozen_invoice / nothing_to_pay / freeze_failed / settle_failed），外加"批次
+      // 尚未发出"/"费用尚未确认"这两种直接 throw 出来的、本身已经是完整中文句子的错误——
+      // 这里不能再统一收成一句"付款失败"，那样客户和客服都不知道到底卡在哪一步，
+      // 只会反馈"无法扣款"却查不出原因。已知原因给出对应提示，其余（多半是上面那两种
+      // 已经写好中文的 throw）直接把原始文案显示出来，总比什么都不说强。
+      const REASON_MSG: Record<string, [string, string]> = {
+        customer_not_found: ["客户信息异常，请联系客服", "Account issue — please contact support"],
+        no_frozen_invoice: [
+          "账单生成异常，请稍后重试或联系客服",
+          "Invoice not ready — please retry shortly or contact support",
+        ],
+        nothing_to_pay: ["该批次无需付款", "Nothing to pay for this batch"],
+        // no_waybills：按你的客户信息一条订单/集运单都查不到，多半是客户信息有误
+        // 或对不上，不是"已经付过"——不能跟 already_paid 用同一句"已结清"，那样反而
+        // 让人以为不用付钱，看不出这其实是个需要联系客服核实的数据问题。
+        no_waybills: [
+          "查不到该批次下属于你的订单记录，请联系客服核实",
+          "Couldn't find your orders under this batch — please contact support",
+        ],
+        nothing_to_bill: ["该批次费用计算为 0，无需付款", "This batch totals CA$0 — nothing to pay"],
+        freeze_failed: ["账单生成失败，请联系客服", "Failed to generate invoice — please contact support"],
+        settle_failed: ["结算失败，请稍后重试", "Settlement failed — please try again"],
+      };
+      const known = data?.reason ? REASON_MSG[data.reason as string] : undefined;
+      if (known) return toast.error(tr(known[0], known[1]));
+      return toast.error(
+        (typeof data?.reason === "string" && data.reason) ||
+          tr("付款失败，请稍后重试或联系客服", "Payment failed — please try again or contact support"),
+      );
     }
     const pointsMsg =
       data.points_earned > 0 ? tr(`，获得 ${data.points_earned} 积分`, `, earned ${data.points_earned} points`) : "";
@@ -1545,6 +1605,8 @@ function BatchCard({
   const isAir = b.shipping_method === "air";
   const [trackOpen, setTrackOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [dutyOpen, setDutyOpen] = useState(false);
   const [events, setEvents] = useState<any[] | null | "err">(null);
 
   const toggleTrack = async () => {
@@ -1610,13 +1672,112 @@ function BatchCard({
           </div>
           {b.subtotal_cad === null ? (
             <div className="text-xs font-medium text-amber-600">
-              {tr("等待客服确认费用", "Awaiting fee confirmation")}
+              {b.snapshot_pending
+                ? tr("数据准备中，请稍后刷新", "Preparing data — please refresh shortly")
+                : tr("等待客服确认费用", "Awaiting fee confirmation")}
             </div>
           ) : (
-            <div className="font-display text-lg font-bold text-brand-gradient">CA${b.subtotal_cad.toFixed(2)}</div>
+            <>
+              <div className="font-display text-lg font-bold text-brand-gradient">CA${b.subtotal_cad.toFixed(2)}</div>
+              {b.fee_lines && (
+                <button
+                  onClick={() => setDetailOpen((v) => !v)}
+                  className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-soft hover:text-brand"
+                >
+                  {tr("费用明细", "Fee details")}
+                  <span>{detailOpen ? "▲" : "▼"}</span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>
+
+      {detailOpen && b.fee_lines && (
+        <div className="border-b border-border bg-background/40 px-5 py-3 text-xs">
+          {(() => {
+            const fl = b.fee_lines!;
+            const rows: Array<[string, string, number]> = [
+              [tr("运费", "Freight"), "freight", fl.freight_cad],
+              [tr("保险", "Insurance"), "insurance", fl.insurance_cad],
+              [tr("关税", "Customs duty"), "customs", fl.customs_cad],
+              [tr("清关费", "Clearance"), "clearance", fl.clearance_cad],
+              [tr("附加费", "Surcharge"), "surcharge", fl.surcharge_cad],
+              [tr("末端派送费", "Last-mile delivery"), "delivery", fl.delivery_cad],
+              [tr("检查费", "Inspection"), "inspection", fl.inspection_cad],
+            ];
+            return (
+              <div className="space-y-1.5">
+                {rows.map(([label, key, val]) => (
+                  <div key={key}>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-ink-soft">
+                        {label}
+                        {key === "customs" && (b.duty_items?.length ?? 0) > 0 && (
+                          <button
+                            onClick={() => setDutyOpen((v) => !v)}
+                            className="inline-flex items-center gap-0.5 text-[10px] text-brand hover:underline"
+                          >
+                            {tr("明细", "breakdown")} <span>{dutyOpen ? "▲" : "▼"}</span>
+                          </button>
+                        )}
+                      </span>
+                      <span className="font-mono tabular-nums">CA${val.toFixed(2)}</span>
+                    </div>
+                    {key === "customs" && dutyOpen && (
+                      <div className="mt-1.5 overflow-x-auto rounded-lg border border-border bg-surface p-2">
+                        {(b.duty_unmatched_hs?.length ?? 0) > 0 && (
+                          <div className="mb-1.5 rounded bg-warning/10 px-2 py-1 text-[10px] text-warning">
+                            ⚠{" "}
+                            {tr(
+                              `以下品名未匹配 HS 编码，关税暂按 0 计：${(b.duty_unmatched_hs ?? []).join("、")}`,
+                              `No HS code matched (duty counted as 0): ${(b.duty_unmatched_hs ?? []).join(", ")}`,
+                            )}
+                          </div>
+                        )}
+                        <table className="w-full text-[10px]">
+                          <thead className="text-left text-ink-soft">
+                            <tr>
+                              <th className="py-1 pr-2">{tr("品名", "Item")}</th>
+                              <th className="pr-2">HS</th>
+                              <th className="pr-2 text-right">{tr("税率", "Rate")}</th>
+                              <th className="pr-2 text-right">{tr("数量", "Qty")}</th>
+                              <th className="pr-2 text-right">{tr("申报价值", "Declared")}</th>
+                              <th className="text-right">{tr("关税", "Duty")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(b.duty_items ?? []).map((d, i) => (
+                              <tr key={`${d.name}-${i}`} className="border-t border-border/60">
+                                <td className="py-1 pr-2">{d.name}</td>
+                                <td className="pr-2 font-mono">{d.hs_code ?? tr("缺", "—")}</td>
+                                <td className="pr-2 text-right">{(d.tax_rate * 100).toFixed(2)}%</td>
+                                <td className="pr-2 text-right">{d.quantity}</td>
+                                <td className="pr-2 text-right font-mono">CA${d.declared_value_cad.toFixed(2)}</td>
+                                <td className="text-right font-mono">CA${d.duty_cad.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {fl.discount_cad > 0 && (
+                  <div className="flex items-center justify-between text-success">
+                    <span>{tr("折扣", "Discount")}</span>
+                    <span className="font-mono tabular-nums">−CA${fl.discount_cad.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-border pt-1.5 font-semibold">
+                  <span>{tr("小计", "Subtotal")}</span>
+                  <span className="font-mono tabular-nums">CA${(b.subtotal_cad ?? 0).toFixed(2)}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <div className="px-5 py-3">
         <button
@@ -1708,10 +1869,12 @@ function BatchCard({
 
       {!b.is_paid && b.subtotal_cad === null && (
         <div className="border-t border-border bg-background px-5 py-3 text-xs text-amber-600">
-          {tr(
-            "等待客服确认费用，确认后即可查看金额并付款",
-            "Awaiting fee confirmation — amount and payment unlock once confirmed",
-          )}
+          {b.snapshot_pending
+            ? tr("数据准备中，请稍后刷新页面重试", "Preparing data — please refresh the page shortly")
+            : tr(
+                "等待客服确认费用，确认后即可查看金额并付款",
+                "Awaiting fee confirmation — amount and payment unlock once confirmed",
+              )}
         </div>
       )}
       {!b.is_paid && (b.subtotal_cad ?? 0) > 0 && (
@@ -2164,7 +2327,9 @@ function MyItemsTab() {
       weight_kg: editing.weight_kg ?? null,
     };
     const { error } = await withRetry<any>(() =>
-      editing.id ? sb.from("my_items").update(payload).eq("id", editing.id) : sb.from("my_items").insert(payload),
+      editing.id
+        ? sb.from("my_items").update(payload).eq("id", editing.id)
+        : sb.from("my_items").insert(payload),
     );
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -2503,9 +2668,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
         .order("created_at", { ascending: false }),
       sb
         .from("waybills")
-        .select(
-          "order_id,forwarding_id,waybill_no,status,weight_kg,length_cm,width_cm,height_cm,weight_snapshot,created_at",
-        )
+        .select("order_id,forwarding_id,waybill_no,status,weight_kg,length_cm,width_cm,height_cm,weight_snapshot,created_at")
         .order("created_at"),
       sb.from("order_items").select("order_id,name_zh,name_en,quantity").order("created_at"),
       sb.from("forwarding_items").select("forwarding_id,name,quantity").order("created_at"),
@@ -2827,8 +2990,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
                       {(o.total_weight_kg ?? 0) > 0 && (o.total_volume_m3 ?? 0) > 0 && <span> · </span>}
                       {(o.total_volume_m3 ?? 0) > 0 && (
                         <span>
-                          {(o.total_volume_m3 ?? 0).toFixed(3)} m³ / {(o.total_volumetric_weight_kg ?? 0).toFixed(2)} kg{" "}
-                          {tr("体积重", "vol. wt.")}
+                          {(o.total_volume_m3 ?? 0).toFixed(3)} m³ / {(o.total_volumetric_weight_kg ?? 0).toFixed(2)} kg {tr("体积重", "vol. wt.")}
                         </span>
                       )}
                     </div>
@@ -2889,7 +3051,11 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
                       disabled={busyDel === o.id}
                       className="ml-auto inline-flex items-center gap-1 rounded-full border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
                     >
-                      {busyDel === o.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      {busyDel === o.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
                       {tr("删除", "Delete")}
                     </button>
                   )}
@@ -2969,9 +3135,21 @@ function WalletTab() {
   const EMT_EMAIL = "epluscanada@gmail.com";
 
   const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false); // 硬锁：覆盖 setBusy 生效前的极短窗口
+  // 同一「金额 × 渠道」的重复点击 / 失败重试 → 同一 idempotency_key → 服务端复用原充值单。
+  // 一次充值成功发起后 topupNonce+1，让「再充一笔相同金额」拿到全新 key，不撞已用过的键。
+  const [topupNonce, setTopupNonce] = useState(0);
+  const topupKey = useMemo(
+    () =>
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `k_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    [amount, channel, topupNonce],
+  );
   const [qr, setQr] = useState<{ src: string; reference: string; notice?: string; openUrl?: string } | null>(null);
   const QR_TTL_SEC = 20;
   const [qrLeft, setQrLeft] = useState<number>(QR_TTL_SEC);
+
 
   const load = async () => {
     const [{ data: w }, { data: t }] = await Promise.all([
@@ -2995,6 +3173,8 @@ function WalletTab() {
 
   const submitEmtTopupFlow = async () => {
     if (!amount || amount < 2) return toast.error(tr("最低充值 CA$2", "Min top-up CA$2"));
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     try {
       let proofPath: string | null = null;
@@ -3010,13 +3190,16 @@ function WalletTab() {
           .upload(proofPath, emtFile, { contentType: emtFile.type || undefined });
         if (up.error) throw up.error;
       }
-      const r = await submitEmt({ data: { amountCad: amount, proofPath, note: emtNote || null } });
+      const r = await submitEmt({
+        data: { amountCad: amount, proofPath, note: emtNote || null, idempotencyKey: topupKey },
+      });
       toast.success(
         tr(
           `已提交（${r.reference}），客服会在 24 小时内为您处理入账`,
           `Submitted (${r.reference}). Support will credit your balance within 24 hours.`,
         ),
       );
+      setTopupNonce((n) => n + 1); // 本次已发起 → 下一笔用新 key
       setEmtFile(null);
       setEmtNote("");
       await load();
@@ -3024,6 +3207,7 @@ function WalletTab() {
       toast.error(e?.message ?? tr("提交失败", "Submission failed"));
     } finally {
       setBusy(false);
+      submittingRef.current = false;
     }
   };
 
@@ -3031,11 +3215,14 @@ function WalletTab() {
     if (!amount || amount < 2) return toast.error(tr("最低充值 CA$2", "Min top-up CA$2"));
     if (channel === "card") return payByCard();
     if (channel === "emt") return submitEmtTopupFlow();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     try {
       const device = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile" : "desktop";
-      const r = await startOtt({ data: { amountCad: amount, channel, device } });
+      const r = await startOtt({ data: { amountCad: amount, channel, device, idempotencyKey: topupKey } });
 
+      setTopupNonce((n) => n + 1); // 本次已发起 → 下一笔用新 key（QR 场景尤其需要）
       if (r.mode === "qr") {
         localStorage.setItem("ott_pending_ref", r.reference);
         setQr({ src: r.qrDataUrl, reference: r.reference, notice: r.notice, openUrl: r.openUrl });
@@ -3047,6 +3234,7 @@ function WalletTab() {
       toast.error(e.message ?? tr("发起支付失败", "Failed to start payment"));
     } finally {
       setBusy(false);
+      submittingRef.current = false;
     }
   };
 
@@ -3103,19 +3291,25 @@ function WalletTab() {
     };
   }, [qr?.reference]);
 
+
   // Credit card: OTT Pay + Elavon Converge hosted payment page (card data never touches us)
   const payByCard = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     try {
-      const r = await startHosted({ data: { amountCad: amount } });
+      const r = await startHosted({ data: { amountCad: amount, idempotencyKey: topupKey } });
+      setTopupNonce((n) => n + 1);
       localStorage.setItem("ott_pending_ref", r.reference);
       window.location.href = r.url;
     } catch (e: any) {
       toast.error(e.message ?? tr("支付失败", "Payment failed"));
     } finally {
       setBusy(false);
+      submittingRef.current = false;
     }
   };
+
 
   if (!wallet || !txs) return <Spinner />;
 
@@ -3258,6 +3452,7 @@ function WalletTab() {
           )}
         </p>
         <button
+
           onClick={recharge}
           disabled={busy}
           className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-cta-gradient text-sm font-semibold text-cta-foreground shadow-elevated transition hover:brightness-110 disabled:opacity-50"
@@ -3269,10 +3464,7 @@ function WalletTab() {
         </button>
 
         <p className="mt-2 text-center text-[11px] text-ink-soft">
-          {tr(
-            "由 OTT Pay 安全处理支付（微信 / 支付宝 / 信用卡）",
-            "Payments securely processed by OTT Pay (WeChat / Alipay / Card)",
-          )}
+          {tr("由 OTT Pay 安全处理支付（微信 / 支付宝 / 信用卡）", "Payments securely processed by OTT Pay (WeChat / Alipay / Card)")}
         </p>
       </div>
 
@@ -3280,9 +3472,7 @@ function WalletTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-xs rounded-2xl bg-surface p-6 text-center">
             <h4 className="font-display text-base font-bold">
-              {channel === "alipay"
-                ? tr("请使用支付宝扫码支付", "Scan with Alipay to pay")
-                : tr("请使用微信扫码支付", "Scan with WeChat to pay")}
+              {channel === "alipay" ? tr("请使用支付宝扫码支付", "Scan with Alipay to pay") : tr("请使用微信扫码支付", "Scan with WeChat to pay")}
             </h4>
 
             {qr.notice && (
@@ -3296,21 +3486,10 @@ function WalletTab() {
               </p>
             )}
 
-            <img
-              src={qr.src}
-              alt={channel === "alipay" ? "Alipay QR" : "WeChat Pay QR"}
-              className="mx-auto my-4 h-56 w-56 rounded-lg bg-white p-2"
-            />
+            <img src={qr.src} alt={channel === "alipay" ? "Alipay QR" : "WeChat Pay QR"} className="mx-auto my-4 h-56 w-56 rounded-lg bg-white p-2" />
 
-            <p className="text-xs text-ink-soft">
-              {tr(
-                `金额 CA$${amount.toFixed(2)}，支付后自动到账`,
-                `CA$${amount.toFixed(2)} — credited automatically after payment`,
-              )}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-brand">
-              {tr(`二维码 ${qrLeft} 秒后失效`, `QR expires in ${qrLeft}s`)}
-            </p>
+            <p className="text-xs text-ink-soft">{tr(`金额 CA$${amount.toFixed(2)}，支付后自动到账`, `CA$${amount.toFixed(2)} — credited automatically after payment`)}</p>
+            <p className="mt-1 text-xs font-semibold text-brand">{tr(`二维码 ${qrLeft} 秒后失效`, `QR expires in ${qrLeft}s`)}</p>
 
             {qr.openUrl && (
               <a
@@ -3325,12 +3504,15 @@ function WalletTab() {
               </a>
             )}
 
+
             <button onClick={() => setQr(null)} className="mt-2 w-full rounded-full border border-border py-2 text-sm">
               {tr("关闭", "Close")}
             </button>
           </div>
         </div>
       )}
+
+
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h3 className="mb-4 font-display text-lg font-bold">{tr("账单流水", "Transactions")}</h3>

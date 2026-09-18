@@ -1,12 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
   name: "get_owner_dashboard",
@@ -17,10 +11,7 @@ export default defineTool({
   handler: async (_input, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_dashboard");
-    if (error) {
-      console.error("MCP get_owner_dashboard failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
-    }
+    if (error) { console.error("MCP get_owner_dashboard failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(); }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { dashboard: data } };
   },
 });

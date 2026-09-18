@@ -90,22 +90,11 @@ function SupportMessagesTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
-          <input
-            value={qIn}
-            onChange={(e) => setQIn(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && setQ(qIn)}
-            placeholder="搜索客户号"
-            className="w-64 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-          />
-          <button onClick={() => setQ(qIn)} className="rounded-md border border-border px-3 py-1.5 text-sm">
-            搜索
-          </button>
+          <input value={qIn} onChange={(e) => setQIn(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setQ(qIn)} placeholder="搜索客户号" className="w-64 rounded-md border border-border bg-background px-3 py-1.5 text-sm" />
+          <button onClick={() => setQ(qIn)} className="rounded-md border border-border px-3 py-1.5 text-sm">搜索</button>
         </div>
-        <div
-          className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${unread ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}
-        >
-          <Bell className="h-4 w-4" />
-          {unread ? `${unread} 条新消息` : "暂无新消息"}
+        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${unread ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
+          <Bell className="h-4 w-4" />{unread ? `${unread} 条新消息` : "暂无新消息"}
         </div>
       </div>
 
@@ -113,44 +102,27 @@ function SupportMessagesTab() {
         <div className="max-h-[650px] overflow-y-auto rounded-lg border border-border">
           {threadsQ.isLoading && <Loader2 className="m-6 h-4 w-4 animate-spin" />}
           {threads.map((thread) => (
-            <button
-              key={thread.id}
-              onClick={() => setOpenId(thread.id)}
-              className={`block w-full border-b border-border p-3 text-left last:border-b-0 ${openId === thread.id ? "bg-primary/10" : "hover:bg-muted/50"}`}
-            >
+            <button key={thread.id} onClick={() => setOpenId(thread.id)} className={`block w-full border-b border-border p-3 text-left last:border-b-0 ${openId === thread.id ? "bg-primary/10" : "hover:bg-muted/50"}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-medium">客户 {thread.customer_code}</span>
-                {thread.unread_for_staff > 0 && (
-                  <span className="rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
-                    {thread.unread_for_staff}
-                  </span>
-                )}
+                {thread.unread_for_staff > 0 && <span className="rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">{thread.unread_for_staff}</span>}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">最近消息：{fmt(thread.last_message_at)}</div>
             </button>
           ))}
-          {!threadsQ.isLoading && !threads.length && (
-            <div className="p-8 text-center text-sm text-muted-foreground">暂无 GPT / 站内留言</div>
-          )}
+          {!threadsQ.isLoading && !threads.length && <div className="p-8 text-center text-sm text-muted-foreground">暂无 GPT / 站内留言</div>}
         </div>
 
         <div className="min-h-72 rounded-lg border border-border p-4">
-          {!openId && (
-            <div className="grid h-64 place-items-center text-sm text-muted-foreground">选择一个客户查看留言</div>
-          )}
+          {!openId && <div className="grid h-64 place-items-center text-sm text-muted-foreground">选择一个客户查看留言</div>}
           {detailQ.isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {detailQ.data && (
             <>
-              <div className="mb-3 border-b border-border pb-3 font-semibold">
-                客户 {detailQ.data.thread?.customer_code}
-              </div>
+              <div className="mb-3 border-b border-border pb-3 font-semibold">客户 {detailQ.data.thread?.customer_code}</div>
               <div className="max-h-[560px] space-y-3 overflow-y-auto">
                 {((detailQ.data.messages ?? []) as any[]).map((message) => (
                   <div key={message.id} className={message.sender_role === "customer" ? "pr-10" : "pl-10"}>
-                    <div className="mb-1 text-xs text-muted-foreground">
-                      {message.sender_role === "customer" ? "客户" : "EPLUS 客服"} · {message.source} ·{" "}
-                      {fmt(message.created_at)}
-                    </div>
+                    <div className="mb-1 text-xs text-muted-foreground">{message.sender_role === "customer" ? "客户" : "EPLUS 客服"} · {message.source} · {fmt(message.created_at)}</div>
                     <div className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-sm">{message.body}</div>
                   </div>
                 ))}
@@ -159,9 +131,7 @@ function SupportMessagesTab() {
           )}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        这里按 EPLUS OAuth 客户账号分组，只保存通过 EPLUS 工具或站内系统产生的留言，不会复制客户私人 ChatGPT 对话。
-      </p>
+      <p className="text-xs text-muted-foreground">这里按 EPLUS OAuth 客户账号分组，只保存通过 EPLUS 工具或站内系统产生的留言，不会复制客户私人 ChatGPT 对话。</p>
     </div>
   );
 }
@@ -354,12 +324,8 @@ function BindingsTab() {
   });
 
   const mut = useMutation({
-    mutationFn: (v: {
-      id: string;
-      action: "disable" | "enable" | "unbind" | "rebind";
-      customer_code?: string;
-      reason: string;
-    }) => update({ data: v }),
+    mutationFn: (v: { id: string; action: "disable" | "enable" | "unbind" | "rebind"; customer_code?: string; reason: string }) =>
+      update({ data: v }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wxai-bindings"] }),
   });
 
@@ -415,30 +381,18 @@ function BindingsTab() {
                 <td className="p-2">{fmt(b.bound_at ?? b.created_at)}</td>
                 <td className="space-x-1 p-2">
                   {(b.status ?? "active") === "active" ? (
-                    <button
-                      onClick={() => act(b.id, "disable")}
-                      className="rounded border border-border px-2 py-1 text-xs"
-                    >
+                    <button onClick={() => act(b.id, "disable")} className="rounded border border-border px-2 py-1 text-xs">
                       停用
                     </button>
                   ) : (
-                    <button
-                      onClick={() => act(b.id, "enable")}
-                      className="rounded border border-border px-2 py-1 text-xs"
-                    >
+                    <button onClick={() => act(b.id, "enable")} className="rounded border border-border px-2 py-1 text-xs">
                       启用
                     </button>
                   )}
-                  <button
-                    onClick={() => act(b.id, "unbind")}
-                    className="rounded border border-border px-2 py-1 text-xs"
-                  >
+                  <button onClick={() => act(b.id, "unbind")} className="rounded border border-border px-2 py-1 text-xs">
                     解绑
                   </button>
-                  <button
-                    onClick={() => act(b.id, "rebind")}
-                    className="rounded border border-border px-2 py-1 text-xs"
-                  >
+                  <button onClick={() => act(b.id, "rebind")} className="rounded border border-border px-2 py-1 text-xs">
                     更换客户
                   </button>
                 </td>

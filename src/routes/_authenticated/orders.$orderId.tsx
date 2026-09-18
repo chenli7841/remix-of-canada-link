@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/orders/$orderId")({
   head: () => ({ meta: [{ title: "订单/运单详情 / Order & Waybill Detail — SinoCargo" }] }),
   component: OrderDetailPage,
   errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-3xl px-4 py-20 text-center text-destructive">{error.message}</div>
+    <div className="mx-auto max-w-3xl px-4 py-20 text-center text-destructive">{error instanceof Error ? error.message : String(error)}</div>
   ),
   notFoundComponent: () => (
     <div className="mx-auto max-w-3xl px-4 py-20 text-center text-ink-soft">Order not found</div>

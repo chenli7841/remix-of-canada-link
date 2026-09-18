@@ -1,0 +1,1 @@
+ALTER TYPE public.waybill_status ADD VALUE IF NOT EXISTS 'ready_pickup' BEFORE 'delivered';

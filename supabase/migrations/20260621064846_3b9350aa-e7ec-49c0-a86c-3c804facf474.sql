@@ -1,0 +1,1 @@
+ALTER TYPE public.invoice_type ADD VALUE IF NOT EXISTS 'shop';

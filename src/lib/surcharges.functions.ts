@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { recomputeForwardingTotal } from "@/lib/orders.functions";
+import { recomputeForwardingTotal, assertBatchCustomerNotConfirmed } from "@/lib/orders.functions";
 
 export type SurchargeScope = "waybill" | "carton" | "pallet" | "batch" | "forwarding";
 
@@ -118,6 +118,10 @@ export const addSurcharge = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // 批次附加费：客户已确认价格 → 账单冻结，拒绝改动
+    if (data.scope === "batch" && data.customer_code) {
+      await assertBatchCustomerNotConfirmed(supabaseAdmin, data.id, data.customer_code);
+    }
     const row: any = {
       scope: data.scope,
       amount_cny: Number(data.amount_cny ?? 0),
@@ -141,6 +145,9 @@ export const updateSurcharge = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin.from("surcharges").select("*").eq("id", data.id).maybeSingle();
+    if ((before as any)?.scope === "batch" && (before as any)?.batch_id && (before as any)?.customer_code) {
+      await assertBatchCustomerNotConfirmed(supabaseAdmin, (before as any).batch_id, (before as any).customer_code);
+    }
     const patch: any = {};
     if (data.amount_cny != null) patch.amount_cny = Number(data.amount_cny);
     if (data.note != null) patch.note = data.note.trim();
@@ -160,6 +167,9 @@ export const deleteSurcharge = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin.from("surcharges").select("*").eq("id", data.id).maybeSingle();
+    if ((before as any)?.scope === "batch" && (before as any)?.batch_id && (before as any)?.customer_code) {
+      await assertBatchCustomerNotConfirmed(supabaseAdmin, (before as any).batch_id, (before as any).customer_code);
+    }
     const { error } = await supabaseAdmin.from("surcharges").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     if (before) await logSurcharge(supabaseAdmin, { action: "delete", row: before, before, operatorId: context.userId });

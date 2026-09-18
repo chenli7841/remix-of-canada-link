@@ -283,9 +283,7 @@ function InvoiceDetail() {
                     }}
                   />
                   <span className="flex-1 text-xs">{it.description}</span>
-                  <span className="text-xs font-semibold">
-                    CA${(Number(it.amount_cny) * Number(inv.fx_rate ?? 0.19)).toFixed(2)}
-                  </span>
+                  <span className="text-xs font-semibold">CA${(Number(it.amount_cny) * Number(inv.fx_rate ?? 0.19)).toFixed(2)}</span>
                 </label>
               ))}
             </div>

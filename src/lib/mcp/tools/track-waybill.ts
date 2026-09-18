@@ -1,18 +1,11 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
   name: "track_waybill",
   title: "Track a waybill",
-  description:
-    "Look up a SinoCargo waybill by its waybill number. Access is scoped by RLS to waybills the signed-in user owns.",
+  description: "Look up a SinoCargo waybill by its waybill number. Access is scoped by RLS to waybills the signed-in user owns.",
   inputSchema: {
     waybill_no: z.string().trim().min(1).describe("Waybill number, e.g. SC240101ABC."),
   },

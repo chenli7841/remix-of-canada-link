@@ -109,10 +109,7 @@ async function getServerEntry(): Promise<ServerEntry> {
 
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
-async function normalizeCatastrophicSsrResponse(
-  request: Request,
-  response: Response,
-): Promise<Response> {
+async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -124,9 +121,7 @@ async function normalizeCatastrophicSsrResponse(
 
   const captured = consumeLastCapturedError();
   // 客户端主动断开（AbortError）不是应用错误：不打日志、不返回错误页。
-  if (request.signal.aborted || isAbortError(captured)) {
-    return new Response(null, { status: 499 });
-  }
+  if (isAbortError(captured)) return new Response(null, { status: 499 });
 
   console.error(captured ?? new Error(`h3 swallowed SSR error: ${body}`));
   return new Response(renderErrorPage(), {
@@ -143,7 +138,7 @@ export default {
 
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(request, response);
+      return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       if (isAbortError(error)) return new Response(null, { status: 499 });
       console.error(error);

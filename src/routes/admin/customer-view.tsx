@@ -19,8 +19,13 @@ import {
   previewCustomerStorageFee,
   payCustomerStorageFee,
   createCustomerForwarding,
+  listSalesReps,
+  assignCustomerSalesRep,
+  generateCustomerLoginLink,
+  resetCustomerPassword,
 } from "@/lib/admin-customer-view.functions";
 import { deductWalletForBatch } from "@/lib/orders.functions";
+import { getMyRoles } from "@/lib/admin.functions";
 import { ROLE_LABEL, ROLE_COLOR } from "@/lib/admin-roles";
 import { VIP_LABEL, VIP_COLOR } from "@/lib/vip-levels";
 import {
@@ -50,7 +55,10 @@ import {
   AlertTriangle,
   Send,
   ChevronDown,
-
+  KeyRound,
+  LogIn,
+  Copy,
+  X,
 } from "lucide-react";
 import { CustomerForwardingForm } from "@/components/admin/CustomerForwardingForm";
 
@@ -286,7 +294,7 @@ function OverviewTab({ userId }: { userId: string }) {
           </h3>
           <div className="text-xs">
             <span className="text-slate-400">合计 </span>
-            <span className="font-bold text-rose-300">¥{d.unpaid_total_cny.toFixed(2)}</span>
+            <span className="font-bold text-rose-300">CA${d.unpaid_total_cad.toFixed(2)}</span>
           </div>
         </div>
         {d.unpaid_invoices.length === 0 ? (
@@ -299,7 +307,7 @@ function OverviewTab({ userId }: { userId: string }) {
               <li key={inv.invoice_no} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
                 <span className="font-mono text-slate-300">{inv.invoice_no}</span>
                 <span className="text-slate-500">{inv.status === "overdue" ? "已逾期" : "未付"}</span>
-                <span className="font-bold text-rose-300">¥{inv.due_cny.toFixed(2)}</span>
+                <span className="font-bold text-rose-300">CA${inv.due_cad.toFixed(2)}</span>
               </li>
             ))}
           </ul>
@@ -788,11 +796,22 @@ function BatchesTab({ userId }: { userId: string }) {
     try {
       const r: any = await doPay({ data: { batchId, userId, amountCad } });
       if (!r?.ok) {
-        if (r?.reason === "already_paid") {
-          setMsg({ kind: "ok", text: "该批次已结清" });
-        } else {
-          setMsg({ kind: "err", text: r?.reason ?? "付款失败" });
-        }
+        // deductWalletForBatch 现在会原样透传 settleBatchForCustomer 的失败原因（不再
+        // throw 内部代码字符串），这里对应给出人话——尤其 no_waybills，很可能是这个
+        // 客户的 customer_code 跟订单/集运单上记录的对不上，需要联系开发排查数据，
+        // 不是"已经付过"，不能用同一句话。
+        const REASON_MSG: Record<string, string> = {
+          already_paid: "该批次已结清",
+          no_waybills: "按该客户号查不到这个批次下的订单/集运单，可能是客户号跟订单记录对不上，需要排查数据",
+          nothing_to_bill: "该批次费用计算为 0，无需付款",
+          customer_not_found: "客户信息异常",
+          no_frozen_invoice: "账单生成异常，请稍后重试",
+          nothing_to_pay: "该批次无需付款",
+          freeze_failed: "账单生成失败",
+          settle_failed: "结算失败，请稍后重试",
+        };
+        const known = r?.reason ? REASON_MSG[r.reason as string] : undefined;
+        setMsg({ kind: r?.reason === "already_paid" || r?.reason === "nothing_to_pay" ? "ok" : "err", text: known ?? r?.reason ?? "付款失败" });
       } else {
         setMsg({ kind: "ok", text: `付款成功 CA$${r.deducted_cad}，账单已生成` });
       }
@@ -855,7 +874,13 @@ function BatchesTab({ userId }: { userId: string }) {
                   <div className="text-[10px] uppercase tracking-wider text-slate-500">
                     {b.is_paid ? "批次合计" : "批次待付"}
                   </div>
-                  <div className="font-display text-lg font-bold text-brand">CA${b.subtotal_cad.toFixed(2)}</div>
+                  {b.subtotal_cad === null ? (
+                    <div className="text-xs font-medium text-amber-400">
+                      {b.snapshot_pending ? "数据准备中，请稍后刷新" : "等待客服确认费用"}
+                    </div>
+                  ) : (
+                    <div className="font-display text-lg font-bold text-brand">CA${b.subtotal_cad.toFixed(2)}</div>
+                  )}
                 </div>
               </header>
               <ul className="divide-y divide-white/5">
@@ -883,7 +908,7 @@ function BatchesTab({ userId }: { userId: string }) {
                   </li>
                 ))}
               </ul>
-              {!b.is_paid && b.subtotal_cad > 0 && (
+              {!b.is_paid && b.subtotal_cad !== null && b.subtotal_cad > 0 && (
                 <div className="flex items-center gap-3 border-t border-white/5 px-5 py-3">
                   <div className="text-xs text-slate-400">
                     待付{" "}
@@ -934,6 +959,90 @@ function ProfileTab({ userId, initial }: { userId: string; initial: any }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  // 客户归属销售代表——独立的一段，走 assignCustomerSalesRep（不是上面的
+  // saveCustomerProfile），只有 owner/manager 能真的改成功；其它角色这里显示只读。
+  // 跟 /admin route.tsx 的 AdminLayout 复用同一个 query key，命中缓存不用再请求一次。
+  const fetchRoles = useServerFn(getMyRoles);
+  const rolesQ = useQuery({
+    queryKey: ["my-roles"],
+    queryFn: () => fetchRoles(),
+    staleTime: 30 * 60_000,
+  });
+  const myRoles = (rolesQ.data as any)?.roles ?? [];
+  const isOwnerOrManager = myRoles.includes("owner") || myRoles.includes("manager");
+
+  // 任何有客户视图访问权的人都能读这份名单（哪怕自己不能改，也要能显示"当前归属"）。
+  const fetchReps = useServerFn(listSalesReps);
+  const repsQ = useQuery({ queryKey: ["sales-reps"], queryFn: () => fetchReps() });
+  const reps = ((repsQ.data as any)?.items ?? []) as { id: string; full_name: string | null; email: string | null }[];
+
+  const assignRep = useServerFn(assignCustomerSalesRep);
+  const [salesRepId, setSalesRepId] = useState<string>(initial.sales_rep_id ?? "");
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignMsg, setAssignMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const currentRepName = reps.find((r) => r.id === (initial.sales_rep_id ?? ""))?.full_name;
+
+  const onAssign = async () => {
+    setAssignBusy(true);
+    setAssignMsg(null);
+    try {
+      await assignRep({ data: { userId, salesRepId: salesRepId || null } });
+      await qc.invalidateQueries({ queryKey: ["admin-customer-view"] });
+      setAssignMsg({ kind: "ok", text: "已保存" });
+    } catch (e: any) {
+      setAssignMsg({ kind: "err", text: e?.message ?? "保存失败" });
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
+  // 账号安全：免密登录链接 / 重置密码——都是敏感操作，明文/链接只在这次响应里出现
+  // 一次，state 清空就是真清空，不写 localStorage/sessionStorage，也不在这个组件外
+  // 传递。
+  const genLink = useServerFn(generateCustomerLoginLink);
+  const resetPw = useServerFn(resetCustomerPassword);
+  const [loginLink, setLoginLink] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [secMsg, setSecMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const onGenLink = async () => {
+    setLinkBusy(true);
+    setSecMsg(null);
+    try {
+      const r: any = await genLink({ data: { userId } });
+      setLoginLink(r.link);
+    } catch (e: any) {
+      setSecMsg({ kind: "err", text: e?.message ?? "生成失败" });
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const onResetPw = async () => {
+    if (!confirm("确认重置该客户的登录密码？重置后客户原密码立即失效，需要你另行把新密码转告客户。")) return;
+    setPwBusy(true);
+    setSecMsg(null);
+    try {
+      const r: any = await resetPw({ data: { userId } });
+      setNewPassword(r.password);
+    } catch (e: any) {
+      setSecMsg({ kind: "err", text: e?.message ?? "重置失败" });
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSecMsg({ kind: "ok", text: "已复制" });
+    } catch {
+      setSecMsg({ kind: "err", text: "复制失败，请手动选中文本复制" });
+    }
+  };
+
   const onSave = async () => {
     setBusy(true);
     setMsg(null);
@@ -949,6 +1058,7 @@ function ProfileTab({ userId, initial }: { userId: string; initial: any }) {
   };
 
   return (
+    <div className="space-y-4">
     <section className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
       <h3 className="font-display text-base font-bold">基本资料</h3>
       <p className="mt-1 text-xs text-slate-400">
@@ -1006,6 +1116,121 @@ function ProfileTab({ userId, initial }: { userId: string; initial: any }) {
         保存修改
       </button>
     </section>
+
+    <section className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+      <h3 className="font-display text-base font-bold">客户归属</h3>
+      <p className="mt-1 text-xs text-slate-400">
+        分配给哪个销售代表账号（角色 sales_rep）——该销售代表登录后台后，客户视图只能查到分配给自己的客户。
+        {!isOwnerOrManager && " 只有总负责人/主管能修改这里，你当前是只读。"}
+      </p>
+      <div className="mt-3 max-w-xs">
+        {isOwnerOrManager ? (
+          <select value={salesRepId} onChange={(e) => setSalesRepId(e.target.value)} className={inputCls}>
+            <option value="">未分配</option>
+            {reps.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.full_name || r.email || r.id}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-sm text-slate-300">{initial.sales_rep_id ? currentRepName || "（已分配，姓名未知）" : "未分配"}</div>
+        )}
+      </div>
+      {assignMsg && (
+        <div
+          className={`mt-3 rounded-md border px-3 py-1.5 text-xs ${assignMsg.kind === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}
+        >
+          {assignMsg.text}
+        </div>
+      )}
+      {isOwnerOrManager && (
+        <button
+          onClick={onAssign}
+          disabled={assignBusy}
+          className="mt-4 inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
+        >
+          {assignBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          保存归属
+        </button>
+      )}
+    </section>
+
+    {isOwnerOrManager && (
+      <section className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+        <h3 className="font-display text-base font-bold">账号安全</h3>
+        <p className="mt-1 text-xs text-slate-400">
+          这两个操作都很敏感——免密登录链接谁拿到都能以这个客户身份登录；重置密码会让客户原密码立即失效。只有总负责人/主管能用，每次操作都会记录到操作日志（不含链接/密码本身）。
+        </p>
+        {secMsg && (
+          <div
+            className={`mt-3 rounded-md border px-3 py-1.5 text-xs ${secMsg.kind === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}
+          >
+            {secMsg.text}
+          </div>
+        )}
+
+        {loginLink ? (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-amber-300">
+              <span>一次性登录链接 — 关闭后无法再次查看，需要重新生成</span>
+              <button onClick={() => setLoginLink(null)} className="text-amber-300/70 hover:text-amber-200">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="select-all break-all rounded-md border border-white/10 bg-white/5 px-2 py-2 font-mono text-[11px] text-slate-100">
+              {loginLink}
+            </div>
+            <button
+              onClick={() => copyText(loginLink)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand"
+            >
+              <Copy className="h-3 w-3" />
+              复制链接
+            </button>
+          </div>
+        ) : newPassword ? (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-amber-300">
+              <span>新密码 — 关闭后无法再次查看，客户原密码已失效</span>
+              <button onClick={() => setNewPassword(null)} className="text-amber-300/70 hover:text-amber-200">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="select-all break-all rounded-md border border-white/10 bg-white/5 px-2 py-2 font-mono text-sm text-slate-100">
+              {newPassword}
+            </div>
+            <button
+              onClick={() => copyText(newPassword)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand"
+            >
+              <Copy className="h-3 w-3" />
+              复制密码
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={onGenLink}
+              disabled={linkBusy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand disabled:opacity-50"
+            >
+              {linkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+              生成免密登录链接
+            </button>
+            <button
+              onClick={onResetPw}
+              disabled={pwBusy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+            >
+              {pwBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+              重置密码
+            </button>
+          </div>
+        )}
+      </section>
+    )}
+    </div>
   );
 }
 

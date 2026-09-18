@@ -15,6 +15,21 @@ const STATUSES = ["all","pending","received","storage","packed","shipped","in_tr
 const STATUS_LABEL: Record<string, string> = {
   all:"全部", pending:"待入库", received:"已入库", storage:"仓储中", packed:"已打包",
   shipped:"已发出", in_transit:"运输中", ready_pickup:"可取货", delivered:"已签收", cancelled:"已取消",
+  procurement:"代采购", arrived:"清关中",
+};
+// 每个状态的徽标颜色（tailwind class）—— 可手动调整
+const STATUS_COLOR: Record<string, string> = {
+  pending:      "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  received:     "bg-lime-500/15 text-lime-300 border-lime-500/30",
+  storage:      "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+  packed:       "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  shipped:      "bg-blue-500/15 text-blue-300 border-blue-500/30",
+  arrived:      "bg-teal-500/15 text-teal-300 border-teal-500/30",
+  in_transit:   "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+  ready_pickup: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  delivered:    "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  cancelled:    "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  procurement:  "bg-pink-500/15 text-pink-300 border-pink-500/30",
 };
 
 function ForwardingsPage() {
@@ -60,7 +75,7 @@ function ForwardingsPage() {
               <th className="px-4 py-2.5">线路</th>
               <th className="px-4 py-2.5">箱数</th>
               <th className="px-4 py-2.5">国内单号</th>
-              <th className="px-4 py-2.5">入库状态</th>
+              <th className="px-4 py-2.5">状态</th>
               <th className="px-4 py-2.5">费用</th>
               <th className="px-4 py-2.5">批次</th>
               <th className="px-4 py-2.5">创建时间</th>
@@ -83,7 +98,12 @@ function ForwardingsPage() {
                 <td className="px-4 py-2.5 text-center text-xs">{f.waybill_count ?? f.box_count ?? 0}</td>
                 <td className="px-4 py-2.5 font-mono text-base text-brand">{f.domestic_tracking_no ?? "—"}</td>
                 <td className="px-4 py-2.5 text-xs">
-                  {f.intake_at ? <span className="text-emerald-300">已入库 · {fmtDate(f.intake_at)}</span> : <span className="text-amber-300">待入库</span>}
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLOR[f.status] ?? "bg-slate-500/15 text-slate-300 border-slate-500/30"}`}
+                    title={f.intake_at ? `入库时间 ${fmtDate(f.intake_at)}` : "未入库"}
+                  >
+                    {STATUS_LABEL[f.status] ?? f.status ?? "—"}
+                  </span>
                 </td>
                 <td className="px-4 py-2.5 text-xs">{(() => { const snap = f.freight_snapshot ?? {}; const cad = Number(snap.total_cad ?? ((Number(snap.freight_cad ?? 0)) + Number(snap.duty_cad ?? 0) + Number(snap.insurance_cad ?? 0) + Number(snap.surcharges_cad ?? 0))); return cad > 0 ? fmtCAD(cad) : "—"; })()}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{f.batch_no ?? "—"}</td>

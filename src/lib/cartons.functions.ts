@@ -1,6 +1,51 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getFxCadPerCny } from "@/lib/orders.functions";
+import { getFxCadPerCny, markBatchFeesDirty, markBatchFeesDirtyMany, resolveWaybillBatchIds } from "@/lib/orders.functions";
+
+// 箱号"当前实际所属批次"：在托盘里就跟托盘走，否则用箱号自己的 batch_id
+// （与 computeBatchFeeSummary 的分组口径一致：cartonsR 按 batch_id 取顶层箱号，
+// palletCartons 按托盘取托盘内箱号）。
+async function effectiveCartonBatchId(
+  admin: any,
+  row: { batch_id?: string | null; pallet_id?: string | null } | null | undefined,
+): Promise<string | null> {
+  if (!row) return null;
+  if (row.pallet_id) {
+    const { data: p } = await admin.from("pallets").select("batch_id").eq("id", row.pallet_id).maybeSingle();
+    return (p as any)?.batch_id ?? row.batch_id ?? null;
+  }
+  return row.batch_id ?? null;
+}
+
+// resolveWaybillBatchIds 定义在 orders.functions.ts（scan.functions.ts 的量尺称重写路径也要用，
+// 避免两处口径分叉）。这里是它针对整箱进出托盘场景的同类实现。
+async function resolveCartonBatchIds(admin: any, cartonIds: string[]): Promise<string[]> {
+  if (!cartonIds.length) return [];
+  const { data: cs } = await admin.from("cartons").select("id, batch_id, pallet_id").in("id", cartonIds);
+  const rows = (cs ?? []) as any[];
+  const palletIds = Array.from(new Set(rows.map((c) => c.pallet_id).filter(Boolean)));
+  const palletBatch = new Map<string, string | null>();
+  if (palletIds.length) {
+    const { data: ps } = await admin.from("pallets").select("id, batch_id").in("id", palletIds);
+    for (const p of (ps ?? []) as any[]) palletBatch.set(p.id, p.batch_id ?? null);
+  }
+  const out = new Set<string>();
+  for (const c of rows) {
+    const b: string | null = c.pallet_id ? (palletBatch.get(c.pallet_id) ?? c.batch_id ?? null) : (c.batch_id ?? null);
+    if (b) out.add(b);
+  }
+  return Array.from(out);
+}
+
+// 非致命：批次不存在/查询失败不应该挡住主操作，只是快照过期标记没打上，
+// 最坏情况是客户暂时还看着旧金额，而不是这次箱号/托盘操作直接失败。
+async function safeMarkDirtyMany(admin: any, batchIds: (string | null | undefined)[]) {
+  try {
+    await markBatchFeesDirtyMany(admin, batchIds);
+  } catch (e) {
+    console.error("markBatchFeesDirtyMany failed:", e);
+  }
+}
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -265,9 +310,11 @@ async function getLastMileFeeCad(
   const heavyMin = Number(r.delivery_heavy_min_kg ?? 0);
   const unitFee = Number(r.delivery_unit_fee_cad ?? 0);
   if (lightMax > 0 && chargeableKg < lightMax && lightFee > 0) return +lightFee.toFixed(2);
-  if (heavyMin > 0 && chargeableKg > heavyMin && unitFee > 0) return +(unitFee * Math.max(1, units)).toFixed(2);
+  if (heavyMin > 0 && chargeableKg > heavyMin && unitFee > 0)
+    return +(unitFee * Math.max(1, units)).toFixed(2);
   return 0;
 }
+
 
 function composeCad(
   selfCad: number,
@@ -792,6 +839,8 @@ export const createCarton = createServerFn({ method: "POST" })
       operator_name,
       note: `新建箱号 ${ins.carton_no}`,
     });
+    const effBatch = await effectiveCartonBatchId(supabaseAdmin, ins);
+    if (effBatch) await safeMarkDirtyMany(supabaseAdmin, [effBatch]);
     return { ok: true, carton: ins };
   });
 
@@ -828,6 +877,11 @@ export const updateCarton = createServerFn({ method: "POST" })
       operator_name,
       note: `更新箱号 ${(before as any)?.carton_no ?? ""} 字段：${changedKeys.join(", ")}`,
     });
+    // 量尺称重/线路/托盘归属等任何字段变动都可能影响该箱号所在批次的费用汇总——
+    // 改动前后的批次都打脏（万一这次改动顺带把箱号挪到了别的批次）。
+    const beforeBatch = await effectiveCartonBatchId(supabaseAdmin, before);
+    const afterBatch = await effectiveCartonBatchId(supabaseAdmin, { ...(before as any), ...patch });
+    await safeMarkDirtyMany(supabaseAdmin, [beforeBatch, afterBatch]);
     return { ok: true };
   });
 
@@ -880,6 +934,8 @@ export const deleteCarton = createServerFn({ method: "POST" })
       operator_name,
       note: `删除箱号 ${(before as any)?.carton_no ?? ""}`,
     });
+    const effBatch = await effectiveCartonBatchId(supabaseAdmin, before);
+    if (effBatch) await safeMarkDirtyMany(supabaseAdmin, [effBatch]);
     return { ok: true };
   });
 
@@ -1064,6 +1120,11 @@ export const assignToCarton = createServerFn({ method: "POST" })
         noteLock(f.customer_code ?? null, f.user_id ?? null, address, f.request_no ?? "");
       }
     }
+    // 运单进箱/出箱会改变它计入哪个批次的费用汇总——改动前先记下"原来在哪"，
+    // 连同目标箱号所在批次一起，改动成功后统一打脏。
+    const sourceBatchIds = data.waybillIds?.length ? await resolveWaybillBatchIds(supabaseAdmin, data.waybillIds) : [];
+    const targetBatchId = data.cartonId ? await effectiveCartonBatchId(supabaseAdmin, carton) : null;
+
     const action: "assign" | "remove" = data.cartonId ? "assign" : "remove";
     const operator_name = await getOperatorName(supabaseAdmin, context.userId);
     const logCtx = {
@@ -1113,6 +1174,9 @@ export const assignToCarton = createServerFn({ method: "POST" })
           address_snapshot: (lockCandidate as any).address,
         })
         .eq("id", data.cartonId);
+    }
+    if (data.waybillIds?.length) {
+      await safeMarkDirtyMany(supabaseAdmin, [...sourceBatchIds, targetBatchId]);
     }
     return { ok: true };
   });
@@ -1329,6 +1393,7 @@ export const createPallet = createServerFn({ method: "POST" })
       operator_name,
       note: `新建托盘 ${ins.pallet_no}`,
     });
+    if (ins.batch_id) await safeMarkDirtyMany(supabaseAdmin, [ins.batch_id]);
     return { ok: true, pallet: ins };
   });
 
@@ -1355,6 +1420,7 @@ export const updatePallet = createServerFn({ method: "POST" })
       operator_name,
       note: `更新托盘 ${(before as any)?.pallet_no ?? ""} 字段：${changedKeys.join(", ")}`,
     });
+    await safeMarkDirtyMany(supabaseAdmin, [(before as any)?.batch_id ?? null, patch.batch_id ?? (before as any)?.batch_id ?? null]);
     return { ok: true };
   });
 
@@ -1379,6 +1445,7 @@ export const deletePallet = createServerFn({ method: "POST" })
       operator_name,
       note: `删除托盘 ${(before as any)?.pallet_no ?? ""}`,
     });
+    if ((before as any)?.batch_id) await safeMarkDirtyMany(supabaseAdmin, [(before as any).batch_id]);
     return { ok: true };
   });
 
@@ -1415,6 +1482,7 @@ export const splitPallet = createServerFn({ method: "POST" })
       operator_name,
       note: `拆分托盘 ${(before as any).pallet_no}（释放 ${cartonIds.length} 箱 / ${wbIds.length} 单 → 批次${batchId ? "" : "外"}）并删除托盘`,
     });
+    if (batchId) await safeMarkDirtyMany(supabaseAdmin, [batchId]);
     return { ok: true, released_cartons: cartonIds.length, released_waybills: wbIds.length };
   });
 
@@ -1548,6 +1616,11 @@ export const assignToPallet = createServerFn({ method: "POST" })
         noteLock(f.customer_code ?? null, f.user_id ?? null, address, f.request_no ?? "");
       }
     }
+    // 整箱/散单进出托盘同样会改变计入哪个批次的费用汇总——先记下改动前各自在哪个批次。
+    const sourceCartonBatchIds = data.cartonIds?.length ? await resolveCartonBatchIds(supabaseAdmin, data.cartonIds) : [];
+    const sourceWbBatchIds = data.waybillIds?.length ? await resolveWaybillBatchIds(supabaseAdmin, data.waybillIds) : [];
+    const targetBatchId = data.palletId ? ((pallet as any)?.batch_id ?? null) : null;
+
     const action: "assign" | "remove" = data.palletId ? "assign" : "remove";
     const operator_name = await getOperatorName(supabaseAdmin, context.userId);
     const logCtx = {
@@ -1603,6 +1676,9 @@ export const assignToPallet = createServerFn({ method: "POST" })
           address_snapshot: (lockCandidate as any).address,
         })
         .eq("id", data.palletId);
+    }
+    if (data.cartonIds?.length || data.waybillIds?.length) {
+      await safeMarkDirtyMany(supabaseAdmin, [...sourceCartonBatchIds, ...sourceWbBatchIds, targetBatchId]);
     }
     return { ok: true };
   });

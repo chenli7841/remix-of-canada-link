@@ -6,9 +6,10 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { decryptHosted, hostedMd5Matches, HOSTED_PAID_STATES, HOSTED_FAILED_STATES } =
-          await import("@/lib/ottpay-hosted.server");
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { decryptHosted, hostedMd5Matches, HOSTED_PAID_STATES, HOSTED_FAILED_STATES } = await import(
+          "@/lib/ottpay-hosted.server"
+        );
+        const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
 
         let payload: any;
         try {
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
 
         const { data: tx } = await supabaseAdmin
           .from("wallet_transactions")
-          .select("id, status, amount_cad, note")
+          .select("id, status, amount_cad, provider_payment_id")
           .eq("ref_no", reference)
           .maybeSingle();
         if (!tx) return new Response("SUCCESS");
@@ -79,14 +80,18 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
           return new Response("SUCCESS");
         }
 
-        const patch: Record<string, any> = { status: paid ? "completed" : "failed" };
-        if (info.bizpay_order_id && !/pid=/.test(tx.note ?? "")) {
-          patch.note = `${tx.note ?? ""} · pid=${info.bizpay_order_id}`;
+        const patch: Record<string, any> = {
+          status: paid ? "completed" : "failed",
+          verified_at: new Date().toISOString(),
+        };
+        if (info.bizpay_order_id && !tx.provider_payment_id) {
+          patch.provider_payment_id = String(info.bizpay_order_id);
         }
         await supabaseAdmin
           .from("wallet_transactions")
           .update(patch as any)
-          .eq("id", tx.id);
+          .eq("id", tx.id)
+          .eq("status", "pending");
 
         return new Response("SUCCESS");
       },

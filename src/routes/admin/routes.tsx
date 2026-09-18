@@ -607,7 +607,9 @@ function RouteEditor({ initial, warehouses, onClose }: { initial: any; warehouse
                     />
                     <span>允许微信 AI 客服创建运单时选择本线路</span>
                   </label>
-                  <p className="mt-1 text-[11px] text-slate-500">仅对起点仓为义乌仓 (YW) 且已启用的集运线路生效。</p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    仅对起点仓为义乌仓 (YW) 且已启用的集运线路生效。
+                  </p>
                 </Field>
                 <Field label="微信 AI 价格说明" full>
                   <Input
@@ -640,9 +642,7 @@ function RouteEditor({ initial, warehouses, onClose }: { initial: any; warehouse
                       />
                     </div>
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    仅说明当前线路。GPT 会按客户权限返回的线路回答；留空时不会自行推测。
-                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500">仅说明当前线路。GPT 会按客户权限返回的线路回答；留空时不会自行推测。</p>
                 </Field>
 
                 <Field label="消费税">
@@ -1238,8 +1238,7 @@ function FreightFields({ value: f, onChange }: { value: FreightRule; onChange: (
         />
       </Field>
       <p className="col-span-2 text-[11px] text-slate-500">
-        最低收费与清关费分别在运单级 /
-        批次级生效：运单级按每张运单各判断一次，批次级按同线路同客户号在批次内合并判断一次。
+        最低收费与清关费分别在运单级 / 批次级生效：运单级按每张运单各判断一次，批次级按同线路同客户号在批次内合并判断一次。
       </p>
 
       <Field label="末端派送费：重量低于 (kg)">
@@ -1292,9 +1291,12 @@ function FreightFields({ value: f, onChange }: { value: FreightRule; onChange: (
         />
       </Field>
       <p className="col-span-2 text-[11px] text-slate-500">
-        末端派送费为批次级：先判断「重量低于阈值 → 加收固定派送费」，否则「重量高于第二阈值 → 按（托盘+箱）数量 ×
-        单价」。 超长 / 超重 / 偏远邮编只用于在批次结算页给出提示，不自动计费。
+        末端派送费为批次级：先判断「重量低于阈值 → 加收固定派送费」，否则「重量高于第二阈值 → 按（托盘+箱）数量 × 单价」。
+        超长 / 超重 / 偏远邮编只用于在批次结算页给出提示，不自动计费。
       </p>
+
+
+
 
       <Field label="保险费率 %  (申报价值 × 费率 = 保费)" full>
         <Input

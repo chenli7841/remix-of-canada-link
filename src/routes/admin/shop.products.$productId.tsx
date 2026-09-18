@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { getProduct, saveProduct, listCategories } from "@/lib/shop.functions";
+import { getProduct, saveProduct, listCategories, saveVariant, deleteVariant } from "@/lib/shop.functions";
 import { listHsCodes } from "@/lib/hs-codes.functions";
 import { MediaUpload, uploadShopMedia } from "@/components/admin/MediaUpload";
 import {
@@ -51,6 +51,8 @@ function ProductEdit() {
   const isNew = productId === "new";
   const fetchOne = useServerFn(getProduct);
   const save = useServerFn(saveProduct);
+  const saveVariantFn = useServerFn(saveVariant);
+  const deleteVariantFn = useServerFn(deleteVariant);
   const fetchCats = useServerFn(listCategories);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -127,6 +129,8 @@ function ProductEdit() {
   const [msg, setMsg] = useState<string | null>(null);
   const [featuredCount, setFeaturedCount] = useState(0);
   const [expandedVariant, setExpandedVariant] = useState<Record<number, boolean>>({});
+  const [variantBusy, setVariantBusy] = useState<Record<string, "save" | "del" | undefined>>({});
+  const [variantSaved, setVariantSaved] = useState<Record<string, boolean>>({});
   const totalStock = q.data?.product ? (q.data.product as any).total_stock : null;
 
   useEffect(() => {
@@ -174,7 +178,12 @@ function ProductEdit() {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await save({ data: { ...form, id: isNew ? undefined : productId, variants } });
+      // Existing product: variants are saved row-by-row (saveOneVariant), so the
+      // product-level save never touches them. A brand-new product still seeds its
+      // initial swatch rows in the same request.
+      const r = await save({
+        data: { ...form, id: isNew ? undefined : productId, variants: isNew ? variants : undefined },
+      });
       setMsg("✓ 已保存");
       qc.invalidateQueries({ queryKey: ["shop-products"] });
       qc.invalidateQueries({ queryKey: ["shop-product", productId] });
@@ -183,6 +192,54 @@ function ProductEdit() {
       setMsg("✗ " + e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Save one variant row independently. New product: not allowed yet (no product_id) —
+  // the row is persisted by the first product-level save instead.
+  const saveOneVariant = async (idx: number) => {
+    if (isNew) {
+      setMsg("✗ 请先保存商品，再单独保存规格");
+      return;
+    }
+    const v = variants[idx];
+    const key = String(v.id);
+    setVariantBusy((s) => ({ ...s, [key]: "save" }));
+    setMsg(null);
+    try {
+      const isNewRow = key.startsWith("new_");
+      const r = await saveVariantFn({
+        data: { ...v, id: isNewRow ? undefined : v.id, product_id: productId },
+      });
+      updateVariant(idx, { id: r.variant.id, is_active: r.variant.is_active });
+      setVariantSaved((s) => ({ ...s, [String(r.variant.id)]: true }));
+      setTimeout(() => setVariantSaved((s) => ({ ...s, [String(r.variant.id)]: false })), 2000);
+    } catch (e: any) {
+      setMsg("✗ 规格保存失败：" + e.message);
+    } finally {
+      setVariantBusy((s) => ({ ...s, [key]: undefined }));
+    }
+  };
+
+  const deleteOneVariant = async (idx: number) => {
+    const v = variants[idx];
+    const key = String(v.id);
+    // Unsaved row (or unsaved product) — just drop it locally, nothing to delete.
+    if (isNew || key.startsWith("new_")) {
+      removeVariant(idx);
+      return;
+    }
+    if (!window.confirm("确认删除该规格？被历史订单/库存流水引用过的规格会保留记录、仅停用。")) return;
+    setVariantBusy((s) => ({ ...s, [key]: "del" }));
+    setMsg(null);
+    try {
+      const r = await deleteVariantFn({ data: { id: v.id } });
+      removeVariant(idx);
+      setMsg(r.mode === "soft" ? "✓ 规格已停用（存在历史记录）" : "✓ 规格已删除");
+    } catch (e: any) {
+      setMsg("✗ 规格删除失败：" + e.message);
+    } finally {
+      setVariantBusy((s) => ({ ...s, [key]: undefined }));
     }
   };
 
@@ -540,6 +597,11 @@ function ProductEdit() {
                 </button>
               </div>
               {variants.length === 0 && <div className="text-xs text-ink-soft">暂无规格，前台不显示"规格选择"</div>}
+              {isNew && variants.length > 0 && (
+                <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10.5px] text-amber-700">
+                  新商品的规格会随首次「保存」一起写入；商品创建后每个规格可单独保存 / 删除。
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 {variants.map((v, i) => {
                   const open = !!expandedVariant[i];
@@ -549,6 +611,10 @@ function ProductEdit() {
                       className="rounded-xl border-2 border-dashed border-brand/40 bg-brand/5 px-3 py-2 text-xs"
                     >
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <VariantImageThumb
+                          value={v.image_url ?? ""}
+                          onChange={(url) => updateVariant(i, { image_url: url })}
+                        />
                         <input
                           value={v.attrs?.color ?? ""}
                           onChange={(e) => updateVariant(i, { attrs: { ...v.attrs, color: e.target.value } })}
@@ -578,14 +644,38 @@ function ProductEdit() {
                         />
                         <span className="text-ink-soft">· 库存 {v.stock ?? 0}</span>
                         <button
+                          onClick={() => updateVariant(i, { is_active: v.is_active === false })}
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                            v.is_active === false
+                              ? "bg-rose-500/15 text-rose-600"
+                              : "bg-emerald-500/15 text-emerald-600"
+                          }`}
+                        >
+                          {v.is_active === false ? "已停用" : "启用中"}
+                        </button>
+                        <button
                           onClick={() => setExpandedVariant({ ...expandedVariant, [i]: !open })}
                           className="ml-auto rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink-soft hover:bg-accent"
                         >
                           {open ? "收起重量/包装 ▲" : "设置重量/包装 ▼"}
                         </button>
                         <button
-                          onClick={() => removeVariant(i)}
-                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-ink-soft hover:bg-rose-500/20 hover:text-rose-500"
+                          onClick={() => saveOneVariant(i)}
+                          disabled={variantBusy[String(v.id)] === "save"}
+                          className="rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand hover:bg-brand/20 disabled:opacity-50"
+                        >
+                          {variantBusy[String(v.id)] === "save"
+                            ? "保存中…"
+                            : variantSaved[String(v.id)]
+                              ? "✓ 已保存"
+                              : String(v.id).startsWith("new_")
+                                ? "保存新规格"
+                                : "保存"}
+                        </button>
+                        <button
+                          onClick={() => deleteOneVariant(i)}
+                          disabled={variantBusy[String(v.id)] === "del"}
+                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-ink-soft hover:bg-rose-500/20 hover:text-rose-500 disabled:opacity-50"
                         >
                           <X className="h-2.5 w-2.5" />
                         </button>
@@ -665,7 +755,8 @@ function ProductEdit() {
               </div>
               {variants.length > 0 && (
                 <p className="mt-2 text-[10.5px] text-ink-soft">
-                  SKU 可手动改；库存请到「库存流水」页面调整。重量/包装留空的规格，下单时按商品默认值计费。
+                  每个规格独立「保存 / 删除」，与顶部商品「保存」互不影响。被历史订单/库存流水引用过的规格删除时会自动改为「停用」保留记录。SKU
+                  可手动改；库存请到「库存流水」页面调整。重量/包装留空的规格，下单时按商品默认值计费。
                 </p>
               )}
             </div>
@@ -1307,6 +1398,54 @@ function VariantNum({
       placeholder={placeholder}
       className="w-full rounded-md border border-border bg-surface px-1.5 py-1 text-[11px] focus:border-brand focus:outline-none"
     />
+  );
+}
+
+// 每个规格（SKU）自己的一张图——常驻显示在规格行里（不藏进"展开"面板），
+// 点缩略图直接换图，右上角小 X 清空（清空后前台回退到商品封面图）。
+function VariantImageThumb({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const handle = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy(true);
+    try {
+      onChange(await uploadShopMedia(f));
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="group relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border bg-surface">
+      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={(e) => handle(e.target.files?.[0])} />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={busy}
+        title={value ? "更换 SKU 图片" : "上传 SKU 图片"}
+        className="grid h-full w-full place-items-center"
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-soft" />
+        ) : value ? (
+          <img src={value} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <ImageIcon className="h-3.5 w-3.5 text-ink-soft" />
+        )}
+      </button>
+      {value && !busy && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          title="清空 SKU 图片"
+          className="absolute right-0 top-0 hidden h-3.5 w-3.5 place-items-center rounded-bl bg-black/60 text-white group-hover:grid"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </div>
   );
 }
 

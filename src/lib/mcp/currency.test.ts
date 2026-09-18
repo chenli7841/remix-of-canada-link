@@ -17,9 +17,7 @@ describe("GPT App customer-facing CAD amounts", () => {
   });
 
   test("adds CAD snapshot components when total_cad is absent", () => {
-    expect(forwardingTotalCad(9999, { freight_cad: 20, duty_cad: 3, insurance_cad: 2, surcharges_cad: 1.5 })).toBe(
-      26.5,
-    );
+    expect(forwardingTotalCad(9999, { freight_cad: 20, duty_cad: 3, insurance_cad: 2, surcharges_cad: 1.5 })).toBe(26.5);
   });
 
   test("converts the legacy fee only when no CAD snapshot amount exists", () => {

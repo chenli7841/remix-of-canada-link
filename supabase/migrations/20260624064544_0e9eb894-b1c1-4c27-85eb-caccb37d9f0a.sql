@@ -1,0 +1,1 @@
+ALTER TABLE public.warehouses ADD COLUMN IF NOT EXISTS storage_free_days integer NOT NULL DEFAULT 0;

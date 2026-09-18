@@ -29,6 +29,7 @@ import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCheckoutRouteImport } from './routes/_authenticated/checkout'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminApiTokensRouteImport } from './routes/admin/api-tokens'
 import { Route as AdminCargoTypesRouteImport } from './routes/admin/cargo-types'
 import { Route as AdminCustomerViewRouteImport } from './routes/admin/customer-view'
 import { Route as AdminDestinationsRouteImport } from './routes/admin/destinations'
@@ -91,18 +92,26 @@ import { Route as ApiPublicAiOrderBillingRouteImport } from './routes/api/public
 import { Route as ApiPublicAiResolveWechatCustomerRouteImport } from './routes/api/public/ai-resolve-wechat-customer'
 import { Route as ApiPublicAiTrackRouteImport } from './routes/api/public/ai-track'
 import { Route as ApiPublicAiWarehouseScanRouteImport } from './routes/api/public/ai-warehouse-scan'
+import { Route as AdminShopCartsIndexRouteImport } from './routes/admin/shop.carts.index'
+import { Route as AdminShopCartsCartIdRouteImport } from './routes/admin/shop.carts.$cartId'
 import { Route as AdminShopOrdersIndexRouteImport } from './routes/admin/shop.orders.index'
 import { Route as AdminShopOrdersOrderIdRouteImport } from './routes/admin/shop.orders.$orderId'
 import { Route as AdminShopOrdersProcurementRouteImport } from './routes/admin/shop.orders.procurement'
 import { Route as AdminShopProductsIndexRouteImport } from './routes/admin/shop.products.index'
 import { Route as AdminShopProductsProductIdRouteImport } from './routes/admin/shop.products.$productId'
+import { Route as ApiPartnersV1OrdersRouteImport } from './routes/api/partners/v1/orders'
+import { Route as ApiPartnersV1RoutesRouteImport } from './routes/api/partners/v1/routes'
 import { Route as ApiPublicHooksMarkOverdueRouteImport } from './routes/api/public/hooks/mark-overdue'
 import { Route as ApiPublicHooksOttpayRouteImport } from './routes/api/public/hooks/ottpay'
 import { Route as ApiPublicHooksOttpayCardRouteImport } from './routes/api/public/hooks/ottpay-card'
+import { Route as ApiPublicHooksReconcileOttRouteImport } from './routes/api/public/hooks/reconcile-ott'
 import { Route as ApiPublicWechatCallbackRouteImport } from './routes/api/public/wechat.callback'
 import { Route as ApiPublicWechatLoginRouteImport } from './routes/api/public/wechat.login'
 import { Route as IntlChannelCallbackSplatRouteImport } from './routes/intl/channel/callback/$'
 import { Route as IntlChannelCallbackWxkfGptRouteImport } from './routes/intl/channel/callback/wxkf-gpt'
+import { Route as ApiPartnersV1CustomersExternalCustomerIdProfileRouteImport } from './routes/api/partners/v1/customers.$externalCustomerId.profile'
+import { Route as ApiPartnersV1OrdersByDomesticNumberDomesticNumberRouteImport } from './routes/api/partners/v1/orders.by-domestic-number.$domesticNumber'
+import { Route as ApiPartnersV1RoutesRouteCodeOrderSchemaRouteImport } from './routes/api/partners/v1/routes.$routeCode.order-schema'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -203,6 +212,11 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminApiTokensRoute = AdminApiTokensRouteImport.update({
+  id: '/api-tokens',
+  path: '/api-tokens',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminCargoTypesRoute = AdminCargoTypesRouteImport.update({
@@ -526,6 +540,16 @@ const ApiPublicAiWarehouseScanRoute =
     path: '/api/public/ai-warehouse-scan',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminShopCartsIndexRoute = AdminShopCartsIndexRouteImport.update({
+  id: '/shop/carts/',
+  path: '/shop/carts/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminShopCartsCartIdRoute = AdminShopCartsCartIdRouteImport.update({
+  id: '/shop/carts/$cartId',
+  path: '/shop/carts/$cartId',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminShopOrdersIndexRoute = AdminShopOrdersIndexRouteImport.update({
   id: '/shop/orders/',
   path: '/shop/orders/',
@@ -553,6 +577,16 @@ const AdminShopProductsProductIdRoute =
     path: '/shop/products/$productId',
     getParentRoute: () => AdminRouteRoute,
   } as any)
+const ApiPartnersV1OrdersRoute = ApiPartnersV1OrdersRouteImport.update({
+  id: '/api/partners/v1/orders',
+  path: '/api/partners/v1/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPartnersV1RoutesRoute = ApiPartnersV1RoutesRouteImport.update({
+  id: '/api/partners/v1/routes',
+  path: '/api/partners/v1/routes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksMarkOverdueRoute =
   ApiPublicHooksMarkOverdueRouteImport.update({
     id: '/api/public/hooks/mark-overdue',
@@ -568,6 +602,12 @@ const ApiPublicHooksOttpayCardRoute =
   ApiPublicHooksOttpayCardRouteImport.update({
     id: '/api/public/hooks/ottpay-card',
     path: '/api/public/hooks/ottpay-card',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksReconcileOttRoute =
+  ApiPublicHooksReconcileOttRouteImport.update({
+    id: '/api/public/hooks/reconcile-ott',
+    path: '/api/public/hooks/reconcile-ott',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicWechatCallbackRoute = ApiPublicWechatCallbackRouteImport.update({
@@ -592,6 +632,24 @@ const IntlChannelCallbackWxkfGptRoute =
     path: '/intl/channel/callback/wxkf-gpt',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPartnersV1CustomersExternalCustomerIdProfileRoute =
+  ApiPartnersV1CustomersExternalCustomerIdProfileRouteImport.update({
+    id: '/api/partners/v1/customers/$externalCustomerId/profile',
+    path: '/api/partners/v1/customers/$externalCustomerId/profile',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute =
+  ApiPartnersV1OrdersByDomesticNumberDomesticNumberRouteImport.update({
+    id: '/by-domestic-number/$domesticNumber',
+    path: '/by-domestic-number/$domesticNumber',
+    getParentRoute: () => ApiPartnersV1OrdersRoute,
+  } as any)
+const ApiPartnersV1RoutesRouteCodeOrderSchemaRoute =
+  ApiPartnersV1RoutesRouteCodeOrderSchemaRouteImport.update({
+    id: '/$routeCode/order-schema',
+    path: '/$routeCode/order-schema',
+    getParentRoute: () => ApiPartnersV1RoutesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -612,6 +670,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthenticatedAccountRoute
   '/checkout': typeof AuthenticatedCheckoutRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
@@ -675,18 +734,26 @@ export interface FileRoutesByFullPath {
   '/admin/shop/': typeof AdminShopIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/waybills/': typeof AdminWaybillsIndexRoute
+  '/admin/shop/carts/$cartId': typeof AdminShopCartsCartIdRoute
   '/admin/shop/orders/$orderId': typeof AdminShopOrdersOrderIdRoute
   '/admin/shop/orders/procurement': typeof AdminShopOrdersProcurementRoute
   '/admin/shop/products/$productId': typeof AdminShopProductsProductIdRoute
+  '/api/partners/v1/orders': typeof ApiPartnersV1OrdersRouteWithChildren
+  '/api/partners/v1/routes': typeof ApiPartnersV1RoutesRouteWithChildren
   '/api/public/hooks/mark-overdue': typeof ApiPublicHooksMarkOverdueRoute
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
+  '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
+  '/admin/shop/carts/': typeof AdminShopCartsIndexRoute
   '/admin/shop/orders/': typeof AdminShopOrdersIndexRoute
   '/admin/shop/products/': typeof AdminShopProductsIndexRoute
+  '/api/partners/v1/customers/$externalCustomerId/profile': typeof ApiPartnersV1CustomersExternalCustomerIdProfileRoute
+  '/api/partners/v1/orders/by-domestic-number/$domesticNumber': typeof ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute
+  '/api/partners/v1/routes/$routeCode/order-schema': typeof ApiPartnersV1RoutesRouteCodeOrderSchemaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -705,6 +772,7 @@ export interface FileRoutesByTo {
   '/account': typeof AuthenticatedAccountRoute
   '/checkout': typeof AuthenticatedCheckoutRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
@@ -768,18 +836,26 @@ export interface FileRoutesByTo {
   '/admin/shop': typeof AdminShopIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/admin/waybills': typeof AdminWaybillsIndexRoute
+  '/admin/shop/carts/$cartId': typeof AdminShopCartsCartIdRoute
   '/admin/shop/orders/$orderId': typeof AdminShopOrdersOrderIdRoute
   '/admin/shop/orders/procurement': typeof AdminShopOrdersProcurementRoute
   '/admin/shop/products/$productId': typeof AdminShopProductsProductIdRoute
+  '/api/partners/v1/orders': typeof ApiPartnersV1OrdersRouteWithChildren
+  '/api/partners/v1/routes': typeof ApiPartnersV1RoutesRouteWithChildren
   '/api/public/hooks/mark-overdue': typeof ApiPublicHooksMarkOverdueRoute
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
+  '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
+  '/admin/shop/carts': typeof AdminShopCartsIndexRoute
   '/admin/shop/orders': typeof AdminShopOrdersIndexRoute
   '/admin/shop/products': typeof AdminShopProductsIndexRoute
+  '/api/partners/v1/customers/$externalCustomerId/profile': typeof ApiPartnersV1CustomersExternalCustomerIdProfileRoute
+  '/api/partners/v1/orders/by-domestic-number/$domesticNumber': typeof ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute
+  '/api/partners/v1/routes/$routeCode/order-schema': typeof ApiPartnersV1RoutesRouteCodeOrderSchemaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -802,6 +878,7 @@ export interface FileRoutesById {
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/checkout': typeof AuthenticatedCheckoutRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
+  '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
@@ -865,18 +942,26 @@ export interface FileRoutesById {
   '/admin/shop/': typeof AdminShopIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/waybills/': typeof AdminWaybillsIndexRoute
+  '/admin/shop/carts/$cartId': typeof AdminShopCartsCartIdRoute
   '/admin/shop/orders/$orderId': typeof AdminShopOrdersOrderIdRoute
   '/admin/shop/orders/procurement': typeof AdminShopOrdersProcurementRoute
   '/admin/shop/products/$productId': typeof AdminShopProductsProductIdRoute
+  '/api/partners/v1/orders': typeof ApiPartnersV1OrdersRouteWithChildren
+  '/api/partners/v1/routes': typeof ApiPartnersV1RoutesRouteWithChildren
   '/api/public/hooks/mark-overdue': typeof ApiPublicHooksMarkOverdueRoute
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
+  '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
+  '/admin/shop/carts/': typeof AdminShopCartsIndexRoute
   '/admin/shop/orders/': typeof AdminShopOrdersIndexRoute
   '/admin/shop/products/': typeof AdminShopProductsIndexRoute
+  '/api/partners/v1/customers/$externalCustomerId/profile': typeof ApiPartnersV1CustomersExternalCustomerIdProfileRoute
+  '/api/partners/v1/orders/by-domestic-number/$domesticNumber': typeof ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute
+  '/api/partners/v1/routes/$routeCode/order-schema': typeof ApiPartnersV1RoutesRouteCodeOrderSchemaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -899,6 +984,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/checkout'
     | '/invoices'
+    | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
     | '/admin/destinations'
@@ -962,18 +1048,26 @@ export interface FileRouteTypes {
     | '/admin/shop/'
     | '/admin/users/'
     | '/admin/waybills/'
+    | '/admin/shop/carts/$cartId'
     | '/admin/shop/orders/$orderId'
     | '/admin/shop/orders/procurement'
     | '/admin/shop/products/$productId'
+    | '/api/partners/v1/orders'
+    | '/api/partners/v1/routes'
     | '/api/public/hooks/mark-overdue'
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
+    | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
+    | '/admin/shop/carts/'
     | '/admin/shop/orders/'
     | '/admin/shop/products/'
+    | '/api/partners/v1/customers/$externalCustomerId/profile'
+    | '/api/partners/v1/orders/by-domestic-number/$domesticNumber'
+    | '/api/partners/v1/routes/$routeCode/order-schema'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -992,6 +1086,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/checkout'
     | '/invoices'
+    | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
     | '/admin/destinations'
@@ -1055,18 +1150,26 @@ export interface FileRouteTypes {
     | '/admin/shop'
     | '/admin/users'
     | '/admin/waybills'
+    | '/admin/shop/carts/$cartId'
     | '/admin/shop/orders/$orderId'
     | '/admin/shop/orders/procurement'
     | '/admin/shop/products/$productId'
+    | '/api/partners/v1/orders'
+    | '/api/partners/v1/routes'
     | '/api/public/hooks/mark-overdue'
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
+    | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
+    | '/admin/shop/carts'
     | '/admin/shop/orders'
     | '/admin/shop/products'
+    | '/api/partners/v1/customers/$externalCustomerId/profile'
+    | '/api/partners/v1/orders/by-domestic-number/$domesticNumber'
+    | '/api/partners/v1/routes/$routeCode/order-schema'
   id:
     | '__root__'
     | '/'
@@ -1088,6 +1191,7 @@ export interface FileRouteTypes {
     | '/_authenticated/account'
     | '/_authenticated/checkout'
     | '/_authenticated/invoices'
+    | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
     | '/admin/destinations'
@@ -1151,18 +1255,26 @@ export interface FileRouteTypes {
     | '/admin/shop/'
     | '/admin/users/'
     | '/admin/waybills/'
+    | '/admin/shop/carts/$cartId'
     | '/admin/shop/orders/$orderId'
     | '/admin/shop/orders/procurement'
     | '/admin/shop/products/$productId'
+    | '/api/partners/v1/orders'
+    | '/api/partners/v1/routes'
     | '/api/public/hooks/mark-overdue'
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
+    | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
+    | '/admin/shop/carts/'
     | '/admin/shop/orders/'
     | '/admin/shop/products/'
+    | '/api/partners/v1/customers/$externalCustomerId/profile'
+    | '/api/partners/v1/orders/by-domestic-number/$domesticNumber'
+    | '/api/partners/v1/routes/$routeCode/order-schema'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1192,13 +1304,17 @@ export interface RootRouteChildren {
   ApiPublicAiResolveWechatCustomerRoute: typeof ApiPublicAiResolveWechatCustomerRoute
   ApiPublicAiTrackRoute: typeof ApiPublicAiTrackRoute
   ApiPublicAiWarehouseScanRoute: typeof ApiPublicAiWarehouseScanRoute
+  ApiPartnersV1OrdersRoute: typeof ApiPartnersV1OrdersRouteWithChildren
+  ApiPartnersV1RoutesRoute: typeof ApiPartnersV1RoutesRouteWithChildren
   ApiPublicHooksMarkOverdueRoute: typeof ApiPublicHooksMarkOverdueRoute
   ApiPublicHooksOttpayRoute: typeof ApiPublicHooksOttpayRoute
   ApiPublicHooksOttpayCardRoute: typeof ApiPublicHooksOttpayCardRoute
+  ApiPublicHooksReconcileOttRoute: typeof ApiPublicHooksReconcileOttRoute
   ApiPublicWechatCallbackRoute: typeof ApiPublicWechatCallbackRoute
   ApiPublicWechatLoginRoute: typeof ApiPublicWechatLoginRoute
   IntlChannelCallbackSplatRoute: typeof IntlChannelCallbackSplatRoute
   IntlChannelCallbackWxkfGptRoute: typeof IntlChannelCallbackWxkfGptRoute
+  ApiPartnersV1CustomersExternalCustomerIdProfileRoute: typeof ApiPartnersV1CustomersExternalCustomerIdProfileRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1341,6 +1457,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/api-tokens': {
+      id: '/admin/api-tokens'
+      path: '/api-tokens'
+      fullPath: '/admin/api-tokens'
+      preLoaderRoute: typeof AdminApiTokensRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/cargo-types': {
@@ -1777,6 +1900,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAiWarehouseScanRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/shop/carts/': {
+      id: '/admin/shop/carts/'
+      path: '/shop/carts'
+      fullPath: '/admin/shop/carts/'
+      preLoaderRoute: typeof AdminShopCartsIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/shop/carts/$cartId': {
+      id: '/admin/shop/carts/$cartId'
+      path: '/shop/carts/$cartId'
+      fullPath: '/admin/shop/carts/$cartId'
+      preLoaderRoute: typeof AdminShopCartsCartIdRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/shop/orders/': {
       id: '/admin/shop/orders/'
       path: '/shop/orders'
@@ -1812,6 +1949,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminShopProductsProductIdRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/api/partners/v1/orders': {
+      id: '/api/partners/v1/orders'
+      path: '/api/partners/v1/orders'
+      fullPath: '/api/partners/v1/orders'
+      preLoaderRoute: typeof ApiPartnersV1OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/partners/v1/routes': {
+      id: '/api/partners/v1/routes'
+      path: '/api/partners/v1/routes'
+      fullPath: '/api/partners/v1/routes'
+      preLoaderRoute: typeof ApiPartnersV1RoutesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/mark-overdue': {
       id: '/api/public/hooks/mark-overdue'
       path: '/api/public/hooks/mark-overdue'
@@ -1831,6 +1982,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/ottpay-card'
       fullPath: '/api/public/hooks/ottpay-card'
       preLoaderRoute: typeof ApiPublicHooksOttpayCardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/reconcile-ott': {
+      id: '/api/public/hooks/reconcile-ott'
+      path: '/api/public/hooks/reconcile-ott'
+      fullPath: '/api/public/hooks/reconcile-ott'
+      preLoaderRoute: typeof ApiPublicHooksReconcileOttRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/wechat/callback': {
@@ -1861,6 +2019,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IntlChannelCallbackWxkfGptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/partners/v1/customers/$externalCustomerId/profile': {
+      id: '/api/partners/v1/customers/$externalCustomerId/profile'
+      path: '/api/partners/v1/customers/$externalCustomerId/profile'
+      fullPath: '/api/partners/v1/customers/$externalCustomerId/profile'
+      preLoaderRoute: typeof ApiPartnersV1CustomersExternalCustomerIdProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/partners/v1/orders/by-domestic-number/$domesticNumber': {
+      id: '/api/partners/v1/orders/by-domestic-number/$domesticNumber'
+      path: '/by-domestic-number/$domesticNumber'
+      fullPath: '/api/partners/v1/orders/by-domestic-number/$domesticNumber'
+      preLoaderRoute: typeof ApiPartnersV1OrdersByDomesticNumberDomesticNumberRouteImport
+      parentRoute: typeof ApiPartnersV1OrdersRoute
+    }
+    '/api/partners/v1/routes/$routeCode/order-schema': {
+      id: '/api/partners/v1/routes/$routeCode/order-schema'
+      path: '/$routeCode/order-schema'
+      fullPath: '/api/partners/v1/routes/$routeCode/order-schema'
+      preLoaderRoute: typeof ApiPartnersV1RoutesRouteCodeOrderSchemaRouteImport
+      parentRoute: typeof ApiPartnersV1RoutesRoute
+    }
   }
 }
 
@@ -1889,6 +2068,7 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface AdminRouteRouteChildren {
+  AdminApiTokensRoute: typeof AdminApiTokensRoute
   AdminCargoTypesRoute: typeof AdminCargoTypesRoute
   AdminCustomerViewRoute: typeof AdminCustomerViewRoute
   AdminDestinationsRoute: typeof AdminDestinationsRoute
@@ -1936,14 +2116,17 @@ interface AdminRouteRouteChildren {
   AdminShopIndexRoute: typeof AdminShopIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   AdminWaybillsIndexRoute: typeof AdminWaybillsIndexRoute
+  AdminShopCartsCartIdRoute: typeof AdminShopCartsCartIdRoute
   AdminShopOrdersOrderIdRoute: typeof AdminShopOrdersOrderIdRoute
   AdminShopOrdersProcurementRoute: typeof AdminShopOrdersProcurementRoute
   AdminShopProductsProductIdRoute: typeof AdminShopProductsProductIdRoute
+  AdminShopCartsIndexRoute: typeof AdminShopCartsIndexRoute
   AdminShopOrdersIndexRoute: typeof AdminShopOrdersIndexRoute
   AdminShopProductsIndexRoute: typeof AdminShopProductsIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminApiTokensRoute: AdminApiTokensRoute,
   AdminCargoTypesRoute: AdminCargoTypesRoute,
   AdminCustomerViewRoute: AdminCustomerViewRoute,
   AdminDestinationsRoute: AdminDestinationsRoute,
@@ -1991,9 +2174,11 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminShopIndexRoute: AdminShopIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   AdminWaybillsIndexRoute: AdminWaybillsIndexRoute,
+  AdminShopCartsCartIdRoute: AdminShopCartsCartIdRoute,
   AdminShopOrdersOrderIdRoute: AdminShopOrdersOrderIdRoute,
   AdminShopOrdersProcurementRoute: AdminShopOrdersProcurementRoute,
   AdminShopProductsProductIdRoute: AdminShopProductsProductIdRoute,
+  AdminShopCartsIndexRoute: AdminShopCartsIndexRoute,
   AdminShopOrdersIndexRoute: AdminShopOrdersIndexRoute,
   AdminShopProductsIndexRoute: AdminShopProductsIndexRoute,
 }
@@ -2015,6 +2200,30 @@ const ProductsRouteChildren: ProductsRouteChildren = {
 const ProductsRouteWithChildren = ProductsRoute._addFileChildren(
   ProductsRouteChildren,
 )
+
+interface ApiPartnersV1OrdersRouteChildren {
+  ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute: typeof ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute
+}
+
+const ApiPartnersV1OrdersRouteChildren: ApiPartnersV1OrdersRouteChildren = {
+  ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute:
+    ApiPartnersV1OrdersByDomesticNumberDomesticNumberRoute,
+}
+
+const ApiPartnersV1OrdersRouteWithChildren =
+  ApiPartnersV1OrdersRoute._addFileChildren(ApiPartnersV1OrdersRouteChildren)
+
+interface ApiPartnersV1RoutesRouteChildren {
+  ApiPartnersV1RoutesRouteCodeOrderSchemaRoute: typeof ApiPartnersV1RoutesRouteCodeOrderSchemaRoute
+}
+
+const ApiPartnersV1RoutesRouteChildren: ApiPartnersV1RoutesRouteChildren = {
+  ApiPartnersV1RoutesRouteCodeOrderSchemaRoute:
+    ApiPartnersV1RoutesRouteCodeOrderSchemaRoute,
+}
+
+const ApiPartnersV1RoutesRouteWithChildren =
+  ApiPartnersV1RoutesRoute._addFileChildren(ApiPartnersV1RoutesRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -2044,13 +2253,18 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicAiResolveWechatCustomerRoute: ApiPublicAiResolveWechatCustomerRoute,
   ApiPublicAiTrackRoute: ApiPublicAiTrackRoute,
   ApiPublicAiWarehouseScanRoute: ApiPublicAiWarehouseScanRoute,
+  ApiPartnersV1OrdersRoute: ApiPartnersV1OrdersRouteWithChildren,
+  ApiPartnersV1RoutesRoute: ApiPartnersV1RoutesRouteWithChildren,
   ApiPublicHooksMarkOverdueRoute: ApiPublicHooksMarkOverdueRoute,
   ApiPublicHooksOttpayRoute: ApiPublicHooksOttpayRoute,
   ApiPublicHooksOttpayCardRoute: ApiPublicHooksOttpayCardRoute,
+  ApiPublicHooksReconcileOttRoute: ApiPublicHooksReconcileOttRoute,
   ApiPublicWechatCallbackRoute: ApiPublicWechatCallbackRoute,
   ApiPublicWechatLoginRoute: ApiPublicWechatLoginRoute,
   IntlChannelCallbackSplatRoute: IntlChannelCallbackSplatRoute,
   IntlChannelCallbackWxkfGptRoute: IntlChannelCallbackWxkfGptRoute,
+  ApiPartnersV1CustomersExternalCustomerIdProfileRoute:
+    ApiPartnersV1CustomersExternalCustomerIdProfileRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

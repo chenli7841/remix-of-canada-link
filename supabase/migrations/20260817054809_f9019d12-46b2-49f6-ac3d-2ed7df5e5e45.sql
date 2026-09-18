@@ -1,0 +1,2 @@
+ALTER TABLE public.freight_rules RENAME COLUMN min_charge_order_cad TO min_charge_waybill_cad;
+ALTER TABLE public.freight_rules RENAME COLUMN clearance_fee_order_cad TO clearance_fee_waybill_cad;

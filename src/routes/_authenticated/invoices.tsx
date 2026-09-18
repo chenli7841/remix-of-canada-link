@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { listMyInvoices, payInvoice, getInvoice } from "@/lib/invoices.functions";
 import { useCompanyInfo, usePrintTemplate } from "@/lib/company";
+import { useApp } from "@/lib/i18n";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { InvoiceDocument } from "@/components/invoice/InvoiceDocument";
 import { FileText, Loader2, Printer, Download, Wallet, ArrowLeft } from "lucide-react";
@@ -22,6 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function MyInvoicesPage() {
+  const { cnyToCad } = useApp();
   const fetchList = useServerFn(listMyInvoices);
   const fetchOne = useServerFn(getInvoice);
   const pay = useServerFn(payInvoice);
@@ -154,7 +156,7 @@ function MyInvoicesPage() {
               <tr key={r.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-xs">{r.invoice_no}</td>
                 <td className="px-4 py-3 text-xs">{r.type}</td>
-                <td className="px-4 py-3 font-semibold">¥{Number(r.total_cny).toFixed(2)}</td>
+                <td className="px-4 py-3 font-semibold">CA${cnyToCad(Number(r.total_cny)).toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[r.status]}`}>
                     {STATUS_LABEL[r.status]}

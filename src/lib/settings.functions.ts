@@ -307,11 +307,15 @@ export const upsertRoute = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let routeId = data.id;
+    // vip_level 新增了 ship/owner 两个值（20260911120000 迁移），types.ts 还没跟迁移重新生成，
+    // 生成的类型里 blacklist/visible_vip_levels 还只认旧的四个值——cast 一下，等迁移应用+重新生成
+    // types.ts 后可以去掉。
+    const routePayload = data.route as any;
     if (routeId) {
-      const { error } = await supabaseAdmin.from("shipping_routes").update(data.route).eq("id", routeId);
+      const { error } = await supabaseAdmin.from("shipping_routes").update(routePayload).eq("id", routeId);
       if (error) throw new Error(error.message);
     } else {
-      const { data: ins, error } = await supabaseAdmin.from("shipping_routes").insert(data.route).select("id").single();
+      const { data: ins, error } = await supabaseAdmin.from("shipping_routes").insert(routePayload).select("id").single();
       if (error) throw new Error(error.message);
       routeId = ins!.id;
     }

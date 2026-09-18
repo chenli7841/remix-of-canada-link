@@ -30,7 +30,7 @@ export const Route = createFileRoute("/products/")({
     context.queryClient.ensureQueryData(productsQO);
     context.queryClient.ensureQueryData(catsQO);
   },
-  errorComponent: ({ error }) => <div className="p-10 text-center text-destructive">{error.message}</div>,
+  errorComponent: ({ error }) => <div className="p-10 text-center text-destructive">{error instanceof Error ? error.message : String(error)}</div>,
   notFoundComponent: () => <div className="p-10 text-center">Not found</div>,
   component: ProductsPage,
 });

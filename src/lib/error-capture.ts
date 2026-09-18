@@ -38,28 +38,6 @@ export function isAbortError(error: unknown): boolean {
   return false;
 }
 
-// The Node HTTP adapter reports a disconnected request through console.error
-// before the resulting generic 500 Response reaches our server wrapper. Keep
-// that expected disconnect out of Vite's error overlay, while recording it so
-// normalizeCatastrophicSsrResponse can turn the generic response into a 499.
-const abortConsoleGuardKey = Symbol.for("eplus.abortConsoleGuard");
-const globalWithConsoleGuard = globalThis as typeof globalThis & {
-  [abortConsoleGuardKey]?: boolean;
-};
-
-if (!globalWithConsoleGuard[abortConsoleGuardKey]) {
-  globalWithConsoleGuard[abortConsoleGuardKey] = true;
-  const originalConsoleError = console.error.bind(console);
-  console.error = (...args: unknown[]) => {
-    const abort = args.find(isAbortError);
-    if (abort !== undefined) {
-      record(abort);
-      return;
-    }
-    originalConsoleError(...args);
-  };
-}
-
 // Node's HTTP server can emit abortIncoming after the request handler has
 // already returned, so neither request middleware nor server.fetch can catch
 // it. Install this once across HMR reloads and swallow only disconnect errors.

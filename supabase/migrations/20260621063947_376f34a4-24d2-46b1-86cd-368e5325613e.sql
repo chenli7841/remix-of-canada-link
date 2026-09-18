@@ -1,0 +1,1 @@
+UPDATE public.wallets SET balance_cad = 50000, updated_at = now() WHERE user_id = '2fc72725-7d89-4465-9164-b6df9d828224';

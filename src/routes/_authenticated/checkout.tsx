@@ -51,7 +51,7 @@ function allowedCodes(i: CartLine, allCodes: string[]): string[] {
 
 function CheckoutPage() {
   const search = Route.useSearch();
-  const { items: allItems, selectedItems, clearSlugs } = useCart();
+  const { items: allItems, selectedItems, clearSlugs, syncServerCart, serverCart } = useCart();
   const { lang, formatPrice, cnyToCad } = useApp();
   const navigate = useNavigate();
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
@@ -162,6 +162,20 @@ function CheckoutPage() {
       .finally(() => setQuoting(false));
   }, [routeCode, couponCode, items.map((i) => `${cartLineKey(i)}:${i.quantity}:${i.purchaseType}`).join(",")]);
 
+  // Mirror the checkout meta (route, coupon, note) into the backend cart so the pre-order
+  // is visible to staff and re-priced server-side. Item membership is pushed by the cart
+  // provider itself — only cart-level fields are sent here.
+  useEffect(() => {
+    if (items.length === 0) return;
+    syncServerCart({
+      route_code: routeCode || null,
+      shipping_method: selectedRoute?.shipping_method ?? null,
+      coupon_code: couponCode || null,
+      note: note || null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeCode, selectedRoute?.shipping_method, couponCode, note, items.length]);
+
   const subtotal = quote?.subtotal_cny ?? items.reduce((s, i) => s + i.priceCNY * i.quantity, 0);
   const freight = quote?.freight_cny ?? 0;
   const customs = quote?.customs_cny ?? 0;
@@ -205,6 +219,22 @@ function CheckoutPage() {
     if (items.length === 0) return;
     if (!addrId) return toast.error(tr("请先选择收货地址", "Choose a shipping address first"));
     if (!routeCode) return toast.error(tr("请先选择运输线路", "Choose a shipping route first"));
+    // If the backend cart carries a staff price adjustment and this checkout covers the
+    // whole cart, order via cart_id so place_shop_order charges the overridden amount.
+    const wholeCart =
+      !!serverCart && serverCart.items.length > 0 && serverCart.items.length === allItems.length && items.length === allItems.length;
+    const hasOverride =
+      !!serverCart &&
+      (serverCart.cart.override_total_cny != null || serverCart.items.some((s) => s.override_unit_price_cny != null));
+    if (hasOverride && !wholeCart) {
+      toast.error(
+        tr(
+          "该购物车已被人工调价，请勾选全部商品一起结算",
+          "This cart has a manual price adjustment — check out all items together",
+        ),
+      );
+      return;
+    }
     setBusy(true);
     try {
       const addr = addresses.find((a) => a.id === addrId);
@@ -212,15 +242,19 @@ function CheckoutPage() {
         route_code: routeCode,
         shipping_method: selectedRoute?.shipping_method,
         address_snapshot: addr,
-        items: items.map((i) => ({
+        note: note || null,
+      };
+      if (wholeCart && serverCart) {
+        payload.cart_id = serverCart.cart.id;
+      } else {
+        payload.items = items.map((i) => ({
           slug: i.slug,
           quantity: i.quantity,
           mode: i.purchaseType,
           variant_id: i.variantId,
-        })),
-        note: note || null,
-      };
-      if (couponCode) payload.coupon_code = couponCode;
+        }));
+        if (couponCode) payload.coupon_code = couponCode;
+      }
       const { data, error } = await sb.rpc("place_shop_order", { _payload: payload });
       if (error) throw error;
       if (!data?.ok) {

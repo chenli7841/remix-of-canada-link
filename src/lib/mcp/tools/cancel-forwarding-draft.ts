@@ -1,18 +1,11 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
 
 export default defineTool({
   name: "cancel_forwarding_draft",
   title: "Cancel a forwarding draft",
-  description:
-    "Cancel the signed-in customer's active forwarding draft only after explicit confirmation. This never cancels an already-created order.",
+  description: "Cancel the signed-in customer's active forwarding draft only after explicit confirmation. This never cancels an already-created order.",
   inputSchema: {
     draft_id: z.string().uuid(),
     confirmation: z.literal("CONFIRM_CANCEL_DRAFT"),

@@ -31,6 +31,39 @@ function IntakeScanPage() {
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  // 候选分三种：
+  //   "auto-new"      待入库、订单内没有运单（海运/箱数未知路线首次扫描）→ 默认1箱直接入库，不问
+  //   "auto-existing" 已有运单，但全部还是 pending（箱数已知路线下单时就已生成运单，还没物理收货）→ 直接收件，不问
+  //   "manual"        已有运单，且至少一张已经推进过状态（真正二次触碰）→ 显示卡片，人工填箱数覆盖重建
+  const classifyCandidate = (cand: Candidate): "auto-new" | "auto-existing" | "manual" => {
+    const cnt = cand.existing_waybill_count ?? 0;
+    if (cnt === 0) return "auto-new";
+    const wbs = (cand.existing_waybills ?? []) as { status?: string }[];
+    const allPending = wbs.length > 0 && wbs.every((w) => w.status === "pending");
+    return allPending ? "auto-existing" : "manual";
+  };
+
+  const handleCandidate = async (cand: Candidate, c: string) => {
+    const kind = classifyCandidate(cand);
+    if (kind === "manual") {
+      setPicked(cand);
+      setBoxCount(cand.existing_waybill_count || cand.box_count || 1);
+      return;
+    }
+    setBusy(true); setMsg(null);
+    try {
+      const r: any = await commit({ data: { parentKind: cand.kind, parentId: cand.id, boxCount: 1 } });
+      const label = kind === "auto-existing" ? `直接收件 ${r.waybills.length} 单（已有运单）` : `生成 1 单`;
+      setMsg({ ok: true, text: `✓ ${label} (${r.parentNo})，面单请在量尺称重保存时打印` });
+      setLog(l => [{ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), code: c, action: `入库 ${cand.display_no} → ${r.waybills.length}单` }, ...l].slice(0, 30));
+      reset();
+    } catch (err: any) {
+      setMsg({ ok: false, text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const c = code.trim();
@@ -60,8 +93,7 @@ function IntakeScanPage() {
         if (cand.kind === "order" && cand.via === "order_no") {
           await autoReceiveOrder(cand, c);
         } else {
-          setPicked(cand);
-          setBoxCount(cand.box_count || 1);
+          await handleCandidate(cand, c);
         }
       } else if (r.match === "fuzzy" && r.candidates.length === 0) {
         // 无任何匹配 — 自动登记滞留
@@ -94,11 +126,12 @@ function IntakeScanPage() {
 
   const doIntake = async () => {
     if (!picked) return;
+    const overwrite = (picked.existing_waybill_count ?? 0) > 0;
     setBusy(true); setMsg(null);
     try {
-      const r = await commit({ data: { parentKind: picked.kind, parentId: picked.id, boxCount, weightPerBox: weight ? Number(weight) : undefined } });
-      setMsg({ ok: true, text: `✓ 已生成 ${r.waybills.length} 个运单 (${r.parentNo})，面单请在量尺称重保存时打印` });
-      setLog(l => [{ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), code: code.trim(), action: `入库 ${picked.display_no} → ${r.waybills.length}单` }, ...l].slice(0, 30));
+      const r = await commit({ data: { parentKind: picked.kind, parentId: picked.id, boxCount, weightPerBox: weight ? Number(weight) : undefined, overwrite } });
+      setMsg({ ok: true, text: `✓ 已${overwrite ? "覆盖重建为" : "生成"} ${r.waybills.length} 个运单 (${r.parentNo})，面单请在量尺称重保存时打印` });
+      setLog(l => [{ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), code: code.trim(), action: `${overwrite ? "覆盖重建" : "入库"} ${picked.display_no} → ${r.waybills.length}单` }, ...l].slice(0, 30));
       reset();
     } catch (err: any) { setMsg({ ok: false, text: err.message }); } finally { setBusy(false); }
   };
@@ -169,8 +202,8 @@ function IntakeScanPage() {
                 {candidates.map((c) => {
                   const noteText = c.buyer_note || c.note || null;
                   return (
-                    <button key={c.id} onClick={() => { setPicked(c); setBoxCount(c.box_count || 1); }}
-                      className={`w-full text-left rounded-md border px-3 py-2 text-xs transition ${picked?.id === c.id ? "border-brand bg-brand/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+                    <button key={c.id} onClick={() => handleCandidate(c, code.trim())} disabled={busy}
+                      className={`w-full text-left rounded-md border px-3 py-2 text-xs transition disabled:opacity-50 ${picked?.id === c.id ? "border-brand bg-brand/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
                       <div className="flex items-center justify-between">
                         <div className="font-mono font-semibold text-slate-200">
                           {c.kind === "order" ? "订单" : "集运"} {c.display_no}
@@ -212,11 +245,16 @@ function IntakeScanPage() {
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-300">
                     <span>已选: {picked.display_no}</span>
                     {picked.existing_waybill_count > 0 && (
-                      <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px]">
-                        已有 {picked.existing_waybill_count} 单 · 将直接收件不重复生成
+                      <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">
+                        已入库过 {picked.existing_waybill_count} 单 · 提交将删除并按新箱数重新生成
                       </span>
                     )}
                   </div>
+                  {picked.existing_waybill_count > 0 && (
+                    <div className="mb-3 font-mono text-[10px] text-amber-200/80">
+                      将被替换: {(picked.existing_waybills ?? []).map((w: any) => w.waybill_no).join(" · ")}
+                    </div>
+                  )}
                   {pickedNote && (
                     <div className="mb-3 rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-2">
                       <div className="flex items-start gap-2">
@@ -229,11 +267,10 @@ function IntakeScanPage() {
                     </div>
                   )}
                   <div className="flex flex-wrap items-end gap-3">
-                    <label className="text-[11px] text-slate-400">箱数{picked.existing_waybill_count > 0 && <span className="ml-1 text-emerald-400">(已读取已有)</span>}
+                    <label className="text-[11px] text-slate-400">箱数
                       <input type="number" min={1} max={200} value={boxCount}
-                        disabled={picked.existing_waybill_count > 0}
                         onChange={(e) => setBoxCount(Math.max(1, Number(e.target.value)))}
-                        className="mt-1 block w-24 rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100 disabled:opacity-60"/>
+                        className="mt-1 block w-24 rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"/>
                     </label>
                     <label className="text-[11px] text-slate-400">每箱重量 (kg, 可空)
                       <input value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="可留空"
@@ -241,7 +278,7 @@ function IntakeScanPage() {
                     </label>
                     <button onClick={doIntake} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500/90 disabled:opacity-50">
                       <Package className="h-4 w-4"/>
-                      {picked.existing_waybill_count > 0 ? `入库 (${picked.existing_waybill_count}单已有)` : `入库 (${boxCount}单)`}
+                      {picked.existing_waybill_count > 0 ? `覆盖重建 (${boxCount}单)` : `入库 (${boxCount}单)`}
                     </button>
                   </div>
                 </div>

@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { getForwardingRateCards } from "@/lib/shop-public.functions";
 import { Calculator, Plane, Ship, Truck, Zap, Warehouse, Package, ArrowRight, User } from "lucide-react";
 
 export const Route = createFileRoute("/shipping")({
@@ -28,7 +29,21 @@ interface RouteTypeCfg {
   transit: string;
   route: string;
   dim_divisor: number;
+  // 以下来自真实运费规则（getForwardingRateCards）；无对应线路时为 undefined，退回旧口径
+  weight_mode?: "actual" | "volumetric" | "max" | string;
+  min_charge_cad?: number;
+  extra_fee_cad?: number;
+  from_rule?: boolean;
 }
+// getForwardingRateCards 返回的运输方式 → 页面上的 RouteTypeKey
+const METHOD_TO_KEY: Record<string, RouteTypeKey> = {
+  air: "air",
+  sea: "sea",
+  express: "express",
+  truck: "truck",
+  warehouse: "storage",
+  storage: "storage",
+};
 const ROUTE_TYPE_KEYS: RouteTypeKey[] = ["air", "sea", "express", "truck", "storage"];
 // Shown until /admin → 系统设置 → 线路类型设置 has been saved at least once (seeded by migration).
 const ROUTE_TYPE_FALLBACK: Record<RouteTypeKey, RouteTypeCfg> = {
@@ -56,6 +71,7 @@ const MIN_KG = 0.5;
 function ShippingPage() {
   const { t, lang, formatCad } = useApp();
   const { user } = useAuth();
+  const fetchRateCards = useServerFn(getForwardingRateCards);
   const [routeTypes, setRouteTypes] = useState<Record<RouteTypeKey, RouteTypeCfg>>(ROUTE_TYPE_FALLBACK);
   const [method, setMethod] = useState<RouteTypeKey>("air");
   const [weight, setWeight] = useState("1.5");
@@ -65,20 +81,39 @@ function ShippingPage() {
   const [result, setResult] = useState<number | null>(null);
 
   useEffect(() => {
-    (supabase as any)
-      .from("app_settings")
-      .select("value")
-      .eq("key", "route_type_display")
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (!data?.value) return;
-        setRouteTypes(
-          Object.fromEntries(
-            ROUTE_TYPE_KEYS.map((k) => [k, { ...ROUTE_TYPE_FALLBACK[k], ...(data.value[k] ?? {}) }]),
-          ) as Record<RouteTypeKey, RouteTypeCfg>,
-        );
+    // 体积除数 / 计费方式 / 单价 / 最低收费 全部取真实运费规则（每方式取一条代表线路）
+    fetchRateCards()
+      .then(({ cards }: any) => {
+        if (!cards?.length) return;
+        setRouteTypes((prev) => {
+          const next = { ...prev };
+          for (const c of cards as any[]) {
+            const key = METHOD_TO_KEY[c.shipping_method];
+            if (!key) continue;
+            const days =
+              c.transit_days_min || c.transit_days_max
+                ? `${c.transit_days_min ?? ""}-${c.transit_days_max ?? ""} 天`
+                : prev[key].transit;
+            next[key] = {
+              ...prev[key],
+              enabled: true,
+              unit_price_cad: c.unit_price_cad,
+              dim_divisor: c.divisor,
+              transit: days,
+              route: (lang === "zh" ? c.route_name_zh : c.route_name_en) || prev[key].route,
+              weight_mode: c.weight_mode,
+              min_charge_cad: c.min_charge_cad,
+              extra_fee_cad: c.extra_fee_cad,
+              from_rule: true,
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        /* 拉不到就用回退配置 */
       });
-  }, []);
+  }, [lang]);
 
   const enabledMethods = useMemo(() => ROUTE_TYPE_KEYS.filter((k) => routeTypes[k].enabled), [routeTypes]);
   useEffect(() => {
@@ -89,8 +124,14 @@ function ShippingPage() {
     const cfg = routeTypes[method];
     const actual = parseFloat(weight) || 0;
     const vol = ((parseFloat(l) || 0) * (parseFloat(w) || 0) * (parseFloat(h) || 0)) / cfg.dim_divisor;
-    const billable = Math.max(actual, vol, MIN_KG);
-    const total = billable * cfg.unit_price_cad;
+    // 计费方式：只算实重 / 只算体积重 / 取大（与后端 _compute_line_quote 一致）
+    const mode = cfg.weight_mode ?? "max";
+    const billableRaw = mode === "actual" ? actual : mode === "volumetric" ? vol : Math.max(actual, vol);
+    const minCharge = cfg.min_charge_cad ?? 0;
+    const extra = cfg.extra_fee_cad ?? 0;
+    // 有最低收费就以它兜底，没有才套 0.5kg 下限（营销回退口径）
+    const billable = minCharge > 0 ? billableRaw : Math.max(billableRaw, MIN_KG);
+    const total = Math.max(billable * cfg.unit_price_cad, minCharge) + extra;
     setResult(total);
   };
 
@@ -230,9 +271,22 @@ function ShippingPage() {
             </div>
             {result !== null && <div className="mt-1 text-sm text-white/70">{formatCad(result)}</div>}
             <p className="mt-6 text-xs leading-relaxed text-white/60">
-              {lang === "zh"
-                ? `* 实际运费以入库实测为准，体积重 = 长×宽×高/${routeTypes[method].dim_divisor}`
-                : `* Final freight is based on actual measurements at intake. Volumetric weight = L×W×H/${routeTypes[method].dim_divisor}`}
+              {(() => {
+                const cfg = routeTypes[method];
+                const modeZh =
+                  cfg.weight_mode === "actual" ? "只算实重" : cfg.weight_mode === "volumetric" ? "只算体积重" : "取实重/体积重较大者";
+                const modeEn =
+                  cfg.weight_mode === "actual"
+                    ? "actual weight only"
+                    : cfg.weight_mode === "volumetric"
+                      ? "volumetric weight only"
+                      : "max(actual, volumetric)";
+                const minZh = cfg.min_charge_cad ? ` · 最低收费 CA$${cfg.min_charge_cad.toFixed(2)}` : "";
+                const minEn = cfg.min_charge_cad ? ` · min charge CA$${cfg.min_charge_cad.toFixed(2)}` : "";
+                return lang === "zh"
+                  ? `* 实际运费以入库实测为准。体积重 = 长×宽×高 / ${cfg.dim_divisor}，计费${modeZh}${minZh}${cfg.from_rule ? "（按当前线路运费规则）" : ""}`
+                  : `* Final freight billed on actual measurement at intake. Volumetric weight = L×W×H / ${cfg.dim_divisor}, billed by ${modeEn}${minEn}${cfg.from_rule ? " (per current route's freight rule)" : ""}`;
+              })()}
             </p>
           </div>
         </div>

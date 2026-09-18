@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { loadAllHsCodes } from "@/lib/duty.server";
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -50,28 +51,20 @@ async function loadCustomsItems(admin: any, batchId: string) {
   const waybills = await batchWaybills(admin, batchId);
   const forwardingIds = Array.from(new Set(waybills.map((w) => w.forwarding_id).filter(Boolean)));
   const orderIds = Array.from(new Set(waybills.map((w) => w.order_id).filter(Boolean)));
-  const [
-    { data: forwardingOrders },
-    { data: forwardingItems },
-    { data: orders },
-    { data: orderItems },
-    { data: hsRows },
-  ] = await Promise.all([
-    forwardingIds.length
-      ? admin.from("forwarding_orders").select("id,customer_code,box_count").in("id", forwardingIds)
-      : Promise.resolve({ data: [] }),
-    forwardingIds.length
-      ? admin.from("forwarding_items").select("*").in("forwarding_id", forwardingIds)
-      : Promise.resolve({ data: [] }),
-    orderIds.length
-      ? admin.from("orders").select("id,customer_code,box_count,fx_rate").in("id", orderIds)
-      : Promise.resolve({ data: [] }),
-    orderIds.length ? admin.from("order_items").select("*").in("order_id", orderIds) : Promise.resolve({ data: [] }),
-    admin
-      .from("hs_codes")
-      .select("hs_code,name_zh,name_en,aliases,material,origin,unit,is_active")
-      .eq("is_active", true),
-  ]);
+  const [{ data: forwardingOrders }, { data: forwardingItems }, { data: orders }, { data: orderItems }, hsRows] =
+    await Promise.all([
+      forwardingIds.length
+        ? admin.from("forwarding_orders").select("id,customer_code,box_count").in("id", forwardingIds)
+        : Promise.resolve({ data: [] }),
+      forwardingIds.length
+        ? admin.from("forwarding_items").select("*").in("forwarding_id", forwardingIds)
+        : Promise.resolve({ data: [] }),
+      orderIds.length
+        ? admin.from("orders").select("id,customer_code,box_count,fx_rate").in("id", orderIds)
+        : Promise.resolve({ data: [] }),
+      orderIds.length ? admin.from("order_items").select("*").in("order_id", orderIds) : Promise.resolve({ data: [] }),
+      loadAllHsCodes(admin, "hs_code,name_zh,name_en,aliases,material,origin,unit,is_active", { activeOnly: true }),
+    ]);
   return {
     waybills,
     forwardingOrders: forwardingOrders ?? [],
@@ -100,10 +93,12 @@ function localMatch(name: string, hsRows: any[]) {
   );
   if (exact) return { row: exact, source: "local_exact" };
   const fuzzy = hsRows.find((h) =>
-    [h.name_zh, h.name_en, ...(Array.isArray(h.aliases) ? h.aliases : [])].filter(Boolean).some((x) => {
-      const v = String(x).trim().toLowerCase();
-      return v.length >= 3 && (v.includes(q) || q.includes(v));
-    }),
+    [h.name_zh, h.name_en, ...(Array.isArray(h.aliases) ? h.aliases : [])]
+      .filter(Boolean)
+      .some((x) => {
+        const v = String(x).trim().toLowerCase();
+        return v.length >= 3 && (v.includes(q) || q.includes(v));
+      }),
   );
   return fuzzy ? { row: fuzzy, source: "local_fuzzy" } : null;
 }
@@ -147,9 +142,7 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
     if (unresolved.length) {
       const { callOpenAiResponses } = await import("@/lib/openai.server");
       const prompt = `你是加拿大报关HS编码匹配助手。为每个商品返回最可能的加拿大10位HS编码。只输出JSON：{"items":[{"id":"...","hs_code":"10位数字","confidence":0到1}]}。没有把握时hs_code为空。商品：${JSON.stringify(
-        unresolved
-          .slice(0, 50)
-          .map((i: any) => ({ id: i.id, name: i.name, material: attrs(i).material, origin: attrs(i).origin })),
+        unresolved.slice(0, 50).map((i: any) => ({ id: i.id, name: i.name, material: attrs(i).material, origin: attrs(i).origin })),
       )}`;
       try {
         const res = await callOpenAiResponses(prompt, { maxOutputTokens: 300, timeoutMs: 20000 });
@@ -183,18 +176,10 @@ export const extractBatchHbl = createServerFn({ method: "POST" })
     const { callOpenAiRaw } = await import("@/lib/openai.server");
     const result = await callOpenAiRaw(
       {
-        input: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: "读取这份海运/空运提单。只输出JSON，字段：shipper{name,address},consignee{name,address},ship_date(YYYY-MM-DD或null),vessel_voyage,container_no,total_weight_kg,total_volume_m3,goods_description。不要猜测看不清的内容。",
-              },
-              { type: "input_file", filename: data.fileName, file_data: `data:application/pdf;base64,${base64}` },
-            ],
-          },
-        ],
+        input: [{ role: "user", content: [
+          { type: "input_text", text: "读取这份海运/空运提单。只输出JSON，字段：shipper{name,address},consignee{name,address},ship_date(YYYY-MM-DD或null),vessel_voyage,container_no,total_weight_kg,total_volume_m3,goods_description。不要猜测看不清的内容。" },
+          { type: "input_file", filename: data.fileName, file_data: `data:application/pdf;base64,${base64}` },
+        ] }],
         max_output_tokens: 300,
       },
       { timeoutMs: 30000 },
@@ -231,11 +216,8 @@ export const getBatchInvoiceExport = createServerFn({ method: "POST" })
     const fwdMap = new Map(loaded.forwardingOrders.map((o: any) => [o.id, o]));
     const orderMap = new Map(loaded.orders.map((o: any) => [o.id, o]));
     const customerForWaybill = (w: any) =>
-      String(
-        (w.forwarding_id && (fwdMap.get(w.forwarding_id) as any)?.customer_code) ||
-          (w.order_id && (orderMap.get(w.order_id) as any)?.customer_code) ||
-          "",
-      );
+      String((w.forwarding_id && (fwdMap.get(w.forwarding_id) as any)?.customer_code) ||
+        (w.order_id && (orderMap.get(w.order_id) as any)?.customer_code) || "");
 
     // Physical outer packages: pallets + standalone cartons + direct waybills.
     const { data: pallets } = await supabaseAdmin.from("pallets").select("*").eq("batch_id", data.batchId);
@@ -245,42 +227,28 @@ export const getBatchInvoiceExport = createServerFn({ method: "POST" })
       ? await supabaseAdmin.from("cartons").select("*").in("pallet_id", palletIds)
       : { data: [] };
     const cartons = [...(batchCartons ?? []), ...(nestedCartons ?? [])];
-    const directWaybills = loaded.waybills.filter(
-      (w: any) => w.assigned_batch_id === data.batchId && !w.carton_id && !w.pallet_id,
+    const directWaybills = loaded.waybills.filter((w: any) =>
+      w.assigned_batch_id === data.batchId && !w.carton_id && !w.pallet_id,
     );
     const packageRows: any[] = [
-      ...(pallets ?? []).map((p: any) => ({
-        ...p,
-        kind: "pallet",
-        no: p.pallet_no,
-        customer_code: p.customer_code ?? "",
-      })),
-      ...cartons
-        .filter((c: any) => !c.pallet_id)
-        .map((c: any) => ({ ...c, kind: "carton", no: c.carton_no, customer_code: c.customer_code ?? "" })),
-      ...directWaybills.map((w: any) => ({
-        ...w,
-        kind: "direct",
-        no: w.waybill_no,
-        customer_code: customerForWaybill(w),
-      })),
+      ...(pallets ?? []).map((p: any) => ({ ...p, kind: "pallet", no: p.pallet_no, customer_code: p.customer_code ?? "" })),
+      ...cartons.filter((c: any) => !c.pallet_id).map((c: any) => ({ ...c, kind: "carton", no: c.carton_no, customer_code: c.customer_code ?? "" })),
+      ...directWaybills.map((w: any) => ({ ...w, kind: "direct", no: w.waybill_no, customer_code: customerForWaybill(w) })),
     ];
     const volumeM3 = (x: any) =>
-      (Number(x.length_cm ?? 0) * Number(x.width_cm ?? 0) * Number(x.height_cm ?? 0)) / 1_000_000;
+      Number(x.length_cm ?? 0) * Number(x.width_cm ?? 0) * Number(x.height_cm ?? 0) / 1_000_000;
     const systemGross = packageRows.reduce((s, p) => s + Number(p.weight_kg ?? 0), 0);
     const systemVolume = packageRows.reduce((s, p) => s + volumeM3(p), 0);
     const targetGross = Number((batch as any)?.hbl_total_weight_kg ?? 0) || systemGross;
     const targetVolume = Number((batch as any)?.hbl_total_volume_m3 ?? 0) || systemVolume;
     const weightFactor = systemGross > 0 ? targetGross / systemGross : 1;
     const volumeFactor = systemVolume > 0 ? targetVolume / systemVolume : 1;
-    let usedGross = 0,
-      usedVolume = 0;
+    let usedGross = 0, usedVolume = 0;
     const packing_rows = packageRows.map((p, index) => {
       const last = index === packageRows.length - 1;
       const adjustedGross = last ? targetGross - usedGross : +(Number(p.weight_kg ?? 0) * weightFactor).toFixed(2);
       const adjustedVolume = last ? targetVolume - usedVolume : +(volumeM3(p) * volumeFactor).toFixed(3);
-      usedGross += adjustedGross;
-      usedVolume += adjustedVolume;
+      usedGross += adjustedGross; usedVolume += adjustedVolume;
       const tare = p.kind === "pallet" ? 15 : 1;
       return {
         kind: p.kind,
@@ -297,10 +265,7 @@ export const getBatchInvoiceExport = createServerFn({ method: "POST" })
     const customerTotals = new Map<string, { packages: number; gross: number; net: number; cbm: number }>();
     for (const p of packing_rows) {
       const t = customerTotals.get(p.customer_code) ?? { packages: 0, gross: 0, net: 0, cbm: 0 };
-      t.packages++;
-      t.gross += p.adjusted_gross_kg;
-      t.net += p.net_weight_kg;
-      t.cbm += p.adjusted_cbm;
+      t.packages++; t.gross += p.adjusted_gross_kg; t.net += p.net_weight_kg; t.cbm += p.adjusted_cbm;
       customerTotals.set(p.customer_code, t);
     }
     const forwardingGoods = loaded.forwardingItems.map((i: any) => {
@@ -349,28 +314,20 @@ export const getBatchInvoiceExport = createServerFn({ method: "POST" })
     // Allocate each customer's adjusted package totals across its goods by declared value.
     // The final goods row absorbs rounding so invoice totals exactly reconcile to the HBL.
     const groupedItems = new Map<string, any[]>();
-    for (const item of baseItems)
-      groupedItems.set(item.customer_code, [...(groupedItems.get(item.customer_code) ?? []), item]);
+    for (const item of baseItems) groupedItems.set(item.customer_code, [...(groupedItems.get(item.customer_code) ?? []), item]);
     const items: any[] = [];
     for (const [customerCode, siblings] of groupedItems) {
       const valueTotal = siblings.reduce((s: number, x: any) => s + Number(x.total_value_cad ?? 0), 0);
       const totals = customerTotals.get(customerCode) ?? { packages: 0, gross: 0, net: 0, cbm: 0 };
-      let usedPackages = 0,
-        usedGross = 0,
-        usedNet = 0,
-        usedCbm = 0;
+      let usedPackages = 0, usedGross = 0, usedNet = 0, usedCbm = 0;
       siblings.forEach((item: any, index: number) => {
         const last = index === siblings.length - 1;
-        const share =
-          valueTotal > 0 ? Number(item.total_value_cad ?? 0) / valueTotal : 1 / Math.max(1, siblings.length);
+        const share = valueTotal > 0 ? Number(item.total_value_cad ?? 0) / valueTotal : 1 / Math.max(1, siblings.length);
         const packages = last ? totals.packages - usedPackages : Math.floor(totals.packages * share);
         const gross = last ? totals.gross - usedGross : +(totals.gross * share).toFixed(2);
         const net = last ? totals.net - usedNet : +(totals.net * share).toFixed(2);
         const cbm = last ? totals.cbm - usedCbm : +(totals.cbm * share).toFixed(3);
-        usedPackages += packages;
-        usedGross += gross;
-        usedNet += net;
-        usedCbm += cbm;
+        usedPackages += packages; usedGross += gross; usedNet += net; usedCbm += cbm;
         items.push({
           ...item,
           packages,
@@ -385,12 +342,8 @@ export const getBatchInvoiceExport = createServerFn({ method: "POST" })
       items,
       packing_rows,
       adjustment: {
-        system_gross_kg: +systemGross.toFixed(2),
-        target_gross_kg: +targetGross.toFixed(2),
-        weight_factor: +weightFactor.toFixed(6),
-        system_cbm: +systemVolume.toFixed(3),
-        target_cbm: +targetVolume.toFixed(3),
-        volume_factor: +volumeFactor.toFixed(6),
+        system_gross_kg: +systemGross.toFixed(2), target_gross_kg: +targetGross.toFixed(2), weight_factor: +weightFactor.toFixed(6),
+        system_cbm: +systemVolume.toFixed(3), target_cbm: +targetVolume.toFixed(3), volume_factor: +volumeFactor.toFixed(6),
       },
     };
   });

@@ -172,17 +172,29 @@ export const getPublicProduct = createServerFn({ method: "POST" })
     // not-yet-deployed fallback as the product-level NEW_COLS above.
     const VARIANT_FREIGHT_COLS =
       "weight_kg,length_cm,width_cm,height_cm,pack_qty,pack_weight_kg,pack_length_cm,pack_width_cm,pack_height_cm,pack_volume_m3";
+    // 规格按价格从低到高排（同价按建单时间），不依赖建表/写入顺序——前端拿到后还会再稳定排一次兜底。
     const buildVariants = (cols: string) =>
       sb
         .from("product_variants")
         .select(cols)
         .eq("product_id", (product as any).id)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .order("price_cny", { ascending: true })
+        .order("created_at", { ascending: true });
+    // image_url ships in migration 20260914120000 — same not-yet-deployed fallback pattern.
+    // Each retry re-captures its own error so the next check reflects that attempt, not
+    // the first one — a stale shared varErr would make the last fallback always fire.
     let { data: variants, error: varErr } = await buildVariants(
-      `id,sku,attrs,price_cny,stock,is_active,${VARIANT_FREIGHT_COLS}`,
+      `id,sku,attrs,price_cny,stock,is_active,created_at,image_url,${VARIANT_FREIGHT_COLS}`,
     );
-    if (isMissingNewColumn(varErr))
-      ({ data: variants } = await buildVariants("id,sku,attrs,price_cny,stock,is_active"));
+    if (isMissingNewColumn(varErr)) {
+      ({ data: variants, error: varErr } = await buildVariants(
+        `id,sku,attrs,price_cny,stock,is_active,created_at,${VARIANT_FREIGHT_COLS}`,
+      ));
+    }
+    if (isMissingNewColumn(varErr)) {
+      ({ data: variants } = await buildVariants("id,sku,attrs,price_cny,stock,is_active,created_at"));
+    }
     const cat = (product as any).category?.slug as string | undefined;
     let related: PublicProduct[] = [];
     if (cat) {
@@ -218,6 +230,74 @@ export const listPublicRoutes = createServerFn({ method: "GET" }).handler(async 
     .order("sort_order");
   if (error) throw new Error(error.message);
   return { items: data ?? [] };
+});
+
+// 公开运费试算用的费率卡：按运输方式（air/sea/express/truck）取一条代表线路的【真实运费规则】——
+// 体积除数、计费方式、单价、最低收费、附加费全部来自 freight_rules，不再用营销回退值。
+// 一次拉取，前端本地算，重复计算无网络往返（比每次点「计算」调后端快）。
+export const getForwardingRateCards = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const [{ data: routes }, { data: rules }, { data: fxRow }] = await Promise.all([
+    supabaseAdmin
+      .from("shipping_routes")
+      .select("id, code, name_zh, name_en, shipping_method, cargo_type, transit_days_min, transit_days_max, sort_order")
+      .eq("is_active", true)
+      .in("usage_scope", ["forwarding", "both"])
+      .order("sort_order"),
+    supabaseAdmin
+      .from("freight_rules")
+      .select(
+        "route_id, volumetric_divisor, weight_mode, unit_price_cad, unit_price_cny, min_charge_cad, min_charge_cny, extra_fee_cny, is_active, created_at",
+      )
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "fx_rate").maybeSingle(),
+  ]);
+
+  const cnyPerCad = Number((fxRow?.value as any)?.cny_per_cad ?? 0) || 5.26;
+  const cadPerCny = 1 / cnyPerCad;
+
+  const ruleByRoute = new Map<string, any>();
+  for (const r of (rules ?? []) as any[]) if (!ruleByRoute.has(r.route_id)) ruleByRoute.set(r.route_id, r);
+
+  const byMethod: Record<string, any> = {};
+  for (const rt of (routes ?? []) as any[]) {
+    const rule = ruleByRoute.get(rt.id);
+    if (!rule) continue;
+    const cur = byMethod[rt.shipping_method];
+    const isGeneral = (rt.cargo_type ?? "general") === "general";
+    const better =
+      !cur ||
+      (isGeneral && !cur._general) ||
+      (isGeneral === cur._general && (rt.sort_order ?? 999) < (cur._sort ?? 999));
+    if (!better) continue;
+    const unitCad =
+      Number(rule.unit_price_cad) > 0
+        ? Number(rule.unit_price_cad)
+        : +(Number(rule.unit_price_cny || 0) * cadPerCny).toFixed(4);
+    const minCad =
+      Number(rule.min_charge_cad) > 0
+        ? Number(rule.min_charge_cad)
+        : +(Number(rule.min_charge_cny || 0) * cadPerCny).toFixed(2);
+    byMethod[rt.shipping_method] = {
+      _general: isGeneral,
+      _sort: rt.sort_order,
+      shipping_method: rt.shipping_method,
+      route_code: rt.code,
+      route_name_zh: rt.name_zh,
+      route_name_en: rt.name_en,
+      transit_days_min: rt.transit_days_min,
+      transit_days_max: rt.transit_days_max,
+      divisor: Number(rule.volumetric_divisor) || 6000,
+      weight_mode: rule.weight_mode || "max",
+      unit_price_cad: unitCad,
+      min_charge_cad: minCad,
+      extra_fee_cad: +(Number(rule.extra_fee_cny || 0) * cadPerCny).toFixed(2),
+    };
+  }
+  return {
+    cards: Object.values(byMethod).map(({ _general, _sort, ...c }) => c),
+  };
 });
 
 export const listPublicWarehouses = createServerFn({ method: "GET" }).handler(async () => {

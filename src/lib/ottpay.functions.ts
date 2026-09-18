@@ -21,15 +21,56 @@ export type OttStartResult =
  */
 export const startOttTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { amountCad: number; channel: "wechat" | "alipay"; device: "mobile" | "desktop" }) => d)
+  .inputValidator(
+    (d: {
+      amountCad: number;
+      channel: "wechat" | "alipay";
+      device: "mobile" | "desktop";
+      idempotencyKey?: string | null;
+    }) => d,
+  )
   .handler(async ({ data, context }): Promise<OttStartResult> => {
     if (!(data.amountCad >= 2)) throw new Error("最低充值 CA$2");
     const { ottPost, toCents, ottConfig } = await import("@/lib/ottpay.server");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
     const { getFxCadPerCny } = await import("@/lib/orders.functions");
 
     const amountCad = Number(data.amountCad.toFixed(2));
     const fx = await getFxCadPerCny(supabaseAdmin);
+
+    // 幂等：同一 idempotency_key（或 2 分钟内同渠道同金额的 pending 单）→ 复用原支付订单，
+    // 不再向 OTT 发起新订单。展示信息从建单时存下的 pay_session.pay_info 还原。
+    const idem = data.idempotencyKey?.trim() || null;
+    const dq = supabaseAdmin
+      .from("wallet_transactions")
+      .select("ref_no, status, provider_payment_id, pay_session")
+      .eq("user_id", context.userId)
+      .eq("type", "recharge")
+      .eq("channel", data.channel)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const { data: dupe } = idem
+      ? await dq.eq("idempotency_key", idem)
+      : await dq.eq("amount_cad", amountCad).gte("created_at", new Date(Date.now() - 120_000).toISOString());
+    const prev = (dupe as any[])?.[0];
+    if (prev?.pay_session?.pay_info) {
+      const pr = prev.pay_session;
+      if (pr.mode === "qr") {
+        const QRCode = await import("qrcode");
+        return {
+          mode: "qr",
+          payInfo: pr.pay_info,
+          qrDataUrl: await QRCode.toDataURL(pr.pay_info, { width: 320, margin: 1 }),
+          reference: prev.ref_no,
+          paymentId: prev.provider_payment_id ?? null,
+          notice: pr.notice ?? undefined,
+          openUrl: pr.open_url ?? undefined,
+        };
+      }
+      return { mode: "redirect", url: pr.pay_info, reference: prev.ref_no, paymentId: prev.provider_payment_id ?? null };
+    }
+
     const reference = `TOPUP${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const cfg = ottConfig();
     const callbackURL = `${cfg.origin}/api/public/hooks/ottpay`;
@@ -160,9 +201,45 @@ export const startOttTopup = createServerFn({ method: "POST" })
       status: "pending",
       channel: data.channel,
       ref_no: reference,
-      note: `OTT Pay 充值 CA$${amountCad}${paymentId ? ` · pid=${paymentId}` : ""}`,
+      idempotency_key: idem,
+      provider_payment_id: paymentId,
+      pay_session: { pay_info: payInfo, mode, notice: notice ?? null, open_url: openUrl ?? null },
+      note: `OTT Pay 充值 CA$${amountCad}`,
     } as any);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (idem && String((error as any).code) === "23505") {
+        const { data: won } = await supabaseAdmin
+          .from("wallet_transactions")
+          .select("ref_no, status, provider_payment_id, pay_session")
+          .eq("idempotency_key", idem)
+          .maybeSingle();
+        if ((won as any) && (won as any).status !== "pending") {
+          throw new Error("该充值请求已处理，请刷新页面后重新发起");
+        }
+        const pr = (won as any)?.pay_session;
+        if (pr?.pay_info) {
+          if (pr.mode === "qr") {
+            const QRCode = await import("qrcode");
+            return {
+              mode: "qr",
+              payInfo: pr.pay_info,
+              qrDataUrl: await QRCode.toDataURL(pr.pay_info, { width: 320, margin: 1 }),
+              reference: (won as any).ref_no,
+              paymentId: (won as any).provider_payment_id ?? null,
+              notice: pr.notice ?? undefined,
+              openUrl: pr.open_url ?? undefined,
+            };
+          }
+          return {
+            mode: "redirect",
+            url: pr.pay_info,
+            reference: (won as any).ref_no,
+            paymentId: (won as any).provider_payment_id ?? null,
+          };
+        }
+      }
+      throw new Error(error.message);
+    }
 
     if (mode === "qr") {
       const QRCode = await import("qrcode");
@@ -179,16 +256,34 @@ export const startOttTopup = createServerFn({ method: "POST" })
  */
 export const startOttHostedCardTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { amountCad: number }) => d)
+  .inputValidator((d: { amountCad: number; idempotencyKey?: string | null }) => d)
   .handler(async ({ data, context }): Promise<{ url: string; reference: string }> => {
     if (!(data.amountCad >= 2)) throw new Error("最低充值 CA$2");
     const { hostedConfig, hostedPost, txnTime } = await import("@/lib/ottpay-hosted.server");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
     const { getFxCadPerCny } = await import("@/lib/orders.functions");
 
     const amountCad = Number(data.amountCad.toFixed(2));
     const fx = await getFxCadPerCny(supabaseAdmin);
     const cfg = hostedConfig();
+
+    // 幂等：同 key（或 2 分钟内同金额的 pending 信用卡充值）→ 复用原托管支付页链接
+    const idem = data.idempotencyKey?.trim() || null;
+    const dq = supabaseAdmin
+      .from("wallet_transactions")
+      .select("ref_no, pay_session")
+      .eq("user_id", context.userId)
+      .eq("type", "recharge")
+      .eq("channel", "card")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const { data: dupe } = idem
+      ? await dq.eq("idempotency_key", idem)
+      : await dq.eq("amount_cad", amountCad).gte("created_at", new Date(Date.now() - 120_000).toISOString());
+    const prevUrl = (dupe as any[])?.[0]?.pay_session?.pay_info;
+    if (prevUrl) return { url: prevUrl, reference: (dupe as any[])[0].ref_no };
+
     const reference = `TOPUP${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     const r = await hostedPost("CC_PURCHASE", "2.0", {
@@ -216,9 +311,25 @@ export const startOttHostedCardTopup = createServerFn({ method: "POST" })
       status: "pending",
       channel: "card",
       ref_no: reference,
+      idempotency_key: idem,
+      pay_session: { pay_info: url, mode: "redirect", hosted: true },
       note: `OTT Pay 信用卡充值 CA$${amountCad} · hosted=1`,
     } as any);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (idem && String((error as any).code) === "23505") {
+        const { data: won } = await supabaseAdmin
+          .from("wallet_transactions")
+          .select("ref_no, status, pay_session")
+          .eq("idempotency_key", idem)
+          .maybeSingle();
+        if ((won as any) && (won as any).status !== "pending") {
+          throw new Error("该充值请求已处理，请刷新页面后重新发起");
+        }
+        const u = (won as any)?.pay_session?.pay_info;
+        if (u) return { url: u, reference: (won as any).ref_no };
+      }
+      throw new Error(error.message);
+    }
 
     return { url, reference };
   });
@@ -229,7 +340,7 @@ export const syncOttTopup = createServerFn({ method: "POST" })
   .inputValidator((d: { reference: string }) => d)
   .handler(async ({ data, context }) => {
     const { ottPost } = await import("@/lib/ottpay.server");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
 
     const { data: tx } = await supabaseAdmin
       .from("wallet_transactions")
@@ -256,11 +367,18 @@ export const syncOttTopup = createServerFn({ method: "POST" })
       let hostedNext: string | null = null;
       if (HOSTED_PAID_STATES.has(st)) hostedNext = "completed";
       else if (HOSTED_FAILED_STATES.has(st)) hostedNext = "failed";
-      if (hostedNext) await supabaseAdmin.from("wallet_transactions").update({ status: hostedNext }).eq("id", tx.id);
+      // status='pending' 条件更新 —— 已被回调/对账处理过的不再改，触发器只加一次余额
+      if (hostedNext)
+        await supabaseAdmin
+          .from("wallet_transactions")
+          .update({ status: hostedNext, verified_at: new Date().toISOString() })
+          .eq("id", tx.id)
+          .eq("status", "pending");
       return { status: hostedNext ?? "pending" };
     }
 
-    const pid = /pid=([\w-]+)/.exec(tx.note ?? "")?.[1];
+    // pid 优先取字段，回退到历史 note 里的 pid=（不再新写 note）
+    const pid = (tx as any).provider_payment_id || /pid=([\w-]+)/.exec(tx.note ?? "")?.[1];
     if (!pid) return { status: "pending" };
 
     const r = await ottPost<any>("/api/v1/payment/status-query", { paymentId: pid });
@@ -269,6 +387,10 @@ export const syncOttTopup = createServerFn({ method: "POST" })
     if (["success", "captured", "authorised", "authorized"].includes(s)) next = "completed";
     else if (["failure", "orderclosed"].includes(s)) next = "failed";
 
-    if (next) await supabaseAdmin.from("wallet_transactions").update({ status: next }).eq("id", tx.id);
+    if (next) {
+      const patch: any = { status: next, verified_at: new Date().toISOString() };
+      if (!(tx as any).provider_payment_id) patch.provider_payment_id = pid;
+      await supabaseAdmin.from("wallet_transactions").update(patch).eq("id", tx.id).eq("status", "pending");
+    }
     return { status: next ?? "pending" };
   });

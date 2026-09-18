@@ -8,6 +8,7 @@ import {
   setBatchPriceConfirmed,
   deductWalletForBatch,
   deductBatchOffline,
+  refreshBatchCustomerSnapshot,
 } from "@/lib/orders.functions";
 import { X, Truck, Package, Layers, ChevronDown, ChevronRight, Wallet, Save, AlertTriangle } from "lucide-react";
 
@@ -27,6 +28,8 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
   const setConfirmedFn = useServerFn(setBatchPriceConfirmed);
   const deduct = useServerFn(deductWalletForBatch);
   const deductOffline = useServerFn(deductBatchOffline);
+  const refreshSnapshotFn = useServerFn(refreshBatchCustomerSnapshot);
+  const [refreshingSnap, setRefreshingSnap] = useState(false);
 
   const c = customerData ?? {};
   const waybills = (c.waybills ?? []) as any[];
@@ -83,9 +86,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
   const onSave = async () => {
     setBusy(true);
     try {
-      await saveDraft({
-        data: { batchId, customerCode, deliveryCad: deliveryAmt, inspectionCad: inspAmt, discountCad: discAmt },
-      });
+      await saveDraft({ data: { batchId, customerCode, deliveryCad: deliveryAmt, inspectionCad: inspAmt, discountCad: discAmt } });
       await qc.refetchQueries({ queryKey: ["admin-batch", batchId] });
       await qc.invalidateQueries({ queryKey: ["admin-batches"] });
       alert("费用已保存并重新计算；价格确认状态未改变");
@@ -100,17 +101,40 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
     if (next && warnings.length > 0 && !window.confirm("存在超长/超重/偏远预警，确认价格已核对无误？")) return;
     setBusy(true);
     try {
-      await saveDraft({
-        data: { batchId, customerCode, deliveryCad: deliveryAmt, inspectionCad: inspAmt, discountCad: discAmt },
-      });
-      await setConfirmedFn({ data: { batchId, customerCode, confirmed: next } });
+      // 只在"确认"方向（未确认→确认）先落草稿——saveDraft 会拒绝已确认客户的改动，
+      // 取消确认（确认→未确认）此刻客户仍是已确认状态，调它必然报错、且从没必要：
+      // 取消确认不改费用，只是解冻；要改费用请取消确认后单独走「保存」。
+      if (next) {
+        await saveDraft({ data: { batchId, customerCode, deliveryCad: deliveryAmt, inspectionCad: inspAmt, discountCad: discAmt } });
+      }
+      const r: any = await setConfirmedFn({ data: { batchId, customerCode, confirmed: next } });
       setConfirmed(next);
       await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
       await qc.invalidateQueries({ queryKey: ["admin-batches"] });
+      if (next && r?.snapshot_ok === false) {
+        alert(`价格已确认，但客户端快照刷新失败：${r.snapshot_error ?? "未知错误"}。\n客户可能暂时看到"数据准备中"，可点「刷新此客户快照」重试。`);
+      }
+      if (next && r?.invoice_ok === false) {
+        alert(
+          `价格已确认，但账单生成失败：${r.invoice_error ?? "未知错误"}。\n请检查该客户的运单 / 客户号绑定后，取消确认再重新确认。`,
+        );
+      }
     } catch (e: any) {
       alert(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+  const onRefreshSnapshot = async () => {
+    setRefreshingSnap(true);
+    try {
+      await refreshSnapshotFn({ data: { batchId, customerCode } });
+      await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
+      alert("已刷新该客户的快照");
+    } catch (e: any) {
+      alert(`刷新失败：${e.message}`);
+    } finally {
+      setRefreshingSnap(false);
     }
   };
   const onDeduct = async () => {
@@ -135,10 +159,9 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
       return;
     setBusy(true);
     try {
-      // Save inspection/delivery first so they're reflected in the batch bill
-      await saveDraft({
-        data: { batchId, customerCode, deliveryCad: deliveryAmt, inspectionCad: inspAmt, discountCad: discAmt },
-      });
+      // 扣款只在 confirmed===true 时才能到这一步（上面已 return 拦截），而 saveDraft 会拒绝
+      // 已确认客户的改动——这里不需要也不能再 saveDraft，settleBatchForCustomer 走的是确认时
+      // 冻结的账单金额，不是这里的实时草稿值。
       if (method === "wallet") {
         const r: any = await deduct({
           data: {
@@ -273,6 +296,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 </ul>
               </div>
             )}
+
 
             <Card
               title={`关税明细 (${items.length}) · Σ 申报价值 ${cad(items.reduce((s, i) => s + Number(i.declared_value_cad || 0), 0))} · Σ 关税 ${cad(items.reduce((s, i) => s + Number(i.duty_cad || 0), 0))}`}
@@ -451,6 +475,11 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 }
               />
 
+              {confirmed && (
+                <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] text-emerald-200">
+                  价格已确认，账单已冻结。要改运费/派送费/折扣，请先在下方「取消确认」。
+                </div>
+              )}
               <div className="mt-2 border-t border-white/5 pt-2">
                 <label className="block text-[10px] uppercase tracking-wider text-slate-500">
                   末端派送费 (CAD) · 可输入
@@ -460,7 +489,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                   step="0.01"
                   min="0"
                   value={delivery}
-                  disabled={!canEdit}
+                  disabled={!canEdit || confirmed}
                   onChange={(e) => setDelivery(e.target.value)}
                   className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
                 />
@@ -469,7 +498,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                     建议 <span className="font-mono text-slate-300">{cad(deliverySuggested)}</span>
                     {c.delivery_note ? ` · ${c.delivery_note}` : " · 未匹配派送费规则（可在线路设置中配置）"}
                   </span>
-                  {canEdit && deliverySuggested > 0 && (
+                  {canEdit && !confirmed && deliverySuggested > 0 && (
                     <button
                       type="button"
                       onClick={() => setDelivery(String(deliverySuggested))}
@@ -489,7 +518,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                   step="0.01"
                   min="0"
                   value={inspection}
-                  disabled={!canEdit}
+                  disabled={!canEdit || confirmed}
                   onChange={(e) => setInspection(e.target.value)}
                   className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
                 />
@@ -506,7 +535,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                   min="0"
                   max={subtotal}
                   value={discount}
-                  disabled={!canEdit}
+                  disabled={!canEdit || confirmed}
                   onChange={(e) => setDiscount(e.target.value)}
                   className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
                 />
@@ -550,9 +579,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
             <div
               className={`rounded-xl border p-3 text-xs ${confirmed ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-amber-500/30 bg-amber-500/10 text-amber-200"}`}
             >
-              <div className="font-semibold">
-                {confirmed ? "价格已确认 · 客户端可见并可付款" : "价格未确认 · 客户端不显示金额、不可付款"}
-              </div>
+              <div className="font-semibold">{confirmed ? "价格已确认 · 客户端可见并可付款" : "价格未确认 · 客户端不显示金额、不可付款"}</div>
               {canEdit && (
                 <button
                   onClick={onToggleConfirm}
@@ -562,13 +589,24 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                   {confirmed ? "取消确认" : "确认价格并对客户显示"}
                 </button>
               )}
+              {canEdit && confirmed && (
+                <button
+                  onClick={onRefreshSnapshot}
+                  disabled={refreshingSnap}
+                  title="客户端「我的批次」只读这份快照；后台改了费用但客户金额没变时，点这个手动重算"
+                  className="mt-1.5 w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/10 disabled:opacity-50"
+                >
+                  {refreshingSnap ? "刷新中…" : "刷新此客户快照"}
+                </button>
+              )}
             </div>
 
             {canEdit && (
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={onSave}
-                  disabled={busy}
+                  disabled={busy || confirmed}
+                  title={confirmed ? "价格已确认，账单冻结；请先取消确认" : undefined}
                   className="inline-flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:opacity-50"
                 >
                   <Save className="h-3.5 w-3.5" />

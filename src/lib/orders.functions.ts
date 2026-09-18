@@ -77,6 +77,20 @@ async function getOperatorName(admin: any, userId: string): Promise<string> {
   return data?.full_name || data?.email || userId;
 }
 
+// 批次账单冻结：客户已确认价格后，批次内的费用改动一律拒绝——必须先"取消确认"。
+export async function assertBatchCustomerNotConfirmed(admin: any, batchId: string, customerCode: string) {
+  if (!customerCode) return;
+  const { data } = await admin
+    .from("batch_settlements")
+    .select("confirmed")
+    .eq("batch_id", batchId)
+    .eq("customer_code", customerCode)
+    .maybeSingle();
+  if ((data as any)?.confirmed) {
+    throw new Error(`客户 ${customerCode} 的价格已确认，账单已冻结。请先在「按客户号账单」里取消确认，再修改费用。`);
+  }
+}
+
 // ====== Freight calculation helper (server-side) ======
 // Field logic:
 //   freight_rules.unit_price_cad / min_charge_cad / clearance_fee_cad — 主字段 (CAD)
@@ -271,6 +285,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
   const clearance_cad = +Number(rule.clearance_fee_waybill_cad ?? 0).toFixed(2);
   freight_cad = +freight_cad.toFixed(2);
 
+
   // 关税 —— 走 HS 明细口径（duty.server）；customs_rules.rate_pct 已弃用
   let duty_cad = 0;
   const customs_applies = !!customs?.enabled;
@@ -315,6 +330,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     .eq("id", waybillId);
   return snapshot;
 }
+
 
 // ====== Recompute forwarding order totals from its waybills ======
 // freight/duty/insurance = Σ waybills (each computed via computeAndPersistWaybillFees)
@@ -384,6 +400,8 @@ export async function recomputeForwardingTotal(admin: any, forwardingId: string)
       min_charge_waybill_cad = Number(rule.min_charge_waybill_cad ?? 0);
     }
   }
+
+
 
   const wbIds = (wbs ?? []).map((w: any) => w.id);
   const palletIds = Array.from(new Set((wbs ?? []).map((w: any) => w.pallet_id).filter(Boolean))) as string[];
@@ -475,6 +493,154 @@ export const recalcForwardingTotal = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const snapshot = await recomputeForwardingTotal(supabaseAdmin, data.id);
     return { ok: true, snapshot };
+  });
+
+// ============================================================
+//   集运单物品明细：订单级编辑 → 自动重算关税 / 总额 / 同步运单拆分
+// ============================================================
+type FwdItemPatch = {
+  name?: string;
+  quantity?: number;
+  unit_price_cad?: number | null;
+  unit_price_cny?: number | null;
+  hs_code?: string | null;
+  material?: string | null;
+  origin?: string | null;
+  brand?: string | null;
+  box_count?: number | null;
+  inner_qty?: number | null;
+};
+
+function buildFwdItemPatch(p: FwdItemPatch) {
+  const patch: any = {};
+  if (p.name !== undefined) patch.name = String(p.name).trim();
+  if (p.quantity !== undefined) patch.quantity = Number(p.quantity) || 0;
+  if (p.unit_price_cad !== undefined) patch.unit_price_cad = p.unit_price_cad == null ? 0 : Number(p.unit_price_cad);
+  if (p.unit_price_cny !== undefined) patch.unit_price_cny = p.unit_price_cny == null ? 0 : Number(p.unit_price_cny);
+  if (p.material !== undefined) patch.material = p.material?.trim() || null;
+  if (p.origin !== undefined) patch.origin = p.origin?.trim() || null;
+  if (p.brand !== undefined) patch.brand = p.brand?.trim() || null;
+  if (p.box_count !== undefined) patch.box_count = p.box_count == null || p.box_count === ("" as any) ? null : Number(p.box_count);
+  if (p.inner_qty !== undefined) patch.inner_qty = p.inner_qty == null || p.inner_qty === ("" as any) ? null : Number(p.inner_qty);
+  if (p.hs_code !== undefined) {
+    const code = (p.hs_code ?? "").replace(/\s+/g, "").trim() || null;
+    patch.hs_code = code;
+    patch.hs_confirmed = !!code;
+    patch.hs_matched = code ? "manual" : "none";
+  }
+  return patch;
+}
+
+// 名称变化时，把各运单 items_summary 里的旧名称替换成新名称（保持关税匹配口径）
+async function renameInWaybillItemsSummary(admin: any, forwardingId: string, oldName: string, newName: string) {
+  if (!oldName || oldName === newName) return;
+  const { data: wbs } = await admin.from("waybills").select("id, items_summary").eq("forwarding_id", forwardingId);
+  for (const w of (wbs ?? []) as any[]) {
+    const arr = Array.isArray(w.items_summary) ? w.items_summary : [];
+    let changed = false;
+    const next = arr.map((it: any) => {
+      if (it?.name === oldName) {
+        changed = true;
+        return { ...it, name: newName };
+      }
+      return it;
+    });
+    if (changed) await admin.from("waybills").update({ items_summary: next }).eq("id", w.id);
+  }
+}
+
+async function recomputeForwardingAfterItemChange(admin: any, forwardingId: string) {
+  try {
+    const { persistWaybillItemsForParent } = await import("./duty.server");
+    await persistWaybillItemsForParent(admin, { forwarding_id: forwardingId });
+  } catch (e) {
+    console.error("persistWaybillItemsForParent failed (forwarding item change)", e);
+  }
+  await recomputeForwardingTotal(admin, forwardingId);
+}
+
+export const updateForwardingItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { itemId: string; patch: FwdItemPatch }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: before } = await supabaseAdmin
+      .from("forwarding_items")
+      .select("id, forwarding_id, name")
+      .eq("id", data.itemId)
+      .maybeSingle();
+    if (!before) throw new Error("物品不存在");
+    const patch = buildFwdItemPatch(data.patch);
+    if (Object.keys(patch).length === 0) return { ok: true };
+    const { error } = await supabaseAdmin.from("forwarding_items").update(patch).eq("id", data.itemId);
+    if (error) throw new Error(error.message);
+    if (patch.name && patch.name !== (before as any).name) {
+      await renameInWaybillItemsSummary(supabaseAdmin, (before as any).forwarding_id, (before as any).name, patch.name);
+    }
+    await recordLog(supabaseAdmin, {
+      entity_type: "forwarding_item",
+      entity_id: data.itemId,
+      action: "update",
+      before,
+      after: patch,
+      operator_id: context.userId,
+      operator_name: await getOperatorName(supabaseAdmin, context.userId),
+    });
+    await recomputeForwardingAfterItemChange(supabaseAdmin, (before as any).forwarding_id);
+    return { ok: true };
+  });
+
+export const addForwardingItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { forwardingId: string; patch: FwdItemPatch }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const patch = buildFwdItemPatch(data.patch);
+    if (!patch.name) throw new Error("品名不能为空");
+    const { data: ins, error } = await supabaseAdmin
+      .from("forwarding_items")
+      .insert({ forwarding_id: data.forwardingId, quantity: 1, unit_price_cad: 0, unit_price_cny: 0, ...patch })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    await recordLog(supabaseAdmin, {
+      entity_type: "forwarding_item",
+      entity_id: ins!.id,
+      action: "create",
+      after: patch,
+      operator_id: context.userId,
+      operator_name: await getOperatorName(supabaseAdmin, context.userId),
+    });
+    await recomputeForwardingAfterItemChange(supabaseAdmin, data.forwardingId);
+    return { ok: true, id: ins!.id };
+  });
+
+export const deleteForwardingItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { itemId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: before } = await supabaseAdmin
+      .from("forwarding_items")
+      .select("id, forwarding_id, name")
+      .eq("id", data.itemId)
+      .maybeSingle();
+    if (!before) return { ok: true };
+    const { error } = await supabaseAdmin.from("forwarding_items").delete().eq("id", data.itemId);
+    if (error) throw new Error(error.message);
+    await recordLog(supabaseAdmin, {
+      entity_type: "forwarding_item",
+      entity_id: data.itemId,
+      action: "delete",
+      before,
+      operator_id: context.userId,
+      operator_name: await getOperatorName(supabaseAdmin, context.userId),
+    });
+    await recomputeForwardingAfterItemChange(supabaseAdmin, (before as any).forwarding_id);
+    return { ok: true };
   });
 
 // ============================================================
@@ -1067,11 +1233,8 @@ export const getWaybillDetail = createServerFn({ method: "POST" })
         address_destination_code = (o as any)?.address_snapshot?.destination_code ?? null;
         if (!address_destination_code && (o as any)?.user_id) {
           const { data: a } = await supabaseAdmin
-            .from("addresses")
-            .select("destination_code")
-            .eq("user_id", (o as any).user_id)
-            .eq("is_default", true)
-            .maybeSingle();
+            .from("addresses").select("destination_code")
+            .eq("user_id", (o as any).user_id).eq("is_default", true).maybeSingle();
           address_destination_code = a?.destination_code ?? null;
         }
       } else if (wb.forwarding_id) {
@@ -1083,17 +1246,12 @@ export const getWaybillDetail = createServerFn({ method: "POST" })
         address_destination_code = (f as any)?.address?.destination_code ?? null;
         if (!address_destination_code && (f as any)?.user_id) {
           const { data: a } = await supabaseAdmin
-            .from("addresses")
-            .select("destination_code")
-            .eq("user_id", (f as any).user_id)
-            .eq("is_default", true)
-            .maybeSingle();
+            .from("addresses").select("destination_code")
+            .eq("user_id", (f as any).user_id).eq("is_default", true).maybeSingle();
           address_destination_code = a?.destination_code ?? null;
         }
       }
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
 
     return {
       waybill: wb,
@@ -1513,9 +1671,21 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       remote_prefixes: string[];
     }
   >();
+  // customs_rules.enabled 决定该线路是否向客户收关税：
+  //   true  → 不包税（客户实付关税）
+  //   false → 包关税（承运方吸收，客户端关税明细整段隐藏）
+  const customsEnabledByRoute = new Map<string, boolean>();
   if (routeCodesInUse.length) {
     const { data: routes } = await admin.from("shipping_routes").select("id, code").in("code", routeCodesInUse);
     const routeIds = (routes ?? []).map((r: any) => r.id);
+    if (routeIds.length) {
+      const { data: crs } = await admin
+        .from("customs_rules")
+        .select("route_id, enabled")
+        .in("route_id", routeIds);
+      const crByRoute = new Map<string, boolean>((crs ?? []).map((c: any) => [c.route_id as string, !!c.enabled]));
+      for (const r of routes ?? []) customsEnabledByRoute.set(r.code, crByRoute.get(r.id) ?? false);
+    }
     const { data: rules } = routeIds.length
       ? await admin
           .from("freight_rules")
@@ -1734,6 +1904,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       });
     }
     // 运单级清关费已取消，清关费只在批次级按 (线路, 客户号) 加一次
+
   }
   // Batch-level clearance: per (route, customer) once
   const groupSet = new Set<string>();
@@ -1974,10 +2145,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   // === 10. Customs items per (customer, route) — HS 明细统一口径 ===
   // 集运运单：computeWaybillDutyBreakdown（与 waybills.duty_cad 落库完全一致）
   // 电商订单：order_items × products.hs_code / hs_codes 名称匹配
-  const { computeWaybillDutyBreakdown, buildHsIndex, matchHsForName } = await import("./duty.server");
-  const { data: allHs } = await admin
-    .from("hs_codes")
-    .select("hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate");
+  const { computeWaybillDutyBreakdown, buildHsIndex, matchHsForName, loadAllHsCodes } = await import("./duty.server");
+  const allHs = await loadAllHsCodes(admin, "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate");
   const hsIndex = buildHsIndex((allHs ?? []) as any[]);
 
   const itemsByKey = new Map<string, Map<string, any>>(); // key → "name|hs" → merged row
@@ -2008,15 +2177,39 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     s.add(name);
   }
 
-  // ---- 集运侧：逐运单调用 duty helper ----
+  // ---- 集运侧：优先读 waybill_items 快照，无则回退现算 ----
+  const fwdWbIds = allWbs.filter((w) => w.forwarding_id).map((w) => w.id);
+  const wiByWb = new Map<string, any[]>();
+  if (fwdWbIds.length) {
+    const { data: wiRows } = await admin.from("waybill_items").select("*").in("waybill_id", fwdWbIds);
+    for (const r of (wiRows ?? []) as any[]) {
+      const arr = wiByWb.get(r.waybill_id) ?? [];
+      arr.push(r);
+      wiByWb.set(r.waybill_id, arr);
+    }
+  }
   for (const w of allWbs) {
     if (!w.forwarding_id) continue;
     const cc = wbCustomer(w);
     if (!cc) continue;
     const rc = wbRoute(w).code;
     const key = bKey(cc, rc);
-    const br = await computeWaybillDutyBreakdown(admin, w);
-    for (const it of br.items) {
+    const stored = wiByWb.get(w.id);
+    const items = stored?.length
+      ? stored.map((r: any) => ({
+          name: r.name ?? "",
+          hs_code: r.hs_code ?? null,
+          mfn_rate: Number(r.mfn_rate ?? 0),
+          gst_rate: Number(r.gst_rate ?? 0),
+          anti_dumping_rate: Number(r.anti_dumping_rate ?? 0),
+          tax_rate: Number(r.tax_rate ?? 0),
+          unit_price_cad: Number(r.unit_price_cad ?? 0),
+          quantity_per_waybill: Number(r.quantity ?? 0),
+          declared_value_cad: Number(r.declared_value_cad ?? 0),
+          duty_cad: Number(r.duty_cad ?? 0),
+        }))
+      : (await computeWaybillDutyBreakdown(admin, w)).items;
+    for (const it of items) {
       if (!it.hs_code) markUnmatched(key, it.name);
       addItem(key, {
         name: it.name,
@@ -2168,7 +2361,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
           const pc = postalOf(w);
           if (pc && rule.remote_prefixes.some((pre) => pc.startsWith(pre))) remote.add(pc);
         }
-        for (const pc of remote) b.warnings.push({ kind: "remote", ref: pc, detail: `收货邮编 ${pc} 属偏远地区` });
+        for (const pc of remote)
+          b.warnings.push({ kind: "remote", ref: pc, detail: `收货邮编 ${pc} 属偏远地区` });
       }
     }
   }
@@ -2279,6 +2473,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         pallets: b.pallets,
         items,
         unmatched_hs_names: unmatchedMapMerged.get(k) ?? [],
+        // 该线路是否向客户收关税：false = 包关税（客户端关税明细整段隐藏）
+        customs_enabled: b.route_code ? (customsEnabledByRoute.get(b.route_code) ?? false) : false,
       };
     })
     .sort((a, b) => {
@@ -2325,6 +2521,211 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     carton_count: cartons.length,
     pallet_count: pallets.length,
   };
+}
+
+// ============================================================
+//   批次 × 客户号 费用快照（客户端「我的批次」直读，免全量重算）
+// ============================================================
+// 把 batches.fees_dirty_at 打上时间戳，表示费用输入已变动、现有快照可能过期。
+// 任何"改钱但不改批次状态"的操作（附加费、量尺称重、运单进出批次…）都应调用它。
+export async function markBatchFeesDirty(admin: any, batchId: string | null | undefined) {
+  if (!batchId) return;
+  await admin.from("batches").update({ fees_dirty_at: new Date().toISOString() }).eq("id", batchId);
+}
+
+export async function markBatchFeesDirtyMany(admin: any, batchIds: (string | null | undefined)[]) {
+  const ids = Array.from(new Set(batchIds.filter(Boolean))) as string[];
+  if (!ids.length) return;
+  await admin.from("batches").update({ fees_dirty_at: new Date().toISOString() }).in("id", ids);
+}
+
+// 一批运单当前各自所属的批次：在箱里跟箱走，在托盘里跟托盘走，否则用运单自己的
+// assigned_batch_id —— 与 computeBatchFeeSummary 的分组口径一致（cartonsR/palletCartons/
+// directWbs 三路取批次的规则）。供 cartons.functions.ts / scan.functions.ts 里改动运单
+// 重量尺寸、或让运单进出箱/托盘的写路径调用，在改动前后把涉及的批次都标记为脏。
+export async function resolveWaybillBatchIds(admin: any, waybillIds: string[]): Promise<string[]> {
+  if (!waybillIds.length) return [];
+  const { data: wbs } = await admin
+    .from("waybills")
+    .select("id, carton_id, pallet_id, assigned_batch_id")
+    .in("id", waybillIds);
+  const rows = (wbs ?? []) as any[];
+  const cartonIds = Array.from(new Set(rows.map((w) => w.carton_id).filter(Boolean)));
+  const palletIds = Array.from(new Set(rows.map((w) => w.pallet_id).filter(Boolean)));
+  const cartonBatch = new Map<string, string | null>();
+  const palletBatch = new Map<string, string | null>();
+  if (cartonIds.length) {
+    const { data: cs } = await admin.from("cartons").select("id, batch_id").in("id", cartonIds);
+    for (const c of (cs ?? []) as any[]) cartonBatch.set(c.id, c.batch_id ?? null);
+  }
+  if (palletIds.length) {
+    const { data: ps } = await admin.from("pallets").select("id, batch_id").in("id", palletIds);
+    for (const p of (ps ?? []) as any[]) palletBatch.set(p.id, p.batch_id ?? null);
+  }
+  const out = new Set<string>();
+  for (const w of rows) {
+    const b: string | null = w.carton_id
+      ? (cartonBatch.get(w.carton_id) ?? null)
+      : w.pallet_id
+        ? (palletBatch.get(w.pallet_id) ?? null)
+        : (w.assigned_batch_id ?? null);
+    if (b) out.add(b);
+  }
+  return Array.from(out);
+}
+
+// 把一个批次每位客户的费用小计写入 batch_settlements 快照（按客户号跨线路合计，
+// 与 listMyBatches 的客户端口径一致）。只写快照相关列，不动 confirmed / confirmed_at。
+// summary 可传入已算好的结果以避免重复计算。
+// 把 computeBatchFeeSummary 的 per_customer（可能一个客户拆多个"客户号×线路"桶）
+// 按客户号合并成一行。供 refreshBatchSettlements（整批写全部客户）和
+// refreshBatchSettlementsForCustomer（只写一个客户）共用，避免两处口径分叉。
+function aggregateSettlementBuckets(perCustomer: any[]): Map<string, any> {
+  const byCustomer = new Map<string, any>();
+  for (const p of perCustomer) {
+    const code: string | null = p.customer_code ?? null;
+    if (!code) continue;
+    const agg = byCustomer.get(code) ?? {
+      subtotal_cad: 0,
+      waybill_count: 0,
+      carton_count: 0,
+      pallet_count: 0,
+      routes: new Set<string>(),
+      buckets: [] as any[],
+      wb_total: 0,
+      wb_paid: 0,
+    };
+    agg.subtotal_cad += Number(p.subtotal_cad ?? p.subtotal_cny ?? 0);
+    agg.waybill_count += Number(p.waybill_count ?? 0);
+    agg.carton_count += Number(p.carton_count ?? 0);
+    agg.pallet_count += Number(p.pallet_count ?? 0);
+    if (p.route_code) agg.routes.add(String(p.route_code));
+    // 付款状态：统计该客户所有运单的 payment_status
+    for (const w of (p.waybills ?? []) as any[]) {
+      agg.wb_total += 1;
+      if (w.payment_status === "paid") agg.wb_paid += 1;
+    }
+    // 只留展示需要的精简字段，不落库 waybills/cartons/items 等重嵌套数组
+    agg.buckets.push({
+      customer_code: p.customer_code ?? null,
+      customer_name: p.customer_name ?? null,
+      route_code: p.route_code ?? null,
+      route_id: p.route_id ?? null,
+      group_key: p.group_key ?? null,
+      fee_scheme: p.fee_scheme ?? null,
+      waybill_count: p.waybill_count ?? 0,
+      carton_count: p.carton_count ?? 0,
+      pallet_count: p.pallet_count ?? 0,
+      weight_kg: p.weight_kg ?? 0,
+      volume_m3: p.volume_m3 ?? 0,
+      fee_freight_cad: p.fee_freight_cad ?? 0,
+      fee_customs_cad: p.fee_customs_cad ?? 0,
+      fee_insurance_cad: p.fee_insurance_cad ?? 0,
+      fee_clearance_cad: p.fee_clearance_cad ?? 0,
+      fee_surcharge_cad: p.fee_surcharge_cad ?? 0,
+      fee_delivery_cad: p.fee_delivery_cad ?? 0,
+      fee_inspection_cad: p.fee_inspection_cad ?? 0,
+      fee_discount_cad: p.fee_discount_cad ?? 0,
+      subtotal_cad: p.subtotal_cad ?? p.subtotal_cny ?? 0,
+      price_confirmed: !!p.price_confirmed,
+      // 该线路是否向客户收关税：false = 包关税，客户端关税明细整段隐藏
+      customs_enabled: !!p.customs_enabled,
+      // 关税明细（逐品名）+ 未匹配 HS 品名 —— 供客户端「关税」下的次级展开直读
+      duty_items: (p.items ?? []).map((it: any) => ({
+        name: it.name ?? "",
+        hs_code: it.hs_code ?? null,
+        mfn_rate: Number(it.mfn_rate ?? 0),
+        gst_rate: Number(it.gst_rate ?? 0),
+        anti_dumping_rate: Number(it.anti_dumping_rate ?? 0),
+        tax_rate: Number(it.tax_rate ?? 0),
+        unit_price_cad: Number(it.unit_price_cad ?? 0),
+        quantity: Number(it.quantity ?? 0),
+        declared_value_cad: Number(it.declared_value_cad ?? 0),
+        duty_cad: Number(it.duty_cad ?? 0),
+      })),
+      unmatched_hs_names: p.unmatched_hs_names ?? [],
+    });
+    byCustomer.set(code, agg);
+  }
+  return byCustomer;
+}
+
+function settlementRowFor(batchId: string, customerCode: string, agg: any, nowIso: string) {
+  return {
+    batch_id: batchId,
+    customer_code: customerCode,
+    subtotal_cad: +Number(agg.subtotal_cad).toFixed(2),
+    waybill_count: agg.waybill_count,
+    carton_count: agg.carton_count,
+    pallet_count: agg.pallet_count,
+    route_codes: Array.from(agg.routes as Set<string>).sort().join(",") || null,
+    is_paid: agg.wb_total > 0 && agg.wb_paid === agg.wb_total,
+    fee_breakdown: { per_route: agg.buckets, snapshot_at: nowIso },
+    snapshot_at: nowIso,
+    calc_version: 1,
+  };
+}
+
+// 整批刷新：写批次内每一位客户的快照行，并清掉 fees_dirty_at。开销随批次运单数增长，
+// 只应由"影响全批"的动作触发（批次解锁重锁、批量确认价格）——单个客户的改动请用
+// refreshBatchSettlementsForCustomer，不要为了一个客户把所有人都重写一遍。
+export async function refreshBatchSettlements(admin: any, batchId: string, summary?: any) {
+  const s = summary ?? (await computeBatchFeeSummary(admin, batchId));
+  const byCustomer = aggregateSettlementBuckets((s?.per_customer ?? []) as any[]);
+  const nowIso = new Date().toISOString();
+  const rows = [...byCustomer.entries()].map(([customer_code, agg]) => settlementRowFor(batchId, customer_code, agg, nowIso));
+  if (!rows.length) {
+    // 批次内没有可归集的客户账单：清掉已过期标记即可
+    await admin.from("batches").update({ fees_dirty_at: null }).eq("id", batchId);
+    return { ok: true, customers: 0 };
+  }
+  const { error } = await admin
+    .from("batch_settlements")
+    .upsert(rows, { onConflict: "batch_id,customer_code" });
+  if (error) throw new Error(error.message);
+  // 快照已是最新，清掉"费用已变动"标记
+  await admin.from("batches").update({ fees_dirty_at: null }).eq("id", batchId);
+  return { ok: true, customers: rows.length };
+}
+
+// 单客户刷新：只算/只写这一位客户的快照行，不碰批次内其他客户，也不清 fees_dirty_at
+// （其他客户可能仍是脏的）。改一个客户的费用（派送费/检查费/折扣/确认价格）时用这个，
+// 避免像整批刷新那样在 64 个客户的批次里无谓重写 63 行不相关数据。
+// 返回 {ok:false, error} 而不是抛错/吞错——调用方决定是硬失败还是仅提示。
+export async function refreshBatchSettlementsForCustomer(
+  admin: any,
+  batchId: string,
+  customerCode: string,
+  summary?: any,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!customerCode) return { ok: false, error: "missing customer_code" };
+  try {
+    const s = summary ?? (await computeBatchFeeSummary(admin, batchId));
+    const byCustomer = aggregateSettlementBuckets((s?.per_customer ?? []) as any[]);
+    const agg = byCustomer.get(customerCode);
+    const nowIso = new Date().toISOString();
+    const row = agg
+      ? settlementRowFor(batchId, customerCode, agg, nowIso)
+      : {
+          // 该客户在本批已没有费用行了（运单全部移出等）——仍要写一条，避免客户端继续看到旧金额
+          batch_id: batchId,
+          customer_code: customerCode,
+          subtotal_cad: 0,
+          waybill_count: 0,
+          carton_count: 0,
+          pallet_count: 0,
+          route_codes: null,
+          is_paid: false,
+          fee_breakdown: { per_route: [], snapshot_at: nowIso },
+          snapshot_at: nowIso,
+          calc_version: 1,
+        };
+    const { error } = await admin.from("batch_settlements").upsert([row], { onConflict: "batch_id,customer_code" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? String(e) };
+  }
 }
 
 // ---- Shared batch settlement (wallet or offline) ----
@@ -2384,361 +2785,236 @@ async function settleBatchForCustomer(
   points_earned?: number;
 }> {
   const { batchId, customerUserId, customerCode, method } = params;
-  const discount = Math.max(0, Number(params.discountCad ?? 0));
-  const FX = await getFxCadPerCny(admin);
+  const discountCad = Math.max(0, Number(params.discountCad ?? 0));
 
   const { data: batchRow } = await admin.from("batches").select("batch_no").eq("id", batchId).maybeSingle();
   const batchNo = (batchRow as any)?.batch_no ?? batchId;
 
-  // 1) Locate this customer's UNPAID waybills in the batch (via their orders/forwarding requests —
-  // waybills has no customer_code column of its own).
-  let wbList: any[] = [];
-  if (customerCode) {
-    const [oR, fR] = await Promise.all([
-      admin.from("orders").select("id").eq("customer_code", customerCode),
-      admin.from("forwarding_orders").select("id").eq("customer_code", customerCode),
-    ]);
-    const oIds = ((oR.data ?? []) as any[]).map((o) => o.id);
-    const fIds = ((fR.data ?? []) as any[]).map((f) => f.id);
-    const filters: string[] = [];
-    if (oIds.length) filters.push(`order_id.in.(${oIds.join(",")})`);
-    if (fIds.length) filters.push(`forwarding_id.in.(${fIds.join(",")})`);
-    if (filters.length) {
-      const { data: wbs } = await admin
-        .from("waybills")
-        .select(
-          "id, waybill_no, order_id, forwarding_id, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, payment_status",
-        )
-        .eq("assigned_batch_id", batchId)
-        .or(filters.join(","));
-      wbList = ((wbs ?? []) as any[]).filter((w) => w.payment_status !== "paid");
-    }
-  }
-  if (wbList.length === 0) return { ok: false, reason: "already_paid" };
-
-  // 2) Authoritative totals from these waybills (server-computed — never trust a client-supplied amount)
-  const { buildInvoiceLineMeta } = await import("./duty.server");
-  // One query for every surcharge note across these waybills, so 附加费 rows
-  // can show what they're actually for instead of a bare number.
-  const { data: surchargeRows } = await admin
-    .from("surcharges")
-    .select("waybill_id, note, amount_cny")
-    .in(
-      "waybill_id",
-      wbList.map((w) => w.id),
-    );
-  const surchargeNotesByWaybill = new Map<string, string[]>();
-  for (const s of (surchargeRows ?? []) as any[]) {
-    if (!s.waybill_id) continue;
-    const arr = surchargeNotesByWaybill.get(s.waybill_id) ?? [];
-    if (s.note) arr.push(s.note);
-    surchargeNotesByWaybill.set(s.waybill_id, arr);
-  }
-
-  let f = 0,
-    cst = 0,
-    ins = 0,
-    other = 0;
-  const lineItems: any[] = [];
-  for (const w of wbList) {
-    const wf = Number(w.freight_cad ?? 0),
-      wc = Number(w.duty_cad ?? 0),
-      wi = Number(w.insurance_cad ?? 0),
-      wClearance = Number(w.clearance_cad ?? 0),
-      wSurcharge = Number(w.surcharge_cad ?? 0);
-    const fCny = +(wf / FX).toFixed(2),
-      cCny = +(wc / FX).toFixed(2),
-      iCny = +(wi / FX).toFixed(2),
-      clearanceCny = +(wClearance / FX).toFixed(2),
-      surchargeCny = +(wSurcharge / FX).toFixed(2);
-    const oCny = +(clearanceCny + surchargeCny).toFixed(2);
-    f += fCny;
-    cst += cCny;
-    ins += iCny;
-    other += oCny;
-
-    const meta = await buildInvoiceLineMeta(admin, w).catch(() => null);
-    lineItems.push({
-      waybill_id: w.id,
-      order_id: w.order_id,
-      forwarding_id: w.forwarding_id,
-      description: `运单 ${w.waybill_no}`,
-      freight_cny: fCny,
-      customs_cny: cCny,
-      insurance_cny: iCny,
-      other_cny: 0,
-      amount_cny: +(fCny + cCny + iCny).toFixed(2),
-      meta,
+  // 冻结账单：价格确认时（ensureUnpaidBatchInvoice）已生成一张未付账单。付款一律按【该账单金额】
+  // 扣，不在这里重算整批费用（大批次会超时）。若尚无冻结账单（员工未经确认直接扣款的异常路径），
+  // 先按运单口径冻结一张——这一步慢，但只发生一次，之后所有付款都走快照直读。
+  const hasFrozen = async () => {
+    const { data } = await admin
+      .from("invoices")
+      .select("id")
+      .eq("user_id", customerUserId)
+      .eq("type", "batch")
+      .eq("batch_no", batchNo)
+      .in("status", ["unpaid", "overdue"])
+      .limit(1);
+    return ((data ?? []) as any[]).length > 0;
+  };
+  if (customerCode && !(await hasFrozen())) {
+    const ens = await ensureUnpaidBatchInvoice(admin, {
+      batchId,
+      customerCode,
+      operatorId: params.operatorId,
     });
-    // 清关费/附加费 broken into their own rows (费用类型起行) instead of a
-    // combined "other" figure — same waybill reference, own subtotal.
-    if (clearanceCny > 0) {
-      lineItems.push({
-        waybill_id: w.id,
-        order_id: w.order_id,
-        forwarding_id: w.forwarding_id,
-        description: `清关费 · 批次 ${batchNo}`,
-        freight_cny: 0,
-        customs_cny: 0,
-        insurance_cny: 0,
-        other_cny: clearanceCny,
-        amount_cny: clearanceCny,
-        meta: {
-          fee_type: "清关费",
-          batch_no: batchNo,
-          waybill_no: w.waybill_no,
-          amount_cad: +wClearance.toFixed(2),
-        },
-      });
-    }
-    if (surchargeCny > 0) {
-      const notes = surchargeNotesByWaybill.get(w.id) ?? [];
-      lineItems.push({
-        waybill_id: w.id,
-        order_id: w.order_id,
-        forwarding_id: w.forwarding_id,
-        description: `附加费${notes.length ? ` · ${notes.join("、")}` : ""} · 运单 ${w.waybill_no}`,
-        freight_cny: 0,
-        customs_cny: 0,
-        insurance_cny: 0,
-        other_cny: surchargeCny,
-        amount_cny: surchargeCny,
-        meta: {
-          fee_type: "附加费",
-          batch_no: batchNo,
-          waybill_no: w.waybill_no,
-          note: notes.join("、") || null,
-          amount_cad: +wSurcharge.toFixed(2),
-        },
-      });
-    }
-  }
-  // 批次级派送费 / 检查费（展示端已计入总额，这里必须一并收取）
-  const extras = await batchExtraFeesCad(admin, batchId, customerCode);
-  for (const [label, cad] of [
-    ["末端派送费", extras.delivery],
-    ["检查费", extras.inspection],
-  ] as const) {
-    if (!cad) continue;
-    const cny = +(cad / FX).toFixed(2);
-    other += cny;
-    lineItems.push({
-      description: `${label} · 批次 ${batchNo}`,
-      freight_cny: 0,
-      customs_cny: 0,
-      insurance_cny: 0,
-      other_cny: cny,
-      amount_cny: cny,
-      meta: { fee_type: label, batch_no: batchNo, amount_cad: +cad.toFixed(2) },
-    });
-  }
-  const subCny = +(f + cst + ins + other).toFixed(2);
-
-  const discountCny = discount > 0 ? +(discount / FX).toFixed(2) : 0;
-  const totalCny = +(subCny - discountCny).toFixed(2);
-  const subCad = +(subCny * FX).toFixed(2);
-  const finalDeduct = +(subCad - discount).toFixed(2);
-  if (finalDeduct <= 0) return { ok: false, reason: "nothing_to_pay" };
-
-  if (params.enforceBalance) {
-    const { data: w } = await admin.from("wallets").select("balance_cad").eq("user_id", customerUserId).maybeSingle();
-    const bal = Number((w as any)?.balance_cad ?? 0);
-    if (bal < finalDeduct) return { ok: false, reason: "insufficient", need_cad: finalDeduct, balance_cad: bal };
-  }
-
-  const methodLabel = method === "wallet" ? "钱包扣款" : method === "emt" ? "EMT 收款" : "现金收款";
-
-  // 3) wallet_transactions — trigger applies balance change only for method='wallet'
-  const { error: txErr } = await admin.from("wallet_transactions").insert({
-    user_id: customerUserId,
-    type: "spend",
-    status: "completed",
-    amount_cad: finalDeduct,
-    amount_cny: totalCny,
-    channel: method,
-    ref_no: params.refNo ?? null,
-    note: params.note ?? `批次 ${batchNo} · ${methodLabel}${discount > 0 ? ` (含折扣 CA$${discount.toFixed(2)})` : ""}`,
-  });
-  if (txErr) throw new Error(txErr.message);
-
-  // 4) Discount is already persisted by saveBatchCustomerFeeDraft. Do not add a
-  // second negative surcharge during payment, otherwise the batch total is reduced twice.
-
-  // 5) Invoice + items — 价格确认时可能已经生成过一张未付账单（每批次每客户一张），
-  // 这里优先复用并把它改成已付，避免同一批次出现两张账单。
-  const invoicePayload = {
-    user_id: customerUserId,
-    type: "batch",
-    payment_method: method,
-    subtotal_cny: subCny,
-    freight_cny: +f.toFixed(2),
-    customs_cny: +cst.toFixed(2),
-    insurance_cny: +ins.toFixed(2),
-    other_cny: +(other - discountCny).toFixed(2),
-    total_cny: totalCny,
-    paid_cny: totalCny,
-    paid_cad: finalDeduct,
-    status: "paid",
-    fx_rate: FX,
-    batch_no: batchNo,
-    paid_at: new Date().toISOString(),
-    due_date: new Date().toISOString().slice(0, 10),
-    created_by: params.operatorId,
-    note: `批次 ${batchNo} · ${methodLabel}${discount > 0 ? ` (折扣 CA$${discount.toFixed(2)})` : ""}`,
-  } as any;
-
-  const { data: pending } = await admin
-    .from("invoices")
-    .select("id")
-    .eq("user_id", customerUserId)
-    .eq("type", "batch")
-    .eq("batch_no", batchNo)
-    .in("status", ["unpaid", "overdue"])
-    .order("created_at", { ascending: true })
-    .limit(1);
-  const pendingId: string | null = ((pending ?? []) as any[])[0]?.id ?? null;
-
-  let inv: any = null;
-  let invErr: any = null;
-  if (pendingId) {
-    await admin.from("invoice_items").delete().eq("invoice_id", pendingId);
-    const r = await admin.from("invoices").update(invoicePayload).eq("id", pendingId).select("*").single();
-    inv = r.data;
-    invErr = r.error;
-  } else {
-    const r = await admin.from("invoices").insert(invoicePayload).select("*").single();
-    inv = r.data;
-    invErr = r.error;
-  }
-  if (invErr) throw new Error(invErr.message);
-  const invoiceId: string | null = inv?.id ?? null;
-
-  if (invoiceId) {
-    await admin.from("invoice_items").insert(lineItems.map((li: any) => ({ ...li, invoice_id: invoiceId })));
-    if (discountCny > 0) {
-      await admin.from("invoice_items").insert({
-        invoice_id: invoiceId,
-        description: `折扣（${methodLabel}）`,
-        freight_cny: 0,
-        customs_cny: 0,
-        insurance_cny: 0,
-        other_cny: -discountCny,
-        amount_cny: -discountCny,
-        meta: {
-          fee_type: "折扣",
-          batch_no: batchNo,
-          note: methodLabel,
-          amount_cad: -+discount.toFixed(2),
-        },
-      });
+    if (!ens.ok) {
+      // 这三种以前统一收成 "already_paid" 返回，前端一律显示"已结清"——但
+      // no_waybills（按 customer_code 一条订单/集运单都查不到，很可能是
+      // customer_code 跟运单实际归属对不上）和 nothing_to_bill（算出来是
+      // 0 元）跟"真的已经付过"是完全不同的情况，混在一起会让客户和客服都
+      // 误以为已结清、查不出真实原因。这里如实透传，前端各自给出对应提示。
+      if (ens.reason === "already_paid") {
+        return { ok: false, reason: "already_paid" };
+      }
+      return { ok: false, reason: ens.reason ?? "freeze_failed" };
     }
   }
 
-  // 6) Mark waybills paid + logs + tracking events
-  const wbIds = wbList.map((w) => w.id);
-  await admin.from("waybills").update({ payment_status: "paid" }).in("id", wbIds);
-  for (const w of wbList) {
-    await recordLog(admin, {
-      entity_type: "waybill",
-      entity_id: w.id,
-      action: "wallet_deduct_paid",
-      after: { batch_no: batchNo, invoice_id: invoiceId, amount_cad: finalDeduct, method },
-      operator_id: params.operatorId,
-      operator_name: params.operatorName,
-      note: `批次结算（批次 ${batchNo} · ${methodLabel}）`,
-    });
-    let { data: ship } = await admin.from("shipments").select("id").eq("tracking_no", w.waybill_no).maybeSingle();
-    if (!ship) {
-      const { data: insShip } = await admin
-        .from("shipments")
-        .insert({ tracking_no: w.waybill_no, status: "created" })
-        .select("id")
-        .single();
-      ship = insShip;
-    }
-    if (ship) {
-      await admin.from("tracking_events").insert({
-        shipment_id: ship.id,
-        status_zh: method === "wallet" ? "费用已支付（钱包扣款）" : `费用已支付（${methodLabel}）`,
-        status_en: method === "wallet" ? "Payment settled (wallet)" : "Payment settled (offline)",
-        event_time: new Date().toISOString(),
-        source: "admin_action",
-      });
-    }
-  }
-  const orderIds = Array.from(new Set(wbList.map((w) => w.order_id).filter(Boolean)));
-  const fwdIds = Array.from(new Set(wbList.map((w) => w.forwarding_id).filter(Boolean)));
-  for (const oid of orderIds)
-    await recordLog(admin, {
-      entity_type: "order",
-      entity_id: oid,
-      action: "wallet_deduct_paid",
-      after: { batch_no: batchNo, invoice_id: invoiceId, amount_cad: finalDeduct, method },
-      operator_id: params.operatorId,
-      operator_name: params.operatorName,
-      note: `批次结算（批次 ${batchNo}）`,
-    });
-  for (const fid of fwdIds)
-    await recordLog(admin, {
-      entity_type: "forwarding",
-      entity_id: fid,
-      action: "wallet_deduct_paid",
-      after: { batch_no: batchNo, invoice_id: invoiceId, amount_cad: finalDeduct, method },
-      operator_id: params.operatorId,
-      operator_name: params.operatorName,
-      note: `批次结算（批次 ${batchNo}）`,
-    });
-  if (invoiceId)
-    await recordLog(admin, {
-      entity_type: "batch",
-      entity_id: batchId,
-      action: "invoice_create_and_pay",
-      after: {
-        invoice_id: invoiceId,
-        batch_no: batchNo,
-        amount_cad: finalDeduct,
-        discount_cad: discount,
-        method,
-      },
-      operator_id: params.operatorId,
-      operator_name: params.operatorName,
-      note: `生成账单并结清（客户 ${customerCode || customerUserId} · CA$${finalDeduct.toFixed(2)} · ${methodLabel}）`,
-    });
-
-  await admin.from("admin_action_logs").insert({
-    entity_type: "batch",
-    entity_id: batchId,
-    action: "wallet_deduct",
-    after: {
-      user_id: customerUserId,
-      customer_code: customerCode,
-      amount_cad: finalDeduct,
-      discount_cad: discount,
-      invoice_id: invoiceId,
+  // 核心：一个事务 RPC 完成「扣余额 / 结清账单 / 运单批量转已付 / 快照 / 积分」。
+  // 事务原子性 + 运单行锁 → 并发或重试都拿到 already_paid，不会出现半成功。
+  const rpc: any = await admin.rpc("settle_batch_customer_txn", {
+    _payload: {
+      batch_id: batchId,
+      customer_user_id: customerUserId,
+      customer_code: customerCode || null,
       method,
+      discount_cad: discountCad,
+      ref_no: params.refNo ?? null,
+      note: params.note ?? null,
+      operator_id: params.operatorId,
+      operator_name: params.operatorName,
+      enforce_balance: !!params.enforceBalance,
+      award_points: !!params.awardPoints,
     },
-    operator_id: params.operatorId,
-    operator_name: params.operatorName,
-    note: `客户 ${customerCode || customerUserId} 结算 CA$${finalDeduct.toFixed(2)}${discount > 0 ? `（折扣 CA$${discount.toFixed(2)}）` : ""}（批次 ${batchNo} · ${methodLabel}）`,
   });
+  if (rpc.error) throw new Error(rpc.error.message);
+  const res: any = rpc.data;
+  if (!res?.ok) {
+    return {
+      ok: false,
+      reason: res?.reason ?? "settle_failed",
+      need_cad: res?.need_cad != null ? Number(res.need_cad) : undefined,
+      balance_cad: res?.balance_cad != null ? Number(res.balance_cad) : undefined,
+    };
+  }
 
-  let points_earned = 0;
-  if (params.awardPoints) {
-    const { data: pts } = await admin.rpc("award_points_for_spend", {
-      _user_id: customerUserId,
-      _amount_cad: finalDeduct,
+  // ---- 事务已提交：钱与状态已一致。以下为非关键补写，失败只记日志、不回滚、不报错。----
+  try {
+    await enrichAfterBatchSettle(admin, {
+      batchId,
+      batchNo: res.batch_no ?? batchNo,
+      method,
+      invoiceId: res.invoice_id,
+      finalCad: Number(res.paid_cad ?? 0),
+      discountCad,
+      waybillIds: (res.waybill_ids ?? []) as string[],
+      waybillNos: (res.waybill_nos ?? []) as string[],
+      orderIds: (res.order_ids ?? []) as string[],
+      forwardingIds: (res.forwarding_ids ?? []) as string[],
+      operatorId: params.operatorId,
+      operatorName: params.operatorName,
+      customerCode,
+      customerUserId,
     });
-    points_earned = Number(pts ?? 0);
+  } catch (e) {
+    console.error("enrichAfterBatchSettle failed (settlement is already committed):", e);
   }
 
   return {
     ok: true,
-    invoice_id: invoiceId ?? undefined,
-    invoice_no: inv?.invoice_no,
-    paid_cad: finalDeduct,
-    points_earned,
+    invoice_id: res.invoice_id ?? undefined,
+    invoice_no: res.invoice_no,
+    paid_cad: Number(res.paid_cad ?? 0),
+    points_earned: Number(res.points_earned ?? 0),
   };
 }
+
+// Post-settlement enrichment — runs AFTER the settle_batch_customer_txn transaction has
+// committed, so money/status are already correct. Everything here is best-effort and
+// batched (one insert per table instead of a per-waybill loop), so a slow or failing
+// step never blocks or reverts a settlement.
+async function enrichAfterBatchSettle(
+  admin: any,
+  p: {
+    batchId: string;
+    batchNo: string;
+    method: "wallet" | "emt" | "cash";
+    invoiceId?: string;
+    finalCad: number;
+    discountCad: number;
+    waybillIds: string[];
+    waybillNos: string[];
+    orderIds: string[];
+    forwardingIds: string[];
+    operatorId: string;
+    operatorName: string;
+    customerCode: string;
+    customerUserId: string;
+  },
+) {
+  const methodLabel = p.method === "wallet" ? "钱包扣款" : p.method === "emt" ? "EMT 收款" : "现金收款";
+  const after = { batch_no: p.batchNo, invoice_id: p.invoiceId ?? null, amount_cad: p.finalCad, method: p.method };
+
+  const logs: any[] = [];
+  for (const id of p.waybillIds)
+    logs.push({
+      entity_type: "waybill",
+      entity_id: id,
+      action: "wallet_deduct_paid",
+      after,
+      operator_id: p.operatorId,
+      operator_name: p.operatorName,
+      note: `批次结算（批次 ${p.batchNo} · ${methodLabel}）`,
+    });
+  for (const id of p.orderIds)
+    logs.push({
+      entity_type: "order",
+      entity_id: id,
+      action: "wallet_deduct_paid",
+      after,
+      operator_id: p.operatorId,
+      operator_name: p.operatorName,
+      note: `批次结算（批次 ${p.batchNo}）`,
+    });
+  for (const id of p.forwardingIds)
+    logs.push({
+      entity_type: "forwarding",
+      entity_id: id,
+      action: "wallet_deduct_paid",
+      after,
+      operator_id: p.operatorId,
+      operator_name: p.operatorName,
+      note: `批次结算（批次 ${p.batchNo}）`,
+    });
+  if (p.invoiceId)
+    logs.push({
+      entity_type: "batch",
+      entity_id: p.batchId,
+      action: "invoice_create_and_pay",
+      after: { ...after, discount_cad: p.discountCad },
+      operator_id: p.operatorId,
+      operator_name: p.operatorName,
+      note: `生成账单并结清（客户 ${p.customerCode || p.customerUserId} · CA$${p.finalCad.toFixed(2)} · ${methodLabel}）`,
+    });
+  if (logs.length) {
+    const { error } = await admin.from("admin_action_logs").insert(logs);
+    if (error) console.error("batch settle: admin_action_logs bulk insert failed:", error.message);
+  }
+
+  // shipments + 物流轨迹：批量查、批量补、批量写
+  if (p.waybillNos.length) {
+    const { data: existing } = await admin
+      .from("shipments")
+      .select("id, tracking_no")
+      .in("tracking_no", p.waybillNos);
+    const byNo = new Map<string, string>();
+    for (const s of (existing ?? []) as any[]) byNo.set(s.tracking_no, s.id);
+    const missing = p.waybillNos.filter((n) => !byNo.has(n));
+    if (missing.length) {
+      const { data: created } = await admin
+        .from("shipments")
+        .insert(missing.map((n) => ({ tracking_no: n, status: "created" })))
+        .select("id, tracking_no");
+      for (const s of (created ?? []) as any[]) byNo.set(s.tracking_no, s.id);
+    }
+    const nowIso = new Date().toISOString();
+    const shipIds = Array.from(new Set(p.waybillNos.map((n) => byNo.get(n)).filter(Boolean) as string[]));
+    const events = shipIds.map((shipId) => ({
+      shipment_id: shipId,
+      status_zh: p.method === "wallet" ? "费用已支付（钱包扣款）" : `费用已支付（${methodLabel}）`,
+      status_en: p.method === "wallet" ? "Payment settled (wallet)" : "Payment settled (offline)",
+      event_time: nowIso,
+      source: "admin_action",
+    }));
+    if (events.length) {
+      const { error } = await admin.from("tracking_events").insert(events);
+      if (error) console.error("batch settle: tracking_events bulk insert failed:", error.message);
+    }
+  }
+}
+
+// 批次列表页"客户号"搜索用——按客户号找这个客户名下所有运单实际挂在哪些批次，
+// 前端拿这份 batch id 集合去跟方式/目的地这两个纯前端筛选条件取交集。跟
+// findCustomerByCode 一样用 .ilike 不带通配符（大小写不敏感的精确匹配）。
+export const findBatchIdsForCustomerCode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { customerCode: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const code = data.customerCode.trim();
+    if (!code) return { batchIds: [] as string[] };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [oR, fR] = await Promise.all([
+      supabaseAdmin.from("orders").select("id").ilike("customer_code", code),
+      supabaseAdmin.from("forwarding_orders").select("id").ilike("customer_code", code),
+    ]);
+    const oIds = ((oR.data ?? []) as any[]).map((o) => o.id);
+    const fIds = ((fR.data ?? []) as any[]).map((f) => f.id);
+    if (!oIds.length && !fIds.length) return { batchIds: [] as string[] };
+    const filters: string[] = [];
+    if (oIds.length) filters.push(`order_id.in.(${oIds.join(",")})`);
+    if (fIds.length) filters.push(`forwarding_id.in.(${fIds.join(",")})`);
+    const { data: wbs } = await supabaseAdmin
+      .from("waybills")
+      .select("assigned_batch_id")
+      .not("assigned_batch_id", "is", null)
+      .or(filters.join(","));
+    const batchIds = Array.from(new Set(((wbs ?? []) as any[]).map((w) => w.assigned_batch_id).filter(Boolean)));
+    return { batchIds: batchIds as string[] };
+  });
 
 export const listBatches = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -2752,7 +3028,7 @@ export const listBatches = createServerFn({ method: "GET" })
       .limit(200);
     if (error) throw new Error(error.message);
     const batchIds = (data ?? []).map((b: any) => b.id);
-    const [cartonsR, palletsR, wbR, payments] = await Promise.all([
+    const [cartonsR, palletsR, wbR, payments, settlementsR] = await Promise.all([
       supabaseAdmin
         .from("cartons")
         .select("id, batch_id")
@@ -2768,6 +3044,13 @@ export const listBatches = createServerFn({ method: "GET" })
           return ps as string;
         }),
       ),
+      // 账单快照/价格确认状态：batch_settlements 里这个批次已经出现过的客户
+      // （不管当前是不是 confirmed）——一次批量查询，不逐批次现算全量客户，
+      // 保持列表页轻量。
+      supabaseAdmin
+        .from("batch_settlements")
+        .select("batch_id, confirmed")
+        .in("batch_id", batchIds.length ? batchIds : ["00000000-0000-0000-0000-000000000000"]),
     ]);
     const cartonBatch = new Map<string, string>();
     for (const c of cartonsR.data ?? []) if (c.batch_id) cartonBatch.set(c.id, c.batch_id);
@@ -2782,22 +3065,38 @@ export const listBatches = createServerFn({ method: "GET" })
         (w.pallet_id && palletBatch.get(w.pallet_id));
       if (bid) totals.set(bid, (totals.get(bid) ?? 0) + 1);
     }
-    const batches = (data ?? []).map((b: any, i: number) => ({
-      ...b,
-      payment_status: payments[i],
-      waybill_total: totals.get(b.id) ?? 0,
-      grand_total_cny: Number(b.grand_total_cny ?? 0),
-    }));
+    const settleStats = new Map<string, { total: number; confirmed: number }>();
+    for (const s of (settlementsR.data ?? []) as any[]) {
+      const cur = settleStats.get(s.batch_id) ?? { total: 0, confirmed: 0 };
+      cur.total += 1;
+      if (s.confirmed) cur.confirmed += 1;
+      settleStats.set(s.batch_id, cur);
+    }
+    const batches = (data ?? []).map((b: any, i: number) => {
+      const st = settleStats.get(b.id) ?? { total: 0, confirmed: 0 };
+      return {
+        ...b,
+        payment_status: payments[i],
+        waybill_total: totals.get(b.id) ?? 0,
+        grand_total_cny: Number(b.grand_total_cny ?? 0),
+        // settlement_total = 0 → 从没确认过（这个批次从没出过账单快照）。
+        // settlement_confirmed < settlement_total → 有客户被取消确认过（部分）。
+        settlement_total: st.total,
+        settlement_confirmed: st.confirmed,
+      };
+    });
     return { batches };
   });
 
+// 批次详情：基本信息 + 直挂运单 + 日志。**不含费用汇总**（那是 getBatchFeeSummary）。
+// 大批次里 computeBatchFeeSummary 可能几十秒，拆出去让页面框架先出来。
 export const getBatchDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { batchId: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [batchR, directWaybillsR, logsR] = await Promise.all([
+    const [batchR, directWaybillsR, logsR, allCntR] = await Promise.all([
       supabaseAdmin.from("batches").select("*").eq("id", data.batchId).maybeSingle(),
       supabaseAdmin
         .from("waybills")
@@ -2812,30 +3111,68 @@ export const getBatchDetail = createServerFn({ method: "POST" })
         .eq("entity_id", data.batchId)
         .order("created_at", { ascending: false })
         .limit(50),
+      supabaseAdmin
+        .from("waybills")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_batch_id", data.batchId),
     ]);
     if (!batchR.data) throw new Error("Batch not found");
-    const summary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
 
-    // ---- Enrich direct waybills: customer_code + chargeable_weight_kg + total_cad ----
     const wbList = (directWaybillsR.data ?? []) as any[];
     const wbOrderIds = Array.from(new Set(wbList.map((w) => w.order_id).filter(Boolean)));
     const wbFwdIds = Array.from(new Set(wbList.map((w) => w.forwarding_id).filter(Boolean)));
     const [wbOrdersR, wbFwdR] = await Promise.all([
       wbOrderIds.length
-        ? supabaseAdmin.from("orders").select("id, customer_code").in("id", wbOrderIds)
+        ? supabaseAdmin.from("orders").select("id, customer_code, route_id").in("id", wbOrderIds)
         : Promise.resolve({ data: [] as any[] }),
       wbFwdIds.length
-        ? supabaseAdmin.from("forwarding_orders").select("id, customer_code").in("id", wbFwdIds)
+        ? supabaseAdmin.from("forwarding_orders").select("id, customer_code, route_id").in("id", wbFwdIds)
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const wbOMap = new Map(((wbOrdersR as any).data ?? []).map((o: any) => [o.id, o.customer_code]));
     const wbFMap = new Map(((wbFwdR as any).data ?? []).map((f: any) => [f.id, f.customer_code]));
-    const waybills = wbList.map((w: any) => {
+    const wbORoute = new Map(((wbOrdersR as any).data ?? []).map((o: any) => [o.id, o.route_id]));
+    const wbFRoute = new Map(((wbFwdR as any).data ?? []).map((f: any) => [f.id, f.route_id]));
+
+    // 计费重按【该运单所在线路的运费规则】的体积除数 + 计费方式算，不再写死 ÷6000。
+    const routeOf = (w: any) =>
+      (w.order_id && wbORoute.get(w.order_id)) || (w.forwarding_id && wbFRoute.get(w.forwarding_id)) || null;
+    const routeIds = Array.from(new Set(wbList.map(routeOf).filter(Boolean)));
+    const ruleByRoute = new Map<string, { divisor: number; weight_mode: string }>();
+    if (routeIds.length) {
+      const { data: rules } = await supabaseAdmin
+        .from("freight_rules")
+        .select("route_id, volumetric_divisor, weight_mode, created_at")
+        .in("route_id", routeIds)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      for (const r of (rules ?? []) as any[]) {
+        if (!ruleByRoute.has(r.route_id))
+          ruleByRoute.set(r.route_id, {
+            divisor: Number(r.volumetric_divisor) || 6000,
+            weight_mode: r.weight_mode || "max",
+          });
+      }
+    }
+    const chargeableOf = (w: any): number => {
+      const snap = Number((w.weight_snapshot as any)?.chargeable_weight ?? 0);
+      if (snap > 0) return snap; // 已冻结的计费重优先
+      const actual = Number(w.weight_kg ?? 0);
       const L = Number(w.length_cm ?? 0),
         W = Number(w.width_cm ?? 0),
         H = Number(w.height_cm ?? 0);
-      const vol = L && W && H ? (L * W * H) / 6000 : 0;
-      const chargeable = Math.max(Number(w.weight_kg ?? 0), vol);
+      const rule = ruleByRoute.get(routeOf(w) as string);
+      if (!rule) return actual; // 无运费规则 → 只按实重兜底
+      const volW = L && W && H ? (L * W * H) / rule.divisor : 0;
+      return rule.weight_mode === "actual"
+        ? actual
+        : rule.weight_mode === "volumetric"
+          ? volW
+          : Math.max(actual, volW);
+    };
+
+    const waybills = wbList.map((w: any) => {
+      const chargeable = chargeableOf(w);
       const total_cad =
         Number(w.freight_cad ?? 0) +
         Number(w.duty_cad ?? 0) +
@@ -2852,6 +3189,50 @@ export const getBatchDetail = createServerFn({ method: "POST" })
       };
     });
 
+    return {
+      batch: batchR.data,
+      waybills,
+      logs: logsR.data ?? [],
+      waybill_total: (allCntR as any).count ?? waybills.length,
+    };
+  });
+
+// 批次费用汇总 —— 单独一个（慢）请求，前端用独立 loading 状态。
+export const getBatchFeeSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { batchId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // 冷启动自愈：批次内还没落 waybill_items 的集运运单，先补一次，之后每次打开都走快照直读
+    try {
+      const { data: fwdWbs } = await supabaseAdmin
+        .from("waybills")
+        .select("id, forwarding_id")
+        .eq("assigned_batch_id", data.batchId)
+        .not("forwarding_id", "is", null);
+      const wbIds = (fwdWbs ?? []).map((w: any) => w.id);
+      if (wbIds.length) {
+        const { data: haveItems } = await supabaseAdmin
+          .from("waybill_items")
+          .select("waybill_id")
+          .in("waybill_id", wbIds);
+        const have = new Set((haveItems ?? []).map((r: any) => r.waybill_id));
+        const missingFwd = Array.from(
+          new Set((fwdWbs ?? []).filter((w: any) => !have.has(w.id)).map((w: any) => w.forwarding_id)),
+        ) as string[];
+        if (missingFwd.length) {
+          const { persistWaybillItemsForParent } = await import("./duty.server");
+          for (const fid of missingFwd) await persistWaybillItemsForParent(supabaseAdmin, { forwarding_id: fid });
+        }
+      }
+    } catch (e) {
+      console.error("ensureBatchWaybillItems failed:", e);
+    }
+
+    const summary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
+
     // ---- Enrich per_customer with user_id, balance_cad, is_paid ----
     const customerCodes = summary.per_customer.map((c: any) => c.customer_code).filter(Boolean);
     let per_customer = summary.per_customer;
@@ -2867,16 +3248,13 @@ export const getBatchDetail = createServerFn({ method: "POST" })
         const { data: ws } = await supabaseAdmin.from("wallets").select("user_id, balance_cad").in("user_id", userIds);
         for (const w of (ws ?? []) as any[]) walletMap.set(w.user_id, Number(w.balance_cad ?? 0));
       }
-      // Payment status aggregation per customer in this batch
-      // Simple approach: check if any waybill under this customer in this batch is unpaid
       const paidByCustomer = new Map<string, boolean>();
       {
         const allBatchWbsR = await supabaseAdmin
           .from("waybills")
           .select("id, order_id, forwarding_id, payment_status")
-          .or(`assigned_batch_id.eq.${data.batchId}`);
+          .eq("assigned_batch_id", data.batchId);
         const wbs2: any[] = allBatchWbsR.data ?? [];
-        // parent customer for each
         const oIds = Array.from(new Set(wbs2.map((w) => w.order_id).filter(Boolean)));
         const fIds = Array.from(new Set(wbs2.map((w) => w.forwarding_id).filter(Boolean)));
         const [oR, fR] = await Promise.all([
@@ -2909,9 +3287,6 @@ export const getBatchDetail = createServerFn({ method: "POST" })
     }
 
     return {
-      batch: batchR.data,
-      waybills,
-      logs: logsR.data ?? [],
       waybill_total: summary.waybill_total,
       fee_summary: { ...summary, per_customer },
       independent_clearance: summary.independent_clearance,
@@ -2943,10 +3318,12 @@ export const deductWalletForBatch = createServerFn({ method: "POST" })
       enforceBalance: false,
       awardPoints: false,
     });
-    if (!r.ok) {
-      if (r.reason === "already_paid") return { ok: false, reason: "already_paid" as const };
-      throw new Error(r.reason ?? "扣款失败");
-    }
+    // 之前这里只认字面量 "already_paid"，其它原因（no_waybills / nothing_to_bill /
+    // no_frozen_invoice 等）一律 throw new Error(r.reason ?? ...)——throw 出去的就是
+    // 内部原因代码本身（比如字面上的 "no_waybills"），到了 customer-view.tsx 的
+    // catch 块直接当错误文案显示，员工看到的是一串看不懂的英文代码，查不出真实情况。
+    // 现在原样透传全部原因，不再 throw，让前端按具体原因分别给出人话提示。
+    if (!r.ok) return { ok: false, reason: r.reason ?? "settle_failed" };
     return {
       ok: true,
       invoice_id: r.invoice_id,
@@ -2995,16 +3372,133 @@ export const deductBatchOffline = createServerFn({ method: "POST" })
       enforceBalance: false,
       awardPoints: false,
     });
-    if (!r.ok) {
-      if (r.reason === "already_paid") return { ok: false, reason: "already_paid" as const };
-      throw new Error(r.reason ?? "登记收款失败");
-    }
+    // 同 deductWalletForBatch 的问题：以前只认 already_paid，其它原因直接 throw
+    // 内部代码本身，员工看到的是查不出所以然的字符串。现在原样透传。
+    if (!r.ok) return { ok: false, reason: r.reason ?? "settle_failed" };
     return {
       ok: true,
       invoice_id: r.invoice_id,
       deducted_cad: r.paid_cad,
       discount_cad: Math.max(0, Number(data.discountCad ?? 0)),
     };
+  });
+
+// Staff-only: settle EVERY eligible customer in a batch from their wallet balance in one go.
+// "Eligible" = has an unpaid waybill in the batch AND price already confirmed. Wallet only.
+// Same rules as the single-customer deduct (per-customer isolation, frozen-invoice amount,
+// atomic settle_batch_customer_txn). A customer whose balance can't cover it is SKIPPED,
+// not failed — so the operator can top them up and re-run. Processed in small concurrent
+// chunks so a big batch doesn't run as one long serial request.
+export const deductWalletForBatchBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { batchId: string; userIds?: string[] }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const operator_name = await getOperatorName(supabaseAdmin, context.userId);
+
+    // 1) 本批全部运单 → 归到客户号（经 orders / forwarding_orders），谁还有未付运单
+    const { data: wbs } = await supabaseAdmin
+      .from("waybills")
+      .select("id, order_id, forwarding_id, payment_status")
+      .eq("assigned_batch_id", data.batchId);
+    const oIds = Array.from(new Set(((wbs ?? []) as any[]).map((w) => w.order_id).filter(Boolean)));
+    const fIds = Array.from(new Set(((wbs ?? []) as any[]).map((w) => w.forwarding_id).filter(Boolean)));
+    const [oR, fR] = await Promise.all([
+      oIds.length
+        ? supabaseAdmin.from("orders").select("id, customer_code").in("id", oIds)
+        : Promise.resolve({ data: [] as any[] }),
+      fIds.length
+        ? supabaseAdmin.from("forwarding_orders").select("id, customer_code").in("id", fIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const oM = new Map(((oR as any).data ?? []).map((o: any) => [o.id, o.customer_code]));
+    const fM = new Map(((fR as any).data ?? []).map((f: any) => [f.id, f.customer_code]));
+    const unpaidByCust = new Set<string>();
+    for (const w of (wbs ?? []) as any[]) {
+      const cc = (w.order_id && oM.get(w.order_id)) || (w.forwarding_id && fM.get(w.forwarding_id));
+      if (cc && w.payment_status !== "paid") unpaidByCust.add(cc as string);
+    }
+
+    // 2) 只保留「价格已确认」的客户（工作流：先批量确认价格，再批量扣款）
+    const { data: settRows } = await supabaseAdmin
+      .from("batch_settlements")
+      .select("customer_code, confirmed")
+      .eq("batch_id", data.batchId)
+      .eq("confirmed", true);
+    const confirmed = new Set(((settRows ?? []) as any[]).map((r) => r.customer_code));
+    let targetCodes = Array.from(unpaidByCust).filter((c) => confirmed.has(c));
+
+    // 3) 可选：前端只勾选了部分客户
+    if (data.userIds && data.userIds.length) {
+      const { data: sel } = await supabaseAdmin
+        .from("profiles")
+        .select("customer_code")
+        .in("id", data.userIds);
+      const allow = new Set(((sel ?? []) as any[]).map((p) => p.customer_code));
+      targetCodes = targetCodes.filter((c) => allow.has(c));
+    }
+
+    const { data: profs } = targetCodes.length
+      ? await supabaseAdmin.from("profiles").select("id, customer_code").in("customer_code", targetCodes)
+      : { data: [] as any[] };
+    const userByCode = new Map(((profs ?? []) as any[]).map((p) => [p.customer_code, p.id]));
+
+    const settled: any[] = [];
+    const skipped_insufficient: any[] = [];
+    const skipped_already_paid: any[] = [];
+    const failed: any[] = [];
+
+    const settleOne = async (code: string) => {
+      const uid = userByCode.get(code);
+      if (!uid) {
+        failed.push({ customer_code: code, reason: "no_profile" });
+        return;
+      }
+      try {
+        const r = await settleBatchForCustomer(supabaseAdmin, {
+          batchId: data.batchId,
+          customerUserId: uid,
+          customerCode: code,
+          method: "wallet",
+          operatorId: context.userId,
+          operatorName: operator_name,
+          enforceBalance: true, // 余额不够 → 返回 insufficient，跳过而非报错
+          awardPoints: false,
+        });
+        if (r.ok) settled.push({ customer_code: code, paid_cad: r.paid_cad });
+        else if (r.reason === "insufficient")
+          skipped_insufficient.push({ customer_code: code, need_cad: r.need_cad, balance_cad: r.balance_cad });
+        else if (r.reason === "already_paid") skipped_already_paid.push({ customer_code: code });
+        else failed.push({ customer_code: code, reason: r.reason });
+      } catch (e: any) {
+        failed.push({ customer_code: code, reason: e?.message ?? "error" });
+      }
+    };
+
+    // 小并发分片，避免整批串成一个超长请求
+    const CHUNK = 5;
+    for (let i = 0; i < targetCodes.length; i += CHUNK) {
+      await Promise.all(targetCodes.slice(i, i + CHUNK).map(settleOne));
+    }
+
+    await recordLog(supabaseAdmin, {
+      entity_type: "batch",
+      entity_id: data.batchId,
+      action: "wallet_deduct_bulk",
+      after: {
+        target: targetCodes.length,
+        settled: settled.length,
+        skipped_insufficient: skipped_insufficient.length,
+        skipped_already_paid: skipped_already_paid.length,
+        failed: failed.length,
+      },
+      operator_id: context.userId,
+      operator_name,
+      note: `批量钱包扣款：结清 ${settled.length} · 余额不足跳过 ${skipped_insufficient.length} · 已结清 ${skipped_already_paid.length} · 失败 ${failed.length}`,
+    });
+
+    return { ok: true, total: targetCodes.length, settled, skipped_insufficient, skipped_already_paid, failed };
   });
 
 // Customer self-service: pay off their own share of a batch from their wallet.
@@ -3060,35 +3554,47 @@ export const payMyBatch = createServerFn({ method: "POST" })
 // gate used by payMyBatch. Amounts come from computeBatchFeeSummary (the same
 // function the staff "扣款" screens use), filtered down to this customer's own
 // bucket only — never exposes other customers' figures.
-export const listMyBatches = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("customer_code")
-      .eq("id", context.userId)
-      .maybeSingle();
-    const customerCode = (profile as any)?.customer_code ?? null;
+// "我的批次"的完整计算逻辑，按 userId 参数化——客户自己的 listMyBatches（用 context.userId）
+// 和后台"客户视图"的 getCustomerBatches（admin-customer-view.functions.ts，用指定 userId）共用，
+// 避免两处口径分叉（后台看到的必须和客户自己看到的一致，这本来就是"客户视图"存在的意义）。
+export async function computeMyBatchesForUser(admin: any, userId: string) {
+  const supabaseAdmin = admin;
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("customer_code")
+    .eq("id", userId)
+    .maybeSingle();
+  const customerCode = (profile as any)?.customer_code ?? null;
 
-    const { data: myWbs } = await supabaseAdmin
-      .from("waybills")
-      .select("id, assigned_batch_id, order_id, forwarding_id, waybill_no, status, payment_status, intl_tracking_no")
-      .eq("user_id", context.userId)
-      .not("assigned_batch_id", "is", null);
+  const { data: myWbs } = await supabaseAdmin
+    .from("waybills")
+    .select("id, assigned_batch_id, order_id, forwarding_id, waybill_no, status, payment_status, intl_tracking_no")
+    .eq("user_id", userId)
+    .not("assigned_batch_id", "is", null);
     const wbRows = (myWbs ?? []) as any[];
     const batchIds = Array.from(new Set(wbRows.map((w) => w.assigned_batch_id).filter(Boolean)));
     if (!batchIds.length) return { batches: [] };
 
     const { data: batchRows } = await supabaseAdmin
       .from("batches")
-      .select("id, batch_no, status, shipping_method, eta_date")
+      .select("id, batch_no, status, shipping_method, eta_date, fees_dirty_at")
       .in("id", batchIds)
       .in("status", ["shipped", "arrived", "closed"]);
     const visibleBatches = (batchRows ?? []) as any[];
     if (!visibleBatches.length) return { batches: [] };
 
-    const FX = await getFxCadPerCny(supabaseAdmin);
+    // 先批量拉取本客户在这些批次的费用快照（batch_settlements）。
+    // 命中且未过期 → 直读 subtotal_cad，跳过整批 computeBatchFeeSummary（5–7s → 亚秒）。
+    const visibleBatchIds = visibleBatches.map((b) => b.id);
+    const snapByBatch = new Map<string, any>();
+    if (customerCode && visibleBatchIds.length) {
+      const { data: snapRows } = await supabaseAdmin
+        .from("batch_settlements")
+        .select("batch_id, confirmed, subtotal_cad, snapshot_at, fee_breakdown")
+        .in("batch_id", visibleBatchIds)
+        .eq("customer_code", customerCode);
+      for (const r of (snapRows ?? []) as any[]) snapByBatch.set(r.batch_id, r);
+    }
 
     const wbByBatch = new Map<string, any[]>();
     for (const w of wbRows) {
@@ -3110,11 +3616,86 @@ export const listMyBatches = createServerFn({ method: "GET" })
     const oMap = new Map<string, any>((((oR as any).data ?? []) as any[]).map((o: any) => [o.id, o]));
     const fMap = new Map<string, any>((((fR as any).data ?? []) as any[]).map((f: any) => [f.id, f]));
 
+    // 把一组 (客户号×线路) 桶的各费用项相加，得到该客户在本批的费用明细
+    const sumFeeLines = (buckets: any[]) => {
+      const acc = {
+        freight_cad: 0,
+        insurance_cad: 0,
+        customs_cad: 0,
+        clearance_cad: 0,
+        surcharge_cad: 0,
+        delivery_cad: 0,
+        inspection_cad: 0,
+        discount_cad: 0,
+      };
+      for (const p of buckets ?? []) {
+        acc.freight_cad += Number(p.fee_freight_cad ?? 0);
+        acc.insurance_cad += Number(p.fee_insurance_cad ?? 0);
+        acc.customs_cad += Number(p.fee_customs_cad ?? 0);
+        acc.clearance_cad += Number(p.fee_clearance_cad ?? 0);
+        acc.surcharge_cad += Number(p.fee_surcharge_cad ?? 0);
+        acc.delivery_cad += Number(p.fee_delivery_cad ?? 0);
+        acc.inspection_cad += Number(p.fee_inspection_cad ?? 0);
+        acc.discount_cad += Number(p.fee_discount_cad ?? 0);
+      }
+      for (const k of Object.keys(acc) as (keyof typeof acc)[]) acc[k] = +acc[k].toFixed(2);
+      return acc;
+    };
+
+    // 关税明细：把各线路桶的逐品名关税行拼起来（供「关税」下的次级展开）。
+    // 包关税线路（customs_enabled === false）整段跳过，不给客户看。
+    const collectDuty = (buckets: any[]) => {
+      const items: any[] = [];
+      const unmatched = new Set<string>();
+      for (const p of buckets ?? []) {
+        if (p.customs_enabled === false) continue;
+        for (const it of (p.duty_items ?? p.items ?? []) as any[]) {
+          items.push({
+            name: it.name ?? "",
+            hs_code: it.hs_code ?? null,
+            tax_rate: Number(it.tax_rate ?? 0),
+            mfn_rate: Number(it.mfn_rate ?? 0),
+            gst_rate: Number(it.gst_rate ?? 0),
+            anti_dumping_rate: Number(it.anti_dumping_rate ?? 0),
+            unit_price_cad: Number(it.unit_price_cad ?? 0),
+            quantity: Number(it.quantity ?? 0),
+            declared_value_cad: Number(it.declared_value_cad ?? 0),
+            duty_cad: Number(it.duty_cad ?? 0),
+          });
+        }
+        for (const n of (p.unmatched_hs_names ?? []) as string[]) if (n) unmatched.add(n);
+      }
+      return { items, unmatched: [...unmatched] };
+    };
+
+    // 只读快照，绝不在客户请求里现算整批（computeBatchFeeSummary 对大批次要 5-7 秒起）。
+    // 是否已确认直接读 snap.confirmed（不需要算钱才能知道）；未确认的批次本来就不对客户
+    // 显示金额，跳过全部费用计算。已确认但快照缺失/过期属于异常情况（正常情况下
+    // setBatchPriceConfirmed / confirmAllBatchPrices 确认的同时已经把这一客户的快照写好了）——
+    // 这种情况下返回 snapshot_pending，让前端提示"数据准备中"，后台可以手动刷新，
+    // 不把整批重算的成本转嫁给第一个点开页面的客户。
     const batches = [];
     for (const b of visibleBatches) {
-      const summary = await computeBatchFeeSummary(supabaseAdmin, b.id);
-      const mine = customerCode ? summary.per_customer.filter((p: any) => p.customer_code === customerCode) : [];
-      const subtotalCny = +mine.reduce((s: number, p: any) => s + p.subtotal_cny, 0).toFixed(2);
+      const snap = snapByBatch.get(b.id);
+      const priceConfirmed = !!snap?.confirmed;
+
+      let subtotalCny: number | null = null;
+      let feeLines: ReturnType<typeof sumFeeLines> | null = null;
+      let dutyDetail: ReturnType<typeof collectDuty> = { items: [], unmatched: [] };
+      let snapshotPending = false;
+      if (priceConfirmed) {
+        const dirtyAt = b.fees_dirty_at ? +new Date(b.fees_dirty_at) : 0;
+        const snapAt = snap?.snapshot_at ? +new Date(snap.snapshot_at) : 0;
+        const snapFresh = !!snap && snap.subtotal_cad != null && snapAt >= dirtyAt;
+        if (snapFresh) {
+          subtotalCny = +Number(snap.subtotal_cad).toFixed(2);
+          const perRoute = Array.isArray(snap.fee_breakdown?.per_route) ? snap.fee_breakdown.per_route : [];
+          feeLines = sumFeeLines(perRoute);
+          dutyDetail = collectDuty(perRoute);
+        } else {
+          snapshotPending = true;
+        }
+      }
 
       const wbs = wbByBatch.get(b.id) ?? [];
       const items = wbs.map((w: any) => {
@@ -3129,24 +3710,38 @@ export const listMyBatches = createServerFn({ method: "GET" })
           payment_status: w.payment_status,
         };
       });
+      // is_paid 已在付款时写入 batch_settlements 快照（settleBatchForCustomer / refreshBatchSettlements）；
+      // 这里仍按本客户运单实时判定，数据已在内存、零成本且不会有滞后。
       const allPaid = wbs.length > 0 && wbs.every((w: any) => w.payment_status === "paid");
-      // 只有客服确认价格后，客户端才显示金额并可付款
-      const priceConfirmed = mine.length > 0 && mine.every((p: any) => p.price_confirmed);
       batches.push({
         batch_id: b.id,
         batch_no: b.batch_no,
         status: b.status as "shipped" | "arrived" | "closed",
         shipping_method: b.shipping_method,
         eta: b.eta_date,
-        // per_customer.subtotal_cny is already CAD (fee_*_cad === fee_*_cny), do not re-convert
-        subtotal_cad: priceConfirmed ? subtotalCny : null,
+        // subtotalCny 已是 CAD（fee_*_cad === fee_*_cny），不再换算；未确认 / 快照未就绪时为 null
+        subtotal_cad: subtotalCny,
+        // 费用明细（运费/保险/关税/清关/附加费/派送费/检查费/折扣）
+        fee_lines: feeLines,
+        // 关税逐品名明细 + 未匹配 HS 品名（「关税」行下的次级展开用）
+        duty_items: dutyDetail.items,
+        duty_unmatched_hs: dutyDetail.unmatched,
         price_confirmed: priceConfirmed,
+        // 已确认但快照还没就绪（异常情况）——前端显示"数据准备中"而不是 0 或旧值
+        snapshot_pending: snapshotPending,
         is_paid: allPaid,
         items,
         intl_tracking_nos: Array.from(new Set(wbs.map((w: any) => w.intl_tracking_no).filter(Boolean))) as string[],
       });
     }
     return { batches };
+}
+
+export const listMyBatches = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return computeMyBatchesForUser(supabaseAdmin, context.userId);
   });
 
 // Save/replace the 检查费 line for a customer within a batch (kept as a surcharge row with a marker note).
@@ -3156,6 +3751,7 @@ export const saveInspectionFee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await assertBatchCustomerNotConfirmed(supabaseAdmin, data.batchId, data.customerCode);
     const marker = "[inspection]";
     // Remove existing inspection lines for this batch/customer
     await supabaseAdmin
@@ -3187,6 +3783,7 @@ export const saveDeliveryFee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await assertBatchCustomerNotConfirmed(supabaseAdmin, data.batchId, data.customerCode);
     const marker = "[delivery]";
     await supabaseAdmin
       .from("surcharges")
@@ -3215,12 +3812,13 @@ export const saveDeliveryFee = createServerFn({ method: "POST" })
 export const saveBatchCustomerFeeDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { batchId: string; customerCode: string; deliveryCad: number; inspectionCad: number; discountCad: number }) =>
-      d,
+    (d: { batchId: string; customerCode: string; deliveryCad: number; inspectionCad: number; discountCad: number }) => d,
   )
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // 已确认 → 账单冻结，拒绝改费用
+    await assertBatchCustomerNotConfirmed(supabaseAdmin, data.batchId, data.customerCode);
     const values = [
       { marker: "[delivery]", label: "末端派送费", amount: Math.max(0, Number(data.deliveryCad || 0)) },
       { marker: "[inspection]", label: "检查费", amount: Math.max(0, Number(data.inspectionCad || 0)) },
@@ -3252,25 +3850,13 @@ export const saveBatchCustomerFeeDraft = createServerFn({ method: "POST" })
     const customer = (summary.per_customer as any[]).find((x) => x.customer_code === data.customerCode) ?? null;
     const { error: batchUpdateError } = await supabaseAdmin
       .from("batches")
-      .update({
-        grand_total_cny: summary.grand_total_cny,
-        fee_breakdown: { ...summary, computed_at: new Date().toISOString() },
-      })
+      .update({ grand_total_cny: summary.grand_total_cny, fee_breakdown: { ...summary, computed_at: new Date().toISOString() } })
       .eq("id", data.batchId);
     if (batchUpdateError) throw new Error(batchUpdateError.message);
-    const { data: settlement } = await supabaseAdmin
-      .from("batch_settlements")
-      .select("confirmed")
-      .eq("batch_id", data.batchId)
-      .eq("customer_code", data.customerCode)
-      .maybeSingle();
-    if ((settlement as any)?.confirmed) {
-      await ensureUnpaidBatchInvoice(supabaseAdmin, {
-        batchId: data.batchId,
-        customerCode: data.customerCode,
-        operatorId: context.userId,
-      });
-    }
+    // 该客户此刻未确认（上面已断言），客户端本来就不读这一行快照——改派送费/检查费/折扣
+    // 走的是「先取消确认→改草稿→再确认」的流程，快照只应在【确认价格】那一刻重新生成，
+    // 这里不必也不应该动 batch_settlements，避免草稿态的中间值被误当成"已确认"金额落库。
+    // 账单同理，只在【确认 / 批量确认】时重生成；这里已断言未确认，不动账单。
     return { ok: true, customer, totals: summary.totals, grand_total_cny: summary.grand_total_cny };
   });
 
@@ -3469,14 +4055,43 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
     );
     if (error) throw new Error(error.message);
 
-    let invoice_no: string | null = null;
+    // 确认价格 → 冻结/刷新客户端「我的批次」费用快照（此刻的运费即客户看到的金额）。
+    // 只写这一个客户——确认一个人不该把批次里另外 63 个客户的快照也重写一遍。
+    let snapshot_ok = true;
+    let snapshot_error: string | null = null;
     if (data.confirmed) {
-      const r = await ensureUnpaidBatchInvoice(supabaseAdmin, {
-        batchId: data.batchId,
-        customerCode: data.customerCode,
-        operatorId: context.userId,
-      }).catch(() => ({ ok: false }) as any);
-      invoice_no = r?.invoice_no ?? null;
+      const r = await refreshBatchSettlementsForCustomer(supabaseAdmin, data.batchId, data.customerCode);
+      if (!r.ok) {
+        snapshot_ok = false;
+        snapshot_error = r.error ?? "snapshot_refresh_failed";
+        console.error("refreshBatchSettlementsForCustomer failed on setBatchPriceConfirmed:", r.error);
+      }
+    }
+
+    // 生成/刷新该客户的未付批次账单。以前这里用 .catch 把错误吞掉，导致「确认成功但没出账单」
+    // 无法察觉；现在把结果如实返回，UI 据此提示。软失败（该客户在本批已付清 / 无未付运单）
+    // 不算错误。
+    let invoice_no: string | null = null;
+    let invoice_ok = true;
+    let invoice_error: string | null = null;
+    const softInvoiceReasons = ["already_paid", "no_waybills", "nothing_to_bill"];
+    if (data.confirmed) {
+      try {
+        const r = await ensureUnpaidBatchInvoice(supabaseAdmin, {
+          batchId: data.batchId,
+          customerCode: data.customerCode,
+          operatorId: context.userId,
+        });
+        invoice_no = r?.invoice_no ?? null;
+        if (!r?.ok && !softInvoiceReasons.includes(r?.reason ?? "")) {
+          invoice_ok = false;
+          invoice_error = r?.reason ?? "invoice_generation_failed";
+        }
+      } catch (e: any) {
+        invoice_ok = false;
+        invoice_error = e?.message ?? "invoice_generation_failed";
+        console.error("ensureUnpaidBatchInvoice failed in setBatchPriceConfirmed:", e);
+      }
     } else {
       // 取消确认：撤回尚未支付的自动账单
       const { data: batchRow } = await supabaseAdmin
@@ -3504,7 +4119,7 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
         }
       }
     }
-    return { ok: true, confirmed: data.confirmed, invoice_no };
+    return { ok: true, confirmed: data.confirmed, invoice_no, invoice_ok, invoice_error, snapshot_ok, snapshot_error };
   });
 
 // Confirm every customer price in one batch. This does not collect payment.
@@ -3531,16 +4146,68 @@ export const confirmAllBatchPrices = createServerFn({ method: "POST" })
       { onConflict: "batch_id,customer_code" },
     );
     if (error) throw new Error(error.message);
-    const invoices: any[] = [];
-    for (const customerCode of customerCodes) {
-      const result = await ensureUnpaidBatchInvoice(supabaseAdmin, {
-        batchId: data.batchId,
-        customerCode,
-        operatorId: context.userId,
-      });
-      invoices.push({ customer_code: customerCode, ...result });
+    // 批量确认价格 → 冻结/刷新客户端「我的批次」费用快照（复用上面已算的 summary）
+    let snapshot_ok = true;
+    let snapshot_error: string | null = null;
+    try {
+      await refreshBatchSettlements(supabaseAdmin, data.batchId, summary);
+    } catch (e: any) {
+      snapshot_ok = false;
+      snapshot_error = e?.message ?? "snapshot_refresh_failed";
+      console.error("refreshBatchSettlements failed on confirmAllBatchPrices:", e);
     }
-    return { ok: true, confirmed_count: customerCodes.length, invoices };
+    const invoices: any[] = [];
+    const invoice_failed: { customer_code: string; error: string }[] = [];
+    const softInvoiceReasons = ["already_paid", "no_waybills", "nothing_to_bill"];
+    for (const customerCode of customerCodes) {
+      try {
+        const result = await ensureUnpaidBatchInvoice(supabaseAdmin, {
+          batchId: data.batchId,
+          customerCode,
+          operatorId: context.userId,
+        });
+        invoices.push({ customer_code: customerCode, ...result });
+        if (!result?.ok && !softInvoiceReasons.includes(result?.reason ?? "")) {
+          invoice_failed.push({ customer_code: customerCode, error: result?.reason ?? "failed" });
+        }
+      } catch (e: any) {
+        invoice_failed.push({ customer_code: customerCode, error: e?.message ?? "error" });
+        console.error(`ensureUnpaidBatchInvoice failed for ${customerCode}:`, e);
+      }
+    }
+    return {
+      ok: true,
+      confirmed_count: customerCodes.length,
+      invoice_ok_count: customerCodes.length - invoice_failed.length,
+      invoice_failed,
+      invoices,
+      snapshot_ok,
+      snapshot_error,
+    };
+  });
+
+// 后台手动刷新：客户端「我的批次」现在只读快照、不再现算，遇到写路径没覆盖到的改动
+// （量尺、箱托盘进出批次等，本轮暂未逐一接入 markBatchFeesDirty）就需要这两个按钮兜底。
+// 失败直接抛错，不吞——UI 应该原样显示报错，而不是"看起来成功了"。
+export const refreshBatchCustomerSnapshot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { batchId: string; customerCode: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const r = await refreshBatchSettlementsForCustomer(supabaseAdmin, data.batchId, data.customerCode);
+    if (!r.ok) throw new Error(r.error ?? "刷新快照失败");
+    return { ok: true };
+  });
+
+export const refreshBatchAllSnapshots = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { batchId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const r = await refreshBatchSettlements(supabaseAdmin, data.batchId);
+    return { ok: true, customers: r.customers };
   });
 
 // 计费重量 = max(实重, 体积重)，体积重按 ÷6000 估算（与 ContainerChildList 客户端展示口径一致）。
@@ -3579,6 +4246,14 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
     const perCustomer = (summary.per_customer ?? []) as any[];
     if (!perCustomer.length) throw new Error("批次内没有可处理的客户账单");
 
+    // 已确认价格的客户账单已冻结 —— 跳过，不改他们的派送费
+    const { data: confirmedRows } = await supabaseAdmin
+      .from("batch_settlements")
+      .select("customer_code")
+      .eq("batch_id", data.batchId)
+      .eq("confirmed", true);
+    const confirmedCodes = new Set((confirmedRows ?? []).map((r: any) => r.customer_code));
+
     const compareByCode = new Map<string, { weight: number; hadDelivery: boolean }>();
     let compareBatchNo: string | null = null;
     if (data.compareBatchId) {
@@ -3596,19 +4271,18 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
       }
     }
 
-    // 清除上一次批量执行写入的记录，避免重复执行时叠加
-    await supabaseAdmin
-      .from("surcharges")
-      .delete()
-      .eq("scope", "batch")
-      .eq("batch_id", data.batchId)
-      .like("note", `${BULK_DELIVERY_NOTE_PREFIX}%`);
-    await supabaseAdmin
-      .from("surcharges")
-      .delete()
-      .eq("scope", "batch")
-      .eq("batch_id", data.batchId)
-      .like("note", `${BULK_DISCOUNT_NOTE_PREFIX}%`);
+    // 清除上一次批量执行写入的记录，避免重复执行时叠加（已确认客户不动）
+    const confirmedList = [...confirmedCodes];
+    for (const prefix of [BULK_DELIVERY_NOTE_PREFIX, BULK_DISCOUNT_NOTE_PREFIX]) {
+      let del = supabaseAdmin
+        .from("surcharges")
+        .delete()
+        .eq("scope", "batch")
+        .eq("batch_id", data.batchId)
+        .like("note", `${prefix}%`);
+      if (confirmedList.length) del = del.not("customer_code", "in", `(${confirmedList.join(",")})`);
+      await del;
+    }
 
     const charged: string[] = [];
     const discounted: string[] = [];
@@ -3617,6 +4291,10 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
     for (const c of perCustomer) {
       const code = c.customer_code as string | null;
       if (!code) continue;
+      if (confirmedCodes.has(code)) {
+        skipped.push(code);
+        continue;
+      }
       const curWeight = chargeableWeightOf(c);
       const cmp = compareByCode.get(code);
       const combined = curWeight + (cmp?.weight ?? 0);
@@ -3658,23 +4336,7 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
       })
       .eq("id", data.batchId);
 
-    // 已确认价格的客户账单需要同步重算，保持金额与刚写入的派送费/折扣一致
-    const touched = [...charged, ...discounted];
-    if (touched.length) {
-      const { data: settled } = await supabaseAdmin
-        .from("batch_settlements")
-        .select("customer_code, confirmed")
-        .eq("batch_id", data.batchId)
-        .in("customer_code", touched);
-      for (const s of (settled ?? []) as any[]) {
-        if (!s.confirmed) continue;
-        await ensureUnpaidBatchInvoice(supabaseAdmin, {
-          batchId: data.batchId,
-          customerCode: s.customer_code,
-          operatorId: context.userId,
-        }).catch(() => null);
-      }
-    }
+    // 已确认客户已在上面整体跳过，账单冻结不动；未确认客户下次点确认时才会生成账单。
 
     return {
       ok: true,
@@ -3742,12 +4404,15 @@ export const assignWaybillsToBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertManager(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // 运单进出批次会改变各自计入哪个批次的费用汇总——先记下改动前所属批次，成功后统一打脏。
+    const oldBatchIds = await resolveWaybillBatchIds(supabaseAdmin, data.waybillIds);
     if (data.remove) {
       const { error } = await supabaseAdmin
         .from("waybills")
         .update({ assigned_batch_id: null, batch_no: null })
         .in("id", data.waybillIds);
       if (error) throw new Error(error.message);
+      await markBatchFeesDirtyMany(supabaseAdmin, oldBatchIds);
     } else {
       const { data: b } = await supabaseAdmin.from("batches").select("batch_no").eq("id", data.batchId).single();
       const { error } = await supabaseAdmin
@@ -3755,6 +4420,7 @@ export const assignWaybillsToBatch = createServerFn({ method: "POST" })
         .update({ assigned_batch_id: data.batchId, batch_no: b?.batch_no ?? null })
         .in("id", data.waybillIds);
       if (error) throw new Error(error.message);
+      await markBatchFeesDirtyMany(supabaseAdmin, [...oldBatchIds, data.batchId]);
     }
     return { ok: true };
   });
@@ -3768,9 +4434,10 @@ export const updateBatchStatus = createServerFn({ method: "POST" })
     const update: any = { status: data.status };
     if (data.status === "closed") update.closed_at = new Date().toISOString();
     // Persist fee summary whenever status crosses lock boundary OR unlocks.
-    // (Any transition triggers a recompute so the snapshot stays in sync.)
+    // (Any transition triggers a recompute so the drift-warning snapshot stays in sync.)
+    let summary: any = null;
     try {
-      const summary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
+      summary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
       update.grand_total_cny = summary.grand_total_cny;
       update.fee_breakdown = {
         totals: summary.totals,
@@ -3787,6 +4454,19 @@ export const updateBatchStatus = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin.from("batches").update(update).eq("id", data.batchId);
     if (error) throw new Error(error.message);
+
+    // 客户端「我的批次」费用快照：只在【锁定】时写入（正式冻结点，复用上面已算的 summary）；
+    // 【解锁】时打过期标记；已发出 / 已到货 / 已关闭 是纯物流状态，不刷新快照。
+    try {
+      if (data.status === "locked") {
+        await refreshBatchSettlements(supabaseAdmin, data.batchId, summary ?? undefined);
+      } else if (data.status === "draft") {
+        await markBatchFeesDirty(supabaseAdmin, data.batchId);
+      }
+    } catch (e) {
+      console.error("refreshBatchSettlements failed during batch status change:", e);
+    }
+
     // Sync waybills under this batch: shipped → 'shipped', arrived → 'arrived'.
     // Skip terminal/downstream statuses so we don't regress 已签收 etc.
     const targetWb = data.status === "shipped" ? "shipped" : data.status === "arrived" ? "arrived" : null;
@@ -4070,7 +4750,61 @@ export const addWaybillsToForwarding = createServerFn({ method: "POST" })
       });
     }
     await recomputeForwardingTotal(supabaseAdmin, data.forwardingId);
+    // 关税明细落库：新建的每条运单
+    try {
+      const { persistWaybillItems } = await import("./duty.server");
+      for (const ins of inserted) await persistWaybillItems(supabaseAdmin, ins.id);
+    } catch (e) {
+      console.error("persistWaybillItems failed (addWaybillsToForwarding)", e);
+    }
     return { ok: true, waybills: inserted };
+  });
+
+// ===== Phase 1 一次性回填：把存量运单的关税明细写进 waybill_items =====
+// 分页调用（每次一批），前端可循环直到 done。
+export const backfillWaybillItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { limit?: number; offset?: number; onlyMissing?: boolean } = {}) => d)
+  .handler(async ({ data, context }) => {
+    await assertManager(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { persistWaybillItems } = await import("./duty.server");
+    const limit = Math.min(Math.max(data.limit ?? 100, 1), 500);
+    const offset = Math.max(data.offset ?? 0, 0);
+
+    let q = supabaseAdmin
+      .from("waybills")
+      .select("id, waybill_no, forwarding_id, order_id, items_summary, weight_kg, length_cm, width_cm, height_cm", {
+        count: "exact",
+      })
+      .order("created_at", { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    const { data: wbs, count } = await q;
+    let done = 0;
+    let failed = 0;
+    for (const wb of (wbs ?? []) as any[]) {
+      if (data.onlyMissing) {
+        const { count: has } = await supabaseAdmin
+          .from("waybill_items")
+          .select("id", { count: "exact", head: true })
+          .eq("waybill_id", wb.id);
+        if ((has ?? 0) > 0) {
+          done++;
+          continue;
+        }
+      }
+      try {
+        await persistWaybillItems(supabaseAdmin, wb);
+        done++;
+      } catch (e) {
+        failed++;
+        console.error("backfillWaybillItems: waybill", wb.id, e);
+      }
+    }
+    const total = count ?? 0;
+    const nextOffset = offset + (wbs?.length ?? 0);
+    return { ok: true, processed: wbs?.length ?? 0, done, failed, total, next_offset: nextOffset, is_done: nextOffset >= total };
   });
 
 // ===== Label generation: returns plain data, UI renders + prints =====

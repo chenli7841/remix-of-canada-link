@@ -4,14 +4,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import {
   getBatchDetail,
+  getBatchFeeSummary,
   updateBatchStatus,
   assignWaybillsToBatch,
   listWaybills,
   updateBatch,
   batchUpdateWaybillsByBatch,
   deductWalletForBatch,
+  deductWalletForBatchBulk,
   deductBatchOffline,
   confirmAllBatchPrices,
+  refreshBatchAllSnapshots,
   type BatchStatus,
   type WaybillStatus,
 } from "@/lib/orders.functions";
@@ -41,22 +44,7 @@ import { CustomerDrawer } from "@/components/admin/CustomerDrawer";
 import { WaybillCompactList, CartonCompactList, PalletCompactList } from "@/components/admin/ContainerChildList";
 import { renderLabel } from "@/lib/label-render";
 import { LabelSizeToggle } from "@/components/admin/LabelSizeToggle";
-import {
-  Loader2,
-  X,
-  Wand2,
-  Printer,
-  ScanLine,
-  ChevronRight,
-  ChevronDown,
-  AlertCircle,
-  Wallet,
-  Upload,
-  Download,
-  Sparkles,
-  FileText,
-  CheckCheck,
-} from "lucide-react";
+import { Loader2, X, Wand2, Printer, ScanLine, ChevronRight, ChevronDown, AlertCircle, Wallet, Upload, Download, Sparkles, FileText, CheckCheck, RefreshCw } from "lucide-react";
 import { ScanAddDialog } from "@/components/admin/ScanAddDialog";
 import { DateInput } from "@/components/admin/DateInput";
 import { WorkflowStepper, BATCH_FLOW } from "@/components/admin/WorkflowStepper";
@@ -88,6 +76,7 @@ function BatchDetail() {
   const { batchId } = Route.useParams();
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getBatchDetail);
+  const fetchFees = useServerFn(getBatchFeeSummary);
   const fetchRoles = useServerFn(getMyRoles);
   const fetchWaybills = useServerFn(listWaybills);
   const setBatchStatus = useServerFn(updateBatchStatus);
@@ -101,7 +90,10 @@ function BatchDetail() {
   const fetchLabel = useServerFn(getContainerLabelData);
   const deduct = useServerFn(deductWalletForBatch);
   const deductOffline = useServerFn(deductBatchOffline);
+  const bulkDeduct = useServerFn(deductWalletForBatchBulk);
   const confirmAllPrices = useServerFn(confirmAllBatchPrices);
+  const refreshAllSnapshots = useServerFn(refreshBatchAllSnapshots);
+  const [refreshingAllSnap, setRefreshingAllSnap] = useState(false);
   const doSplitPallet = useServerFn(splitPallet);
   const fetchCustomsReadiness = useServerFn(getBatchCustomsReadiness);
   const matchHsCodes = useServerFn(autoMatchBatchHsCodes);
@@ -118,6 +110,12 @@ function BatchDetail() {
   const [plSectionOpen, setPlSectionOpen] = useState(false);
 
   const detailQ = useQuery({ queryKey: ["admin-batch", batchId], queryFn: () => fetchDetail({ data: { batchId } }) });
+  // 费用汇总是慢请求，单独发，用自己的 loading 状态——不阻塞页面框架。
+  // key 挂在 ["admin-batch", batchId] 之下，所有对 batch 的 invalidate 会一起刷新它。
+  const feeQ = useQuery({
+    queryKey: ["admin-batch", batchId, "fees"],
+    queryFn: () => fetchFees({ data: { batchId } }),
+  });
   const cartonsQ = useQuery({
     queryKey: ["batch-cartons", batchId],
     queryFn: () => fetchCartons({ data: { batch_id: batchId, pageSize: 100 } }),
@@ -167,6 +165,7 @@ function BatchDetail() {
   const [hsBusy, setHsBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const [confirmAllBusy, setConfirmAllBusy] = useState(false);
+  const [bulkDeductBusy, setBulkDeductBusy] = useState(false);
   const hblInputRef = useRef<HTMLInputElement>(null);
   const onPrintLabel = async () => {
     const d = await fetchLabel({ data: { kind: "batch", id: batchId } });
@@ -201,9 +200,7 @@ function BatchDetail() {
     setHsBusy(true);
     try {
       const result = await matchHsCodes({ data: { batchId } });
-      toast.success(
-        `本地匹配 ${result.local_matched} 条，AI匹配 ${result.ai_matched} 条，剩余 ${result.missing_count} 条`,
-      );
+      toast.success(`本地匹配 ${result.local_matched} 条，AI匹配 ${result.ai_matched} 条，剩余 ${result.missing_count} 条`);
       await qc.invalidateQueries({ queryKey: ["batch-customs-readiness", batchId] });
     } catch (e: any) {
       toast.error(e?.message ?? "HS Code 自动匹配失败");
@@ -231,14 +228,79 @@ function BatchDetail() {
     if (!window.confirm(`确认批次内 ${pendingCount} 位客户的价格？此操作只确认价格并生成未付账单，不会扣款。`)) return;
     setConfirmAllBusy(true);
     try {
-      const result = await confirmAllPrices({ data: { batchId } });
-      toast.success(`已批量确认 ${result.confirmed_count} 位客户，未执行扣款`);
+      const result: any = await confirmAllPrices({ data: { batchId } });
+      if (result.invoice_failed?.length) {
+        toast.error(
+          `已确认 ${result.confirmed_count} 位，但 ${result.invoice_failed.length} 位账单生成失败：${result.invoice_failed
+            .map((f: any) => `${f.customer_code}(${f.error})`)
+            .join("、")}`,
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(`已批量确认 ${result.confirmed_count} 位客户并生成账单，未执行扣款`);
+      }
+      if (result.snapshot_ok === false) {
+        toast.error(`客户端快照刷新失败：${result.snapshot_error ?? "未知错误"}，可点「刷新全部客户快照」重试`, {
+          duration: 10000,
+        });
+      }
       await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
       await qc.invalidateQueries({ queryKey: ["batch-invoices", batch.batch_no ?? ""] });
     } catch (e: any) {
       toast.error(e?.message ?? "批量确认失败");
     } finally {
       setConfirmAllBusy(false);
+    }
+  };
+
+  const onBulkDeduct = async () => {
+    const customers = fee_summary?.per_customer ?? [];
+    // 价格已确认 且 未付清 且 有客户账号 —— 与服务端目标口径一致，仅用于按钮可用性与确认提示
+    const eligible = customers.filter((c: any) => c.price_confirmed && !c.is_paid && c.user_id);
+    if (!eligible.length) return toast.info("没有可批量扣款的客户（需价格已确认且未付清）");
+    if (
+      !window.confirm(
+        `从钱包余额批量扣款 ${eligible.length} 位客户？只从钱包余额扣，余额不足的客户会自动跳过、不做任何操作。`,
+      )
+    )
+      return;
+    setBulkDeductBusy(true);
+    try {
+      const r: any = await bulkDeduct({ data: { batchId } });
+      const parts = [`结清 ${r.settled.length}`];
+      if (r.skipped_insufficient.length) parts.push(`余额不足跳过 ${r.skipped_insufficient.length}`);
+      if (r.skipped_already_paid.length) parts.push(`已结清 ${r.skipped_already_paid.length}`);
+      if (r.failed.length) parts.push(`失败 ${r.failed.length}`);
+      toast.success(`批量扣款：${parts.join(" · ")}`);
+      if (r.skipped_insufficient.length) {
+        toast.info(
+          `余额不足跳过：${r.skipped_insufficient
+            .map((s: any) => `${s.customer_code}(缺 CA$${(Number(s.need_cad ?? 0) - Number(s.balance_cad ?? 0)).toFixed(2)})`)
+            .join("、")}`,
+        );
+      }
+      await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
+      await qc.invalidateQueries({ queryKey: ["batch-invoices", batch.batch_no ?? ""] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "批量扣款失败");
+    } finally {
+      setBulkDeductBusy(false);
+    }
+  };
+
+  // 客户端「我的批次」只读快照，不再现算。量尺/箱托盘进出批次等改动目前还没有全部接入自动
+  // 刷新——这个按钮是兜底：整批重算并回写每个客户的快照行。
+  const onRefreshAllSnapshots = async () => {
+    if (!window.confirm("重新计算并刷新本批次所有客户的快照？运单较多时可能需要几秒到十几秒。")) return;
+    setRefreshingAllSnap(true);
+    try {
+      const r: any = await refreshAllSnapshots({ data: { batchId } });
+      toast.success(`已刷新 ${r.customers} 位客户的快照`);
+      await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "刷新失败");
+    } finally {
+      setRefreshingAllSnap(false);
     }
   };
 
@@ -269,13 +331,11 @@ function BatchDetail() {
       </div>
     );
   if (detailQ.isError) return <div className="p-6 text-rose-400">{(detailQ.error as Error).message}</div>;
-  const { batch, waybills, logs, waybill_total, independent_clearance, fee_summary } = detailQ.data!;
+  const { batch, waybills, logs, waybill_total } = detailQ.data!;
+  const fee_summary = feeQ.data?.fee_summary ?? null;
+  const independent_clearance = feeQ.data?.independent_clearance ?? null;
   if (!metaInit) {
-    setMeta({
-      display_name: batch.display_name ?? "",
-      eta_date: batch.eta_date ?? "",
-      vessel_no: batch.vessel_no ?? "",
-    });
+    setMeta({ display_name: batch.display_name ?? "", eta_date: batch.eta_date ?? "", vessel_no: batch.vessel_no ?? "" });
     setMetaInit(true);
   }
   const isLocked = batch.status !== "draft";
@@ -309,14 +369,7 @@ function BatchDetail() {
       return;
     }
     await updBatch({
-      data: {
-        batchId,
-        patch: {
-          display_name: meta.display_name.trim() || null,
-          eta_date: meta.eta_date || null,
-          vessel_no: meta.vessel_no || null,
-        },
-      },
+      data: { batchId, patch: { display_name: meta.display_name.trim() || null, eta_date: meta.eta_date || null, vessel_no: meta.vessel_no || null } },
     });
     await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
   };
@@ -369,11 +422,7 @@ function BatchDetail() {
           <button
             onClick={onDownloadInvoice}
             disabled={invoiceBusy || Number(customsQ.data?.missing_count ?? 0) > 0}
-            title={
-              customsQ.data?.missing_count
-                ? `仍有 ${customsQ.data.missing_count} 个商品缺少有效 HS Code`
-                : "下载 Invoice / Packing List"
-            }
+            title={customsQ.data?.missing_count ? `仍有 ${customsQ.data.missing_count} 个商品缺少有效 HS Code` : "下载 Invoice / Packing List"}
             className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {invoiceBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
@@ -487,9 +536,7 @@ function BatchDetail() {
                   <div className="mt-1 text-[10px] leading-relaxed text-slate-500">
                     自动提取收发货人、发运日期、船名/航次、集装箱、总体积、总重量和提单品名；解析后仍可人工修改。
                   </div>
-                  {batch.hbl_file_name && (
-                    <div className="mt-1 text-[10px] text-emerald-300">已上传：{batch.hbl_file_name}</div>
-                  )}
+                  {batch.hbl_file_name && <div className="mt-1 text-[10px] text-emerald-300">已上传：{batch.hbl_file_name}</div>}
                 </div>
                 {canEdit && (
                   <button
@@ -511,15 +558,9 @@ function BatchDetail() {
               </div>
               {(batch.container_no || batch.hbl_total_weight_kg || batch.hbl_total_volume_m3) && (
                 <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-400">
-                  <span>
-                    集装箱：<b className="text-slate-200">{batch.container_no ?? "—"}</b>
-                  </span>
-                  <span>
-                    提单重量：<b className="text-slate-200">{batch.hbl_total_weight_kg ?? "—"} kg</b>
-                  </span>
-                  <span>
-                    提单体积：<b className="text-slate-200">{batch.hbl_total_volume_m3 ?? "—"} m³</b>
-                  </span>
+                  <span>集装箱：<b className="text-slate-200">{batch.container_no ?? "—"}</b></span>
+                  <span>提单重量：<b className="text-slate-200">{batch.hbl_total_weight_kg ?? "—"} kg</b></span>
+                  <span>提单体积：<b className="text-slate-200">{batch.hbl_total_volume_m3 ?? "—"} m³</b></span>
                 </div>
               )}
             </div>
@@ -633,6 +674,20 @@ function BatchDetail() {
       )}
 
       {/* ===== 批次费用汇总 ===== */}
+      {!fee_summary && (
+        <Card title="批次费用汇总">
+          <div className="flex items-center gap-2 py-6 text-xs text-slate-500">
+            {feeQ.isError ? (
+              <span className="text-rose-400">费用汇总加载失败：{(feeQ.error as Error)?.message}</span>
+            ) : (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                正在计算费用汇总（大批次首次可能较慢，请稍候）…
+              </>
+            )}
+          </div>
+        </Card>
+      )}
       {fee_summary && (
         <Card
           title="批次费用汇总"
@@ -642,14 +697,13 @@ function BatchDetail() {
                 已锁定 · 已写入 CA${storedTotal.toFixed(2)}
                 {totalDrift && (
                   <>
-                    <span className="ml-2 text-amber-300">⚠ 与实时计算不一致：CA${liveTotal.toFixed(2)}</span>
+                    <span className="ml-2 text-amber-300">
+                      ⚠ 与实时计算不一致：CA${liveTotal.toFixed(2)}
+                    </span>
                     {canEdit && (
                       <button
                         onClick={async () => {
-                          if (
-                            !confirm(`将已写入金额从 CA$${storedTotal.toFixed(2)} 重算为 CA$${liveTotal.toFixed(2)}？`)
-                          )
-                            return;
+                          if (!confirm(`将已写入金额从 CA$${storedTotal.toFixed(2)} 重算为 CA$${liveTotal.toFixed(2)}？`)) return;
                           await setBatchStatus({ data: { batchId, status: batch.status } });
                           await qc.invalidateQueries({ queryKey: ["admin-batch", batchId] });
                           await qc.invalidateQueries({ queryKey: ["admin-batches"] });
@@ -709,12 +763,39 @@ function BatchDetail() {
                     disabled={confirmAllBusy || fee_summary.per_customer.every((c: any) => c.price_confirmed)}
                     className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {confirmAllBusy ? (
+                    {confirmAllBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+                    {fee_summary.per_customer.every((c: any) => c.price_confirmed) ? "已全部确认" : "批量确认价格"}
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={onBulkDeduct}
+                    disabled={
+                      bulkDeductBusy ||
+                      !fee_summary.per_customer.some((c: any) => c.price_confirmed && !c.is_paid && c.user_id)
+                    }
+                    title="从各客户钱包余额批量扣款；余额不足自动跳过"
+                    className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {bulkDeductBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                    批量扣款（钱包）
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={onRefreshAllSnapshots}
+                    disabled={refreshingAllSnap}
+                    title="客户端「我的批次」只读快照；量尺/箱托盘改动等还没接入自动刷新时用这个兜底"
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {refreshingAllSnap ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <CheckCheck className="h-3.5 w-3.5" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     )}
-                    {fee_summary.per_customer.every((c: any) => c.price_confirmed) ? "已全部确认" : "批量确认价格"}
+                    刷新全部客户快照
                   </button>
                 )}
               </div>
@@ -739,118 +820,116 @@ function BatchDetail() {
                   ? fee_summary.per_customer
                   : fee_summary.per_customer.filter((c: any) =>
                       [c.customer_code, c.customer_name, c.route_code].some((v) =>
-                        String(v ?? "")
-                          .toLowerCase()
-                          .includes(q),
+                        String(v ?? "").toLowerCase().includes(q),
                       ),
                     );
                 return (
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-[10px] uppercase text-slate-500">
-                      <tr>
-                        <th className="py-2">客户号</th>
-                        <th>线路</th>
-                        <th className="text-right">运单数</th>
-                        <th className="text-right">箱号</th>
-                        <th className="text-right">托盘</th>
-                        <th className="text-right">小计 CA$</th>
-                        <th className="text-center">付款</th>
-                        <th className="text-right">余额 CA$</th>
-                        <th className="text-center">操作</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {filteredCustomers.length === 0 && (
-                        <tr>
-                          <td colSpan={10} className="py-6 text-center text-xs text-slate-500">
-                            没有匹配的客户号
-                          </td>
-                        </tr>
+            <table className="w-full text-sm">
+              <thead className="text-left text-[10px] uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">客户号</th>
+                  <th>线路</th>
+                  <th className="text-right">运单数</th>
+                  <th className="text-right">箱号</th>
+                  <th className="text-right">托盘</th>
+                  <th className="text-right">小计 CA$</th>
+                  <th className="text-center">付款</th>
+                  <th className="text-right">余额 CA$</th>
+                  <th className="text-center">操作</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredCustomers.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="py-6 text-center text-xs text-slate-500">
+                      没有匹配的客户号
+                    </td>
+                  </tr>
+                )}
+                {filteredCustomers.map((c: any) => (
+                  <tr
+                    key={c.group_key ?? c.customer_code}
+                    className="cursor-pointer hover:bg-white/[0.03]"
+                    onClick={() => setDrawerCustomer(c.group_key ?? c.customer_code)}
+                  >
+                    <td className="py-2 font-mono text-xs text-brand">
+                      {c.customer_code}
+                      {c.customer_name && <span className="ml-1 text-slate-500">· {c.customer_name}</span>}
+                    </td>
+                    <td className="text-xs">
+                      {c.route_code ? (
+                        <span className="inline-flex rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[10px] font-mono text-brand">
+                          {c.route_code}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500">—</span>
                       )}
-                      {filteredCustomers.map((c: any) => (
-                        <tr
-                          key={c.group_key ?? c.customer_code}
-                          className="cursor-pointer hover:bg-white/[0.03]"
-                          onClick={() => setDrawerCustomer(c.group_key ?? c.customer_code)}
+                    </td>
+                    <td className="text-right text-xs font-mono">{c.waybill_count}</td>
+                    <td className="text-right text-xs font-mono">{c.carton_count}</td>
+                    <td className="text-right text-xs font-mono">{c.pallet_count}</td>
+                    <td className="text-right text-xs font-mono font-semibold text-emerald-300">
+                      {c.subtotal_cny.toFixed(2)}
+                    </td>
+                    <td className="text-center text-xs" onClick={(e) => e.stopPropagation()}>
+                      {c.is_paid ? (
+                        <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
+                          已付款
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">
+                          未付款
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right text-xs font-mono text-slate-200">
+                      {c.user_id ? Number(c.balance_cad ?? 0).toFixed(2) : "—"}
+                    </td>
+                    <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                      {canEdit && c.user_id ? (
+                        <button
+                          onClick={() => {
+                            setDeductState({
+                              user_id: c.user_id,
+                              customer_code: c.customer_code,
+                              balance: Number(c.balance_cad ?? 0),
+                              subtotal: Number(c.gross_subtotal_cny ?? c.subtotal_cny ?? 0),
+                            });
+                            setDeductDiscount(String(Number(c.fee_discount_cad ?? 0)));
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10"
                         >
-                          <td className="py-2 font-mono text-xs text-brand">
-                            {c.customer_code}
-                            {c.customer_name && <span className="ml-1 text-slate-500">· {c.customer_name}</span>}
-                          </td>
-                          <td className="text-xs">
-                            {c.route_code ? (
-                              <span className="inline-flex rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[10px] font-mono text-brand">
-                                {c.route_code}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500">—</span>
-                            )}
-                          </td>
-                          <td className="text-right text-xs font-mono">{c.waybill_count}</td>
-                          <td className="text-right text-xs font-mono">{c.carton_count}</td>
-                          <td className="text-right text-xs font-mono">{c.pallet_count}</td>
-                          <td className="text-right text-xs font-mono font-semibold text-emerald-300">
-                            {c.subtotal_cny.toFixed(2)}
-                          </td>
-                          <td className="text-center text-xs" onClick={(e) => e.stopPropagation()}>
-                            {c.is_paid ? (
-                              <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
-                                已付款
-                              </span>
-                            ) : (
-                              <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">
-                                未付款
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-right text-xs font-mono text-slate-200">
-                            {c.user_id ? Number(c.balance_cad ?? 0).toFixed(2) : "—"}
-                          </td>
-                          <td className="text-center" onClick={(e) => e.stopPropagation()}>
-                            {canEdit && c.user_id ? (
-                              <button
-                                onClick={() => {
-                                  setDeductState({
-                                    user_id: c.user_id,
-                                    customer_code: c.customer_code,
-                                    balance: Number(c.balance_cad ?? 0),
-                                    subtotal: Number(c.gross_subtotal_cny ?? c.subtotal_cny ?? 0),
-                                  });
-                                  setDeductDiscount(String(Number(c.fee_discount_cad ?? 0)));
-                                }}
-                                className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 px-2 py-0.5 text-[10px] text-rose-300 hover:bg-rose-500/10"
-                              >
-                                <Wallet className="h-3 w-3" />
-                                扣款
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-600">—</span>
-                            )}
-                          </td>
-                          <td className="text-right pr-2">
-                            <ChevronRight className="inline h-3.5 w-3.5 text-slate-500" />
-                          </td>
-                        </tr>
-                      ))}
-
-                      {fee_summary.unassigned && (
-                        <tr className="bg-amber-500/5 text-slate-500">
-                          <td className="py-2 text-xs" colSpan={2}>
-                            <AlertCircle className="inline h-3 w-3 mr-1 text-amber-400" />
-                            未指定客户（管理员排查）
-                          </td>
-                          <td className="text-right text-xs font-mono">{fee_summary.unassigned.waybill_count}</td>
-                          <td className="text-right text-xs font-mono">—</td>
-                          <td className="text-right text-xs font-mono">—</td>
-                          <td className="text-right text-xs font-mono text-slate-400">
-                            {fee_summary.unassigned.subtotal_cny.toFixed(2)}
-                          </td>
-                          <td colSpan={4}></td>
-                        </tr>
+                          <Wallet className="h-3 w-3" />
+                          扣款
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-600">—</span>
                       )}
-                    </tbody>
-                  </table>
+                    </td>
+                    <td className="text-right pr-2">
+                      <ChevronRight className="inline h-3.5 w-3.5 text-slate-500" />
+                    </td>
+                  </tr>
+                ))}
+
+                {fee_summary.unassigned && (
+                  <tr className="bg-amber-500/5 text-slate-500">
+                    <td className="py-2 text-xs" colSpan={2}>
+                      <AlertCircle className="inline h-3 w-3 mr-1 text-amber-400" />
+                      未指定客户（管理员排查）
+                    </td>
+                    <td className="text-right text-xs font-mono">{fee_summary.unassigned.waybill_count}</td>
+                    <td className="text-right text-xs font-mono">—</td>
+                    <td className="text-right text-xs font-mono">—</td>
+                    <td className="text-right text-xs font-mono text-slate-400">
+                      {fee_summary.unassigned.subtotal_cny.toFixed(2)}
+                    </td>
+                    <td colSpan={4}></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
                 );
               })()}
             </>
@@ -864,6 +943,7 @@ function BatchDetail() {
         id={batchId}
         canEdit={canEdit}
         showCustomerField
+        collapsible
         title="批次附加费（按客户号账单层级 · 每条必须指定归属客户号）"
         onChanged={() => qc.invalidateQueries({ queryKey: ["admin-batch", batchId] })}
       />
@@ -874,11 +954,7 @@ function BatchDetail() {
         const filteredWaybills = !wbQ
           ? waybills
           : waybills.filter((w: any) =>
-              [w.waybill_no, w.customer_code, w.status].some((v) =>
-                String(v ?? "")
-                  .toLowerCase()
-                  .includes(wbQ),
-              ),
+              [w.waybill_no, w.customer_code, w.status].some((v) => String(v ?? "").toLowerCase().includes(wbQ)),
             );
 
         const ctLoaded = !!cartonsQ.data;
@@ -892,11 +968,7 @@ function BatchDetail() {
         const filteredCartons = !ctQ
           ? ctItems
           : ctItems.filter((c: any) =>
-              [c.carton_no, c.display_name, c.customer_code].some((v) =>
-                String(v ?? "")
-                  .toLowerCase()
-                  .includes(ctQ),
-              ),
+              [c.carton_no, c.display_name, c.customer_code].some((v) => String(v ?? "").toLowerCase().includes(ctQ)),
             );
 
         const plLoaded = !!palletsQ.data;
@@ -910,11 +982,7 @@ function BatchDetail() {
         const filteredPallets = !plQ
           ? plItems
           : plItems.filter((p: any) =>
-              [p.pallet_no, p.display_name, p.customer_code].some((v) =>
-                String(v ?? "")
-                  .toLowerCase()
-                  .includes(plQ),
-              ),
+              [p.pallet_no, p.display_name, p.customer_code].some((v) => String(v ?? "").toLowerCase().includes(plQ)),
             );
 
         // 运单 / 箱号 / 托盘：各自独立折叠，默认收起，不再用 tab 切换（同一时间只能看一个）
@@ -1065,8 +1133,7 @@ function BatchDetail() {
                       onSplit={
                         canEdit
                           ? async (p) => {
-                              if (!confirm(`拆分托盘 ${p.pallet_no}？下属箱号/运单将回到批次层级，托盘会被删除。`))
-                                return;
+                              if (!confirm(`拆分托盘 ${p.pallet_no}？下属箱号/运单将回到批次层级，托盘会被删除。`)) return;
                               const r = await doSplitPallet({ data: { id: p.id } });
                               alert(`已拆分：释放 ${r.released_cartons} 箱 / ${r.released_waybills} 单`);
                               qc.invalidateQueries({ queryKey: ["batch-pallets", batchId] });
@@ -1227,6 +1294,7 @@ function BatchDetail() {
       <BatchInvoicesPanel batchNo={batch.batch_no ?? ""} />
 
       {showAddCarton && (
+
         <PickerDialog
           title="加入箱号"
           onClose={() => setShowAddCarton(false)}
@@ -1399,6 +1467,14 @@ function BatchDetail() {
                                 });
                           if (r?.ok === false && r.reason === "already_paid") {
                             alert("该客户在本批次已结清");
+                          } else if (r?.ok) {
+                            // 服务端按冻结账单金额扣款，可能与页面显示略有出入 —— 以实扣为准
+                            const actual = Number(r.deducted_cad ?? 0);
+                            if (actual > 0 && Math.abs(actual - (sub - disc)) > 0.01) {
+                              alert(
+                                `已按冻结账单结算 CA$${actual.toFixed(2)}（页面预估 CA$${(sub - disc).toFixed(2)}，价格可能已更新）`,
+                              );
+                            }
                           }
                           setDeductState(null);
                           setDeductDiscount("0");

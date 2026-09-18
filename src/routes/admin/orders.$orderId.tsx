@@ -2,25 +2,11 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import {
-  getOrderDetail,
-  cancelOrder,
-  getLabelData,
-  adminShipShopOrder,
-  updateOrderDomesticTrackingNo,
-} from "@/lib/orders.functions";
+import { getOrderDetail, cancelOrder, getLabelData, adminShipShopOrder, updateOrderDomesticTrackingNo } from "@/lib/orders.functions";
 import { getMyRoles } from "@/lib/admin.functions";
 import {
-  ORDER_STATUS_LABEL,
-  ORDER_STATUS_COLOR,
-  WAYBILL_STATUS_LABEL,
-  WAYBILL_STATUS_COLOR,
-  METHOD_LABEL,
-  StatusBadge,
-  Card,
-  fmtDate,
-  fmtCNY,
-  BackLink,
+  ORDER_STATUS_LABEL, ORDER_STATUS_COLOR, WAYBILL_STATUS_LABEL, WAYBILL_STATUS_COLOR,
+  METHOD_LABEL, StatusBadge, Card, fmtDate, fmtCNY, BackLink,
 } from "@/lib/admin-shared";
 import { Loader2, XCircle, Printer, Truck } from "lucide-react";
 import { renderLabel } from "@/lib/label-render";
@@ -52,44 +38,28 @@ function OrderDetail() {
 
   const detailQ = useQuery({ queryKey: ["admin-order", orderId], queryFn: () => fetchDetail({ data: { orderId } }) });
   const meQ = useQuery({ queryKey: ["my-roles"], queryFn: () => fetchRoles(), staleTime: 60_000 });
-  const canEdit = (meQ.data?.roles ?? []).some((r) => r === "owner" || r === "manager");
+  const canEdit = (meQ.data?.roles ?? []).some(r => r === "owner" || r === "manager");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const saveDtnFn = useServerFn(updateOrderDomesticTrackingNo);
   const serverDtn = detailQ.data?.order?.domestic_tracking_no ?? "";
   const [dtn, setDtn] = useState("");
-  useEffect(() => {
-    setDtn(serverDtn);
-  }, [serverDtn]);
+  useEffect(() => { setDtn(serverDtn); }, [serverDtn]);
 
-  if (detailQ.isLoading)
-    return (
-      <div className="grid place-items-center p-20">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-      </div>
-    );
+  if (detailQ.isLoading) return <div className="grid place-items-center p-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500"/></div>;
   if (detailQ.isError) return <div className="p-6 text-rose-400">{(detailQ.error as Error).message}</div>;
   const { order, items, waybills, logs, user } = detailQ.data!;
   const addr: any = order.address_snapshot ?? {};
 
   const totalWeight = waybills.reduce((s: number, w: any) => s + (Number(w.weight_kg) || 0), 0);
-  const totalVolume = waybills.reduce(
-    (s: number, w: any) => s + (Number(w.length_cm) || 0) * (Number(w.width_cm) || 0) * (Number(w.height_cm) || 0),
-    0,
-  );
+  const totalVolume = waybills.reduce((s: number, w: any) => s + ((Number(w.length_cm) || 0) * (Number(w.width_cm) || 0) * (Number(w.height_cm) || 0)), 0);
 
   const onCancel = async () => {
     if (!confirm("确认取消该订单？")) return;
     setBusy(true);
-    try {
-      await cancelFn({ data: { orderId } });
-      await qc.invalidateQueries({ queryKey: ["admin-order", orderId] });
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
+    try { await cancelFn({ data: { orderId } }); await qc.invalidateQueries({ queryKey: ["admin-order", orderId] }); }
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   const onPrint = async () => {
     const data = await fetchLabel({ data: { entityType: "order", entityId: orderId } });
@@ -103,49 +73,34 @@ function OrderDetail() {
         <div>
           <h1 className="font-display text-2xl font-bold">订单 {order.order_no}</h1>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-            <StatusBadge map={ORDER_STATUS_LABEL} color={ORDER_STATUS_COLOR} value={order.status} />
+            <StatusBadge map={ORDER_STATUS_LABEL} color={ORDER_STATUS_COLOR} value={order.status}/>
             <span>{order.payment_status === "paid" ? "已支付" : "未支付"}</span>
             <span>· 创建于 {fmtDate(order.created_at)}</span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LabelSizeToggle />
-          <button
-            onClick={onPrint}
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            生成面单
+          <button onClick={onPrint}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10">
+            <Printer className="h-3.5 w-3.5"/>生成面单
           </button>
           {canEdit && order.source === "shop" && order.status === "procurement" && (
             <button
               onClick={async () => {
                 if (!confirm("确认标记为已发货等待入库？")) return;
                 setBusy(true);
-                try {
-                  await shipShopFn({ data: { orderId } });
-                  await qc.invalidateQueries({ queryKey: ["admin-order", orderId] });
-                } catch (e: any) {
-                  setErr(e.message);
-                } finally {
-                  setBusy(false);
-                }
+                try { await shipShopFn({ data: { orderId } }); await qc.invalidateQueries({ queryKey: ["admin-order", orderId] }); }
+                catch (e: any) { setErr(e.message); } finally { setBusy(false); }
               }}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
-            >
-              <Truck className="h-3.5 w-3.5" />
-              已发货等待入库
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50">
+              <Truck className="h-3.5 w-3.5"/>已发货等待入库
             </button>
           )}
           {canEdit && order.status !== "cancelled" && (
-            <button
-              onClick={onCancel}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              取消订单
+            <button onClick={onCancel} disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50">
+              <XCircle className="h-3.5 w-3.5"/>取消订单
             </button>
           )}
         </div>
@@ -165,40 +120,24 @@ function OrderDetail() {
               <div className="text-xs text-slate-400">{user.email}</div>
               <div className="text-xs text-slate-400">{user.phone ?? "—"}</div>
               <div className="text-xs font-mono text-slate-500">客户号 {user.customer_code ?? "—"}</div>
-              <Link
-                to="/admin/users/$userId"
-                params={{ userId: user.id }}
-                className="text-xs text-brand hover:underline"
-              >
-                查看用户 →
-              </Link>
+              <Link to="/admin/users/$userId" params={{ userId: user.id }} className="text-xs text-brand hover:underline">查看用户 →</Link>
             </div>
-          ) : (
-            <div className="text-sm text-slate-500">—</div>
-          )}
+          ) : <div className="text-sm text-slate-500">—</div>}
         </Card>
         <Card title="收件地址">
           <div className="space-y-1 text-xs text-slate-300">
-            <div className="text-slate-100">
-              {addr.recipient ?? addr.name ?? "—"} · {addr.phone ?? ""}
-            </div>
+            <div className="text-slate-100">{addr.recipient ?? addr.name ?? "—"} · {addr.phone ?? ""}</div>
             <div>{addr.line1 ?? addr.address1 ?? "—"}</div>
             {addr.line2 && <div>{addr.line2}</div>}
-            <div>
-              {[addr.city, addr.province ?? addr.state, addr.postal_code ?? addr.zip].filter(Boolean).join(", ")}
-            </div>
+            <div>{[addr.city, addr.province ?? addr.state, addr.postal_code ?? addr.zip].filter(Boolean).join(", ")}</div>
             <div>{addr.country ?? ""}</div>
           </div>
         </Card>
         <Card title="物流信息">
           <div className="space-y-1 text-xs text-slate-300">
             <div>方式：{METHOD_LABEL[order.shipping_method] ?? order.shipping_method}</div>
-            <div>
-              线路：<span className="font-mono">{order.route_code ?? "—"}</span>
-            </div>
-            <div>
-              国际单号：<span className="font-mono">{order.tracking_no ?? "—"}</span>
-            </div>
+            <div>线路：<span className="font-mono">{order.route_code ?? "—"}</span></div>
+            <div>国际单号：<span className="font-mono">{order.tracking_no ?? "—"}</span></div>
             <div className="flex items-center gap-2">
               <span>国内单号：</span>
               {canEdit ? (
@@ -212,37 +151,21 @@ function OrderDetail() {
                   <button
                     disabled={busy || dtn.trim() === (order.domestic_tracking_no ?? "")}
                     onClick={async () => {
-                      setBusy(true);
-                      setErr(null);
+                      setBusy(true); setErr(null);
                       try {
                         await saveDtnFn({ data: { orderId, domestic_tracking_no: dtn } });
                         await qc.invalidateQueries({ queryKey: ["admin-order", orderId] });
-                      } catch (e: any) {
-                        setErr(e.message);
-                      } finally {
-                        setBusy(false);
-                      }
+                      } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
                     }}
-                    className="rounded-md border border-brand/30 bg-brand/10 px-2 py-1 text-[11px] font-semibold text-brand disabled:opacity-40"
-                  >
+                    className="rounded-md border border-brand/30 bg-brand/10 px-2 py-1 text-[11px] font-semibold text-brand disabled:opacity-40">
                     保存
                   </button>
                 </>
-              ) : (
-                <span className="font-mono">{order.domestic_tracking_no ?? "—"}</span>
-              )}
+              ) : <span className="font-mono">{order.domestic_tracking_no ?? "—"}</span>}
             </div>
-            <div>
-              批次：<span className="font-mono">{order.batch_no ?? "—"}</span>
-            </div>
-            <div>
-              所属箱号：
-              {order.carton_id ? <span className="font-mono">{String(order.carton_id).slice(0, 8)}…</span> : "—"}
-            </div>
-            <div>
-              所属托盘：
-              {order.pallet_id ? <span className="font-mono">{String(order.pallet_id).slice(0, 8)}…</span> : "—"}
-            </div>
+            <div>批次：<span className="font-mono">{order.batch_no ?? "—"}</span></div>
+            <div>所属箱号：{order.carton_id ? <span className="font-mono">{String(order.carton_id).slice(0,8)}…</span> : "—"}</div>
+            <div>所属托盘：{order.pallet_id ? <span className="font-mono">{String(order.pallet_id).slice(0,8)}…</span> : "—"}</div>
           </div>
         </Card>
       </div>
@@ -250,22 +173,10 @@ function OrderDetail() {
       <Card title="商品 / 物品">
         <table className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
-            <tr>
-              <th className="py-2">名称</th>
-              <th>SKU</th>
-              <th>数量</th>
-              <th>单价</th>
-              <th className="text-right">小计</th>
-            </tr>
+            <tr><th className="py-2">名称</th><th>SKU</th><th>数量</th><th>单价</th><th className="text-right">小计</th></tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-slate-500">
-                  —
-                </td>
-              </tr>
-            )}
+            {items.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-slate-500">—</td></tr>}
             {items.map((it: any) => {
               const qty = it.qty ?? it.quantity ?? 1;
               return (
@@ -280,36 +191,11 @@ function OrderDetail() {
             })}
           </tbody>
           <tfoot className="border-t border-white/10 text-xs">
-            <tr>
-              <td colSpan={4} className="py-2 text-right text-slate-400">
-                商品小计
-              </td>
-              <td className="text-right">{fmtCNY(order.subtotal_cny)}</td>
-            </tr>
-            <tr>
-              <td colSpan={4} className="py-1 text-right text-slate-400">
-                运费
-              </td>
-              <td className="text-right">{fmtCNY(order.shipping_cny)}</td>
-            </tr>
-            <tr>
-              <td colSpan={4} className="py-1 text-right text-slate-400">
-                关税
-              </td>
-              <td className="text-right">{fmtCNY(order.customs_cny)}</td>
-            </tr>
-            <tr>
-              <td colSpan={4} className="py-1 text-right text-slate-400">
-                保险
-              </td>
-              <td className="text-right">{fmtCNY(order.insurance_cny)}</td>
-            </tr>
-            <tr>
-              <td colSpan={4} className="py-2 text-right font-semibold text-slate-200">
-                合计
-              </td>
-              <td className="text-right font-semibold text-emerald-300">{fmtCNY(order.total_cny)}</td>
-            </tr>
+            <tr><td colSpan={4} className="py-2 text-right text-slate-400">商品小计</td><td className="text-right">{fmtCNY(order.subtotal_cny)}</td></tr>
+            <tr><td colSpan={4} className="py-1 text-right text-slate-400">运费</td><td className="text-right">{fmtCNY(order.shipping_cny)}</td></tr>
+            <tr><td colSpan={4} className="py-1 text-right text-slate-400">关税</td><td className="text-right">{fmtCNY(order.customs_cny)}</td></tr>
+            <tr><td colSpan={4} className="py-1 text-right text-slate-400">保险</td><td className="text-right">{fmtCNY(order.insurance_cny)}</td></tr>
+            <tr><td colSpan={4} className="py-2 text-right font-semibold text-slate-200">合计</td><td className="text-right font-semibold text-emerald-300">{fmtCNY(order.total_cny)}</td></tr>
           </tfoot>
         </table>
       </Card>
@@ -326,45 +212,19 @@ function OrderDetail() {
       <Card title={`运单 (${waybills.length})`}>
         <table className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
-            <tr>
-              <th className="py-2">运单号</th>
-              <th>方式</th>
-              <th>状态</th>
-              <th>重量</th>
-              <th>尺寸 (L×W×H)</th>
-              <th>批次</th>
-              <th></th>
-            </tr>
+            <tr><th className="py-2">运单号</th><th>方式</th><th>状态</th><th>重量</th><th>尺寸 (L×W×H)</th><th>批次</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {waybills.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-slate-500">
-                  —
-                </td>
-              </tr>
-            )}
+            {waybills.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-slate-500">—</td></tr>}
             {waybills.map((w: any) => (
               <tr key={w.id}>
                 <td className="py-2 font-mono text-xs">{w.waybill_no}</td>
                 <td className="text-xs">{METHOD_LABEL[w.shipping_method] ?? "—"}</td>
-                <td>
-                  <StatusBadge map={WAYBILL_STATUS_LABEL} color={WAYBILL_STATUS_COLOR} value={w.status} />
-                </td>
+                <td><StatusBadge map={WAYBILL_STATUS_LABEL} color={WAYBILL_STATUS_COLOR} value={w.status}/></td>
                 <td className="text-xs">{w.weight_kg ?? "—"} kg</td>
-                <td className="text-xs font-mono">
-                  {w.length_cm && w.width_cm && w.height_cm ? `${w.length_cm}×${w.width_cm}×${w.height_cm}` : "—"}
-                </td>
+                <td className="text-xs font-mono">{w.length_cm && w.width_cm && w.height_cm ? `${w.length_cm}×${w.width_cm}×${w.height_cm}` : "—"}</td>
                 <td className="font-mono text-[10px] text-slate-400">{w.batch_no ?? "—"}</td>
-                <td className="text-right">
-                  <Link
-                    to="/admin/waybills/$waybillId"
-                    params={{ waybillId: w.id }}
-                    className="text-xs text-brand hover:underline"
-                  >
-                    详情
-                  </Link>
-                </td>
+                <td className="text-right"><Link to="/admin/waybills/$waybillId" params={{ waybillId: w.id }} className="text-xs text-brand hover:underline">详情</Link></td>
               </tr>
             ))}
           </tbody>

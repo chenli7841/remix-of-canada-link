@@ -55,17 +55,16 @@ export const listWechatConversations = createServerFn({ method: "POST" })
     // 绑定状态必须来自当前 active 永久绑定，不能只信会话上的旧字段
     const ids = Array.from(new Set(list.map((r) => r.external_userid).filter(Boolean)));
     const bindings = ids.length
-      ? ((
+      ? (
           await supabaseAdmin
             .from("wechat_identity_bindings")
             .select("external_userid, customer_code, status")
             .in("external_userid", ids)
-        ).data ?? [])
+        ).data ?? []
       : [];
     const activeByUser = new Map<string, string>();
     for (const b of bindings as any[]) {
-      if ((b.status ?? "active") === "active" && b.external_userid)
-        activeByUser.set(b.external_userid, b.customer_code);
+      if ((b.status ?? "active") === "active" && b.external_userid) activeByUser.set(b.external_userid, b.customer_code);
     }
 
     return {
@@ -80,6 +79,7 @@ export const listWechatConversations = createServerFn({ method: "POST" })
         };
       }),
     };
+
   });
 
 export const getWechatConversation = createServerFn({ method: "POST" })
@@ -117,14 +117,14 @@ export const getWechatConversation = createServerFn({ method: "POST" })
     ]);
     const draftIds = ((drafts.data ?? []) as any[]).map((d) => d.id);
     const events = draftIds.length
-      ? ((
+      ? (
           await supabaseAdmin
             .from("wechat_forwarding_draft_events")
             .select("*")
             .in("draft_id", draftIds)
             .order("created_at", { ascending: true })
             .limit(300)
-        ).data ?? [])
+        ).data ?? []
       : [];
     const c: any = conv.data;
     return {
@@ -163,10 +163,7 @@ export const listWechatBindings = createServerFn({ method: "POST" })
 
 export const updateWechatBinding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (d: { id: string; action: "disable" | "enable" | "unbind" | "rebind"; customer_code?: string; reason: string }) =>
-      d,
-  )
+  .inputValidator((d: { id: string; action: "disable" | "enable" | "unbind" | "rebind"; customer_code?: string; reason: string }) => d)
   .handler(async ({ data, context }) => {
     await assertManager(context.supabase, context.userId);
     if (!data.reason?.trim()) throw new Error("请填写操作原因");
@@ -192,14 +189,7 @@ export const updateWechatBinding = createServerFn({ method: "POST" })
         .eq("customer_code", code)
         .maybeSingle();
       if (!profile) throw new Error("客户号不存在");
-      patch = {
-        ...patch,
-        customer_code: profile.customer_code,
-        user_id: profile.id,
-        status: "active",
-        unbound_at: null,
-        bound_at: now,
-      };
+      patch = { ...patch, customer_code: profile.customer_code, user_id: profile.id, status: "active", unbound_at: null, bound_at: now };
     }
 
     const { data: after, error } = await supabaseAdmin
@@ -262,25 +252,13 @@ export const getAiSupportThread = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [thread, messages] = await Promise.all([
       supabaseAdmin.from("ai_support_threads").select("*").eq("id", data.id).maybeSingle(),
-      supabaseAdmin
-        .from("ai_support_messages")
-        .select("*")
-        .eq("thread_id", data.id)
-        .order("created_at", { ascending: true })
-        .limit(500),
+      supabaseAdmin.from("ai_support_messages").select("*").eq("thread_id", data.id).order("created_at", { ascending: true }).limit(500),
     ]);
     if (thread.error) throw new Error(thread.error.message);
     if (messages.error) throw new Error(messages.error.message);
     await Promise.all([
-      supabaseAdmin
-        .from("ai_support_messages")
-        .update({ read_by_staff_at: new Date().toISOString() })
-        .eq("thread_id", data.id)
-        .is("read_by_staff_at", null),
-      supabaseAdmin
-        .from("ai_support_threads")
-        .update({ unread_for_staff: 0, updated_at: new Date().toISOString() })
-        .eq("id", data.id),
+      supabaseAdmin.from("ai_support_messages").update({ read_by_staff_at: new Date().toISOString() }).eq("thread_id", data.id).is("read_by_staff_at", null),
+      supabaseAdmin.from("ai_support_threads").update({ unread_for_staff: 0, updated_at: new Date().toISOString() }).eq("id", data.id),
     ]);
     return { thread: thread.data, messages: messages.data ?? [] };
   });

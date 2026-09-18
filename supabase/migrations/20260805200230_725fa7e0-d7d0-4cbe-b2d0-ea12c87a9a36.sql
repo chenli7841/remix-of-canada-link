@@ -1,0 +1,1 @@
+update public.app_settings set value = jsonb_set(jsonb_set(value::jsonb,'{enabled}','true'),'{to_email}','"epluscanada0001@gmail.com"') where key='contact_email_notify';

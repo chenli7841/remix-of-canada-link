@@ -1,0 +1,1 @@
+ALTER TABLE public.order_items ALTER COLUMN name_en DROP NOT NULL;

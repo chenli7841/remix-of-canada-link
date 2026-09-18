@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
-import { useCart, cartLineKey, type CartLine } from "@/lib/cart";
+import { useCart, cartLineKey, serverLineTotal, type CartLine } from "@/lib/cart";
 import { useApp } from "@/lib/i18n";
 import { listPublicRoutes } from "@/lib/shop-public.functions";
 import {
@@ -50,6 +50,7 @@ function CartPage() {
     selectedCount,
     selectedSubtotalCNY,
     selectedWeightKg,
+    serverLineFor,
   } = c;
   const { lang, formatPrice } = useApp();
   const navigate = useNavigate();
@@ -198,9 +199,29 @@ function CartPage() {
                         );
                       })()}
                     </div>
-                    <div className="font-display text-lg font-bold text-brand-gradient">
-                      {formatPrice(i.priceCNY * i.quantity)}
-                    </div>
+                    {(() => {
+                      const sl = serverLineFor(i);
+                      const overridden = !!sl && sl.override_unit_price_cny != null;
+                      const lineTotal = sl ? serverLineTotal(sl) : i.priceCNY * i.quantity;
+                      return (
+                        <div className="text-right">
+                          {overridden && (
+                            <div className="text-[10px] font-medium text-amber-600">
+                              {tr("人工调整价", "Adjusted price")}
+                              {sl?.override_reason ? ` · ${sl.override_reason}` : ""}
+                            </div>
+                          )}
+                          <div className="font-display text-lg font-bold text-brand-gradient">
+                            {formatPrice(lineTotal)}
+                          </div>
+                          {overridden && (
+                            <div className="text-[10px] text-ink-soft line-through">
+                              {formatPrice(i.priceCNY * i.quantity)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

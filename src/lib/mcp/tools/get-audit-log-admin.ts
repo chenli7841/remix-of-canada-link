@@ -1,23 +1,4 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import {
-  isPermissionError,
-  permissionDeniedResult,
-  queryFailedResult,
-  supabaseForUser,
-  unauthenticatedResult,
-} from "../supabase-user";
-export default defineTool({
-  name: "get_audit_log_admin",
-  title: "Get one admin audit log",
-  description:
-    "Read one selected EPLUS admin audit record, including before and after snapshots, using owner permissions. Never expose bulk audit details.",
-  inputSchema: { log_id: z.string().uuid() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ log_id }, ctx) => {
-    if (!ctx.isAuthenticated()) return unauthenticatedResult();
-    const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_audit_log", { _log_id: log_id });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
-  },
-});
+import { isPermissionError, permissionDeniedResult, queryFailedResult, supabaseForUser, unauthenticatedResult } from "../supabase-user";
+export default defineTool({name:"get_audit_log_admin",title:"Get one admin audit log",description:"Read one selected EPLUS admin audit record, including before and after snapshots, using owner permissions. Never expose bulk audit details.",inputSchema:{log_id:z.string().uuid()},annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false},handler:async({log_id},ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();const{data,error}=await supabaseForUser(ctx).rpc("chatgpt_admin_get_audit_log",{_log_id:log_id});if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();return{content:[{type:"text",text:JSON.stringify(data,null,2)}],structuredContent:{result:data}};}});

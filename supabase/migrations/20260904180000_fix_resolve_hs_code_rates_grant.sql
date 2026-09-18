@@ -1,0 +1,11 @@
+-- 2026-08-24's security hardening migration revoked EXECUTE on
+-- resolve_hs_code_rates from authenticated (bucketed with genuinely
+-- internal-only trigger functions) but never re-granted it, unlike the other
+-- functions in that same migration that the app still needed. Unlike those
+-- others, resolve_hs_code_rates IS called directly from the customer's own
+-- session — 我的物品 "新增物品" (account.tsx) and the save_my_item MCP tool
+-- both call it via the user-scoped Supabase client, not the service role —
+-- so every save failed with "permission denied for function
+-- resolve_hs_code_rates". The staff-side "客户视图" add-item path uses the
+-- service role and was unaffected.
+GRANT EXECUTE ON FUNCTION public.resolve_hs_code_rates(text, text, text, numeric, numeric, boolean) TO authenticated;

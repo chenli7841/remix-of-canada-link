@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getAppSettings, setAppSetting } from "@/lib/system.functions";
 import { recomputeWaybillFees } from "@/lib/scan.functions";
+import { backfillWaybillItems } from "@/lib/orders.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -707,6 +708,9 @@ function SystemPage() {
         {/* Recompute waybill fees */}
         <RecomputeFeesCard />
 
+        {/* Backfill waybill_items (关税明细落库) */}
+        <BackfillWaybillItemsCard />
+
         {/* Print template */}
         <Card title="打印模板">
           <Grid>
@@ -845,6 +849,75 @@ function ImageUpload({ value, onChange, folder }: { value: string; onChange: (ur
       />
       {err && <p className="text-[11px] text-red-400">✗ {err}</p>}
     </div>
+  );
+}
+
+function BackfillWaybillItemsCard() {
+  const run = useServerFn(backfillWaybillItems);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const onRun = async (onlyMissing: boolean) => {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      let offset = 0;
+      let done = 0;
+      let failed = 0;
+      let total = 0;
+      // 分页循环直到跑完
+      for (;;) {
+        const r = await run({ data: { limit: 200, offset, onlyMissing } });
+        done += r.done;
+        failed += r.failed;
+        total = r.total;
+        offset = r.next_offset;
+        setMsg(`处理中… ${offset}/${total}（成功 ${done} · 失败 ${failed}）`);
+        if (r.is_done || r.processed === 0) break;
+      }
+      setMsg(`✓ 完成 · 共 ${total} 条 · 成功 ${done} · 失败 ${failed}`);
+      toast.success(`关税明细回填完成：${done} 条`);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+      toast.error(e?.message ?? "回填失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="关税明细回填（waybill_items）">
+      <p className="text-[11px] text-slate-400">
+        把存量运单的关税逐品名明细（品名 / HS / 税率 / 申报价 / 关税）写入 waybill_items，
+        之后批次账单 / 客户端「费用明细」直读、不再每次现算。首次上线后跑一次即可。
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={() => onRun(true)}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/20 disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}只补缺失
+        </button>
+        <button
+          onClick={() => onRun(false)}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}全部重跑
+        </button>
+      </div>
+      {msg && (
+        <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
+          {msg}
+        </div>
+      )}
+      {err && (
+        <div className="mt-2 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
+          ✗ {err}
+        </div>
+      )}
+    </Card>
   );
 }
 

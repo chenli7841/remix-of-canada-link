@@ -1,0 +1,6 @@
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS insurance_cny numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS customs_cny numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS box_count integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS batch_no text,
+  ADD COLUMN IF NOT EXISTS eta date;

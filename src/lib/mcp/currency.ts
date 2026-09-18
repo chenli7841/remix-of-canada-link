@@ -7,7 +7,7 @@ export function cnyToCad(value: unknown, rate: unknown = DEFAULT_CNY_TO_CAD_RATE
 }
 
 export function forwardingTotalCad(feeCny: unknown, freightSnapshot: unknown) {
-  const snapshot = (freightSnapshot ?? {}) as Record<string, unknown>;
+  const snapshot = ((freightSnapshot ?? {}) as Record<string, unknown>);
   const componentTotal =
     Number(snapshot.freight_cad ?? 0) +
     Number(snapshot.duty_cad ?? 0) +
