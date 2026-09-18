@@ -28,7 +28,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
     headers.set('apikey', supabaseKey);
     return fetch(input, { ...init, headers });
-  };
+  } as typeof fetch;
 }
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
