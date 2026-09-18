@@ -13,7 +13,7 @@ export default defineTool({
     offset: z.number().int().min(0).max(10000).optional(),
     limit: z.number().int().min(1).max(10).optional().describe("Page size (default 5)."),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ order_no, status, date_from, date_to, offset, limit }, ctx) => {
     if (!ctx.isAuthenticated()) {
       return unauthenticatedResult();

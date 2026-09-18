@@ -7,7 +7,7 @@ export default defineTool({
   title: "List my delivery addresses",
   description: "List the signed-in customer's own saved EPLUS delivery addresses, with the default address first. When creating a forwarding draft, call this automatically and use the row with is_default=true for recipient name, phone and address; do not ask the customer to retype those fields. Ask the customer only if no default address exists or they explicitly want another saved address.",
   inputSchema: { destination_code: z.string().optional(), offset:z.number().int().min(0).max(10000).optional(), limit:z.number().int().min(1).max(10).optional() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ destination_code, offset, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     let query = supabaseForUser(ctx)

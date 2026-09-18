@@ -14,7 +14,7 @@ export default defineTool({
     declared_value_cad: z.number().nonnegative().optional(),
     direction: z.enum(["forward", "reverse"]).optional(),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (input, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const sb = supabaseForUser(ctx);

@@ -7,7 +7,7 @@ export default defineTool({
   title: "Review a forwarding draft",
   description: "Retrieve the signed-in customer's draft. Present every item, route, address, and CAD value before asking for confirmation.",
   inputSchema: { draft_id: z.string().uuid() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ draft_id }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).from("ai_forwarding_drafts")

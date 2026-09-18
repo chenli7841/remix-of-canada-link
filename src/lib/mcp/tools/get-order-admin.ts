@@ -7,7 +7,7 @@ export default defineTool({
   title: "Get shop order details with staff permissions",
   description: "Read one EPLUS shop order, customer, items and waybills using the signed-in account's normal staff permission. Read-only; all money is CAD.",
   inputSchema: { order_no: z.string().min(1).max(100) },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ order_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_order", { _order_no: order_no });

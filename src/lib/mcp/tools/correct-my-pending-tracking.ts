@@ -14,7 +14,7 @@ export default defineTool({
     reason: z.string().min(2).max(500),
     confirmation: z.literal("CONFIRM_CORRECT_PENDING_TRACKING"),
   },
-  annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
   handler: async (input, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_correct_my_pending_tracking", {

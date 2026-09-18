@@ -25,7 +25,7 @@ export default defineTool({
     note: z.string().max(1000).optional(),
     items: z.array(itemSchema).min(1),
   },
-  annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false, destructiveHint: true },
   handler: async ({ draft_id, ...draftData }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const sb = supabaseForUser(ctx);

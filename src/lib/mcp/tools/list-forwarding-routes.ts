@@ -10,7 +10,7 @@ export default defineTool({
   inputSchema: {
     direction: z.enum(["forward", "reverse"]).optional().describe("Route direction; defaults to forward."),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ direction }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const sb = supabaseForUser(ctx);

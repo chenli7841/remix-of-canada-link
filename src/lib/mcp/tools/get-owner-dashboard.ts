@@ -7,7 +7,7 @@ export default defineTool({
   title: "Get EPLUS owner dashboard",
   description: "Read current EPLUS operational counts using the signed-in owner's permissions. It never changes data.",
   inputSchema: { include: z.literal("current_summary").optional() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (_input, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_dashboard");

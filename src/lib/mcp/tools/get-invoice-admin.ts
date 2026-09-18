@@ -7,7 +7,7 @@ export default defineTool({
   title: "Get invoice details with staff permissions",
   description: "Read one EPLUS invoice, customer and line items using the signed-in account's normal staff permission. Read-only; all money is CAD. This tool cannot pay, refund, deduct funds, or change payment status.",
   inputSchema: { invoice_no: z.string().min(1).max(100) },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ invoice_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_invoice", { _invoice_no: invoice_no });

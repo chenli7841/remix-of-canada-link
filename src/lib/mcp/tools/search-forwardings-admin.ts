@@ -11,7 +11,7 @@ export default defineTool({
     status: z.string().max(30).optional(),
     limit: z.number().int().min(1).max(50).optional(),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ query, status, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_search_forwardings", {

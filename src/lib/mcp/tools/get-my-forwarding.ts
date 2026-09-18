@@ -14,7 +14,7 @@ export default defineTool({
   title: "Get my forwarding order details",
   description: "Get one forwarding order belonging to the signed-in customer, including items and waybills. All money is returned in CAD. This tool cannot pay.",
   inputSchema: { forwarding_id: z.string().uuid() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ forwarding_id }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const sb = supabaseForUser(ctx);

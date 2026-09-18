@@ -23,7 +23,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -39,7 +40,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -85,7 +87,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -130,7 +133,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -155,7 +159,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -180,7 +185,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -205,7 +211,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -230,7 +237,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -274,7 +282,8 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": true
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -401,7 +410,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -431,7 +441,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -487,7 +498,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -508,7 +520,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -534,7 +547,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -556,7 +570,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {
@@ -625,7 +639,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -650,7 +665,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -760,7 +776,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -873,7 +890,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -914,7 +932,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -990,7 +1009,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1204,7 +1224,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1235,7 +1256,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1262,7 +1284,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1288,7 +1311,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1313,7 +1337,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1338,7 +1363,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1373,7 +1399,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1398,7 +1425,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1428,7 +1456,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1458,7 +1487,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1488,7 +1518,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1513,7 +1544,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1557,7 +1589,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1582,7 +1615,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1608,11 +1642,12 @@
       {
         "name": "list_my_support_messages",
         "title": "List my EPLUS support messages",
-        "description": "List support messages belonging to the signed-in EPLUS customer, newest first. Never accept a customer code from chat.",
+        "description": "List support messages belonging to the signed-in EPLUS customer, newest first, and mark the account's support messages as read. This updates read receipts and the unread count. Never accept a customer code from chat.",
         "annotations": {
-          "readOnlyHint": true,
+          "readOnlyHint": false,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1634,7 +1669,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {
@@ -1666,7 +1701,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {
@@ -1704,7 +1739,8 @@
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
-          "openWorldHint": false
+          "openWorldHint": false,
+          "destructiveHint": false
         },
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1730,7 +1766,7 @@
         "annotations": {
           "readOnlyHint": false,
           "idempotentHint": false,
-          "destructiveHint": false,
+          "destructiveHint": true,
           "openWorldHint": false
         },
         "inputSchema": {

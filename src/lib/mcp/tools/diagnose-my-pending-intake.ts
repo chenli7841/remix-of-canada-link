@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: {
     tracking_no: z.string().min(5).max(100).describe("Domestic carrier tracking number supplied by the customer."),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ tracking_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_diagnose_my_pending_intake", { _tracking_no: tracking_no });

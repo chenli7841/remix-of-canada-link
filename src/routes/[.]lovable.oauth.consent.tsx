@@ -1,4 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -8,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 type AuthorizationDetails = {
   client?: { name?: string; redirect_uri?: string } | null;
   requested_scopes?: string[] | null;
+  scope?: string;
   redirect_url?: string | null;
   redirect_to?: string | null;
 };
@@ -17,9 +19,11 @@ type OAuthApi = {
   ) => Promise<{ data: AuthorizationDetails | null; error: Error | null }>;
   approveAuthorization: (
     id: string,
+    options?: { skipBrowserRedirect?: boolean },
   ) => Promise<{ data: { redirect_url?: string; redirect_to?: string } | null; error: Error | null }>;
   denyAuthorization: (
     id: string,
+    options?: { skipBrowserRedirect?: boolean },
   ) => Promise<{ data: { redirect_url?: string; redirect_to?: string } | null; error: Error | null }>;
 };
 const oauth = (supabase.auth as unknown as { oauth: OAuthApi }).oauth;
@@ -31,15 +35,19 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
   }),
   beforeLoad: async ({ search, location }) => {
     if (!search.authorization_id) throw new Error("Missing authorization_id");
-    const { data } = await supabase.auth.getSession();
+    const { data, error } = await supabase.auth.getSession();
+    if (error && !isAuthSessionMissingError(error)) throw error;
     if (!data.session) {
       const next = location.pathname + location.searchStr;
-      throw redirect({ to: "/auth", search: { redirect: next } });
+      throw redirect({ to: "/auth", search: { redirect: next, reauth: "oauth" } });
     }
   },
   loader: async ({ location }) => {
     const authorizationId = new URLSearchParams(location.search).get("authorization_id")!;
     const { data, error } = await oauth.getAuthorizationDetails(authorizationId);
+    if (error && isAuthSessionMissingError(error)) {
+      throw redirect({ to: "/auth", search: { redirect: location.pathname + location.searchStr, reauth: "oauth" } });
+    }
     if (error) throw error;
     const immediate = data?.redirect_url ?? data?.redirect_to;
     if (immediate && !data?.client) throw redirect({ href: immediate });
@@ -50,27 +58,41 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     <main className="mx-auto max-w-md p-8 text-center">
       <h1 className="font-display text-xl font-bold text-foreground">授权请求无法加载</h1>
       <p className="mt-2 text-sm text-ink-soft">{String((error as Error)?.message ?? error)}</p>
+      <p className="mt-4 text-sm text-ink-soft">请返回 OpenAI 的连接页面，重新发起连接或扫描工具，获取新的授权请求。</p>
     </main>
   ),
 });
 
 function Consent() {
+  const navigate = useNavigate();
   const details = Route.useLoaderData();
   const { authorization_id } = Route.useSearch();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clientName = details?.client?.name ?? "外部应用";
-  const scopes = details?.requested_scopes ?? [];
+  const scopes = details?.requested_scopes ?? details?.scope?.split(/\s+/).filter(Boolean) ?? [];
 
   async function decide(approve: boolean) {
     setBusy(true);
     setError(null);
-    const { data, error } = approve
-      ? await oauth.approveAuthorization(authorization_id)
-      : await oauth.denyAuthorization(authorization_id);
+    let result;
+    try {
+      result = approve
+        ? await oauth.approveAuthorization(authorization_id, { skipBrowserRedirect: true })
+        : await oauth.denyAuthorization(authorization_id, { skipBrowserRedirect: true });
+    } catch {
+      setBusy(false);
+      setError("授权结果未确认。请返回插件连接页重新开始，不要重复批准。");
+      return;
+    }
+    const { data, error } = result;
     if (error) {
       setBusy(false);
+      if (isAuthSessionMissingError(error)) {
+        await navigate({ to: "/auth", search: { reauth: "oauth", redirect: `/.lovable/oauth/consent?authorization_id=${encodeURIComponent(authorization_id)}` }, replace: true });
+        return;
+      }
       setError(error.message);
       return;
     }
@@ -87,7 +109,7 @@ function Consent() {
     <main className="min-h-[70vh] bg-gradient-to-br from-background via-accent/30 to-background px-4 py-12">
       <div className="mx-auto w-full max-w-md rounded-3xl border border-border bg-surface p-6 shadow-elevated sm:p-8">
         <h1 className="font-display text-xl font-bold text-foreground">
-          将 <span className="text-brand-gradient">{clientName}</span> 连接到您的 SinoCargo 账号
+          将 <span className="text-brand-gradient">{clientName}</span> 连接到您的 EPLUS 账号
         </h1>
         <p className="mt-2 text-sm text-ink-soft">
           {clientName} 将可以作为您本人调用 EPLUS 启用的工具。此授权不会绕过您的账号权限或 EPLUS 后端安全策略。

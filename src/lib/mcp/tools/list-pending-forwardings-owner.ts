@@ -7,7 +7,7 @@ export default defineTool({
   title: "List pending EPLUS forwardings as owner",
   description: "Read pending or unpaid forwarding orders using the signed-in owner's permissions. Monetary values are CAD.",
   inputSchema: { limit: z.number().int().min(1).max(50).optional() },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ limit }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_pending_forwardings", { _limit: limit ?? 20 });

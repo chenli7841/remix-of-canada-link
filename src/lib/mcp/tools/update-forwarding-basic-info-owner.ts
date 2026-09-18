@@ -12,7 +12,7 @@ export default defineTool({
       destination_code: z.string().max(100).optional(), domestic_tracking_no: z.string().max(200).optional(), intl_tracking_no: z.string().max(200).optional() }),
     reason: z.string().min(2).max(500), confirmation: z.literal("CONFIRM_UPDATE_FORWARDING"),
   },
-  annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
   handler: async (input, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_update_forwarding_basic_info", {

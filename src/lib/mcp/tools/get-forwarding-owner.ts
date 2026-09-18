@@ -7,7 +7,7 @@ export default defineTool({
   title: "Get a forwarding order as owner",
   description: "Read one forwarding order using the signed-in owner's permissions. Use immediately before proposing any write action.",
   inputSchema: { request_no: z.string().min(1).max(100) },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ request_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_get_forwarding", { _request_no: request_no });

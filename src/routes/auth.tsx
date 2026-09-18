@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
+  reauth: z.enum(["oauth"]).optional(),
   wechat: z.enum(["notbound", "failed"]).optional(),
 });
 
@@ -46,8 +47,8 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user) navigate({ to: search.redirect || "/account" });
-  }, [user, navigate, search.redirect]);
+    if (user && !search.reauth) navigate({ to: search.redirect || "/account" });
+  }, [user, navigate, search.redirect, search.reauth]);
 
   useEffect(() => {
     if (search.wechat === "notbound")
@@ -110,6 +111,11 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password });
         if (error) throw error;
         toast.success(tr("登录成功", "Signed in"));
+        if (search.reauth) {
+          // Explicit sign-in replaces the stale session before returning to consent.
+          const target = search.redirect;
+          await navigate({ to: target?.startsWith("/") && !target.startsWith("//") ? target : "/account", replace: true });
+        }
       }
     } catch (err: any) {
       toast.error(err.message ?? tr("操作失败", "Failed"));
@@ -154,6 +160,11 @@ function AuthPage() {
         </Link>
 
         <div className="mb-4 rounded-2xl border-2 border-warning/50 bg-warning/10 p-4 text-sm">
+          {search.reauth && (
+            <p role="status" className="mb-3 font-medium">
+              {tr("当前登录会话无法用于授权。请重新登录，成功后将返回授权确认页。", "Your session cannot authorize this connection. Sign in again to return to the consent page.")}
+            </p>
+          )}
           <p className="mb-1 font-bold text-foreground">{tr("老客户通知", "Notice for existing customers")}</p>
           <p className="text-ink-soft">
             {tr(

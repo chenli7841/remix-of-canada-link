@@ -9,7 +9,7 @@ export default defineTool({
   inputSchema: {
     waybill_no: z.string().trim().min(1).describe("Waybill number, e.g. SC240101ABC."),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ waybill_no }, ctx) => {
     if (!ctx.isAuthenticated()) {
       return unauthenticatedResult();

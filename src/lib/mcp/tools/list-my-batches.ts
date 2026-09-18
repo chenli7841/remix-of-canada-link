@@ -13,7 +13,7 @@ export default defineTool({
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe("Planned shipping month in YYYY-MM, using the customer's intended year."),
     limit: z.number().int().min(1).max(50).optional(),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ month, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data: authData } = await supabaseForUser(ctx).auth.getUser();

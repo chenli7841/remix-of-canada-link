@@ -7,7 +7,7 @@ export default defineTool({
   name:"list_my_invoices", title:"List my invoices",
   description:"List the signed-in customer's invoices with optional invoice-number, status and date filters. Returns a small page; ask before loading more. All money is CAD.",
   inputSchema:{invoice_no:z.string().max(100).optional(),status:z.string().max(30).optional(),date_from:z.string().date().optional(),date_to:z.string().date().optional(),offset:z.number().int().min(0).max(10000).optional(),limit:z.number().int().min(1).max(10).optional()},
-  annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false},
+  annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false, destructiveHint: false },
   handler:async({invoice_no,status,date_from,date_to,offset,limit},ctx)=>{
     if(!ctx.isAuthenticated())return unauthenticatedResult();
     const pageSize=limit??5,start=offset??0;

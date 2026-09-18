@@ -6,7 +6,7 @@ export default defineTool({
   name:"get_my_wallet", title:"Get my wallet and transactions",
   description:"Show the signed-in customer's CAD wallet balance and a small filtered page of completed transactions. Ask before loading more. Read-only and cannot recharge, deduct or refund.",
   inputSchema:{transaction_type:z.string().max(30).optional(),date_from:z.string().date().optional(),date_to:z.string().date().optional(),offset:z.number().int().min(0).max(10000).optional(),limit:z.number().int().min(1).max(10).optional()},
-  annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false},
+  annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false, destructiveHint: false },
   handler:async({transaction_type,date_from,date_to,offset,limit},ctx)=>{
     if(!ctx.isAuthenticated())return unauthenticatedResult();
     const sb=supabaseForUser(ctx),pageSize=limit??5,start=offset??0;

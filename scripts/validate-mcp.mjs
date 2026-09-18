@@ -7,6 +7,15 @@ const evals = JSON.parse(await readFile(new URL("../evals/chatgpt-app.json", imp
 const mcpSource = await readFile(new URL("../src/lib/mcp/index.ts", import.meta.url), "utf8");
 const tools = manifest?.mcp?.tools ?? [];
 const byName = new Map(tools.map((tool) => [tool.name, tool]));
+for (const tool of tools) {
+  for (const hint of ["readOnlyHint", "openWorldHint", "destructiveHint"]) {
+    assert.equal(typeof tool.annotations?.[hint], "boolean", `${tool.name} must explicitly declare ${hint}`);
+  }
+}
+assert.equal(byName.get("list_my_support_messages")?.annotations?.readOnlyHint, false, "Reading support messages updates read receipts");
+for (const name of ["send_my_support_message", "send_customer_support_message_admin", "correct_my_pending_tracking"]) {
+  assert.equal(byName.get(name)?.annotations?.destructiveHint, true, `${name} has irreversible or overwrite effects`);
+}
 
 assert.equal(manifest.path, "/mcp", "MCP endpoint must remain /mcp");
 assert.equal(manifest.auth?.type, "oauth", "EPLUS MCP must require OAuth");

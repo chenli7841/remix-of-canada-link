@@ -12,7 +12,7 @@ export default defineTool({
     date_from: z.string().date().optional(), date_to: z.string().date().optional(),
     offset: z.number().int().min(0).max(10000).optional(), limit: z.number().int().min(1).max(10).optional(),
   },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, destructiveHint: false },
   handler: async ({ request_no, status, date_from, date_to, offset, limit }, ctx) => {
     if (!ctx.isAuthenticated()) {
       return unauthenticatedResult();
