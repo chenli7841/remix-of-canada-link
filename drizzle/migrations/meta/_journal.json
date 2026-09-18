@@ -15,6 +15,13 @@
       "when": 1789699780269,
       "tag": "0001_restore_schema_part2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789699937703,
+      "tag": "0002_restore_schema_part3",
+      "breakpoints": true
     }
   ]
 }

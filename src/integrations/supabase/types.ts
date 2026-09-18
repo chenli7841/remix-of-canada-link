@@ -2378,6 +2378,1143 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          blacklist_reason: string | null
+          created_at: string
+          customer_code: string | null
+          email: string | null
+          fee_scheme_preference: Database["public"]["Enums"]["fee_scheme_preference"]
+          full_name: string | null
+          id: string
+          invoice_address: string | null
+          invoice_email: string | null
+          invoice_phone: string | null
+          invoice_title: string | null
+          is_blacklisted: boolean
+          phone: string | null
+          points: number
+          preferred_currency: string
+          preferred_lang: string
+          reg_address: string | null
+          reg_city: string | null
+          reg_country: string | null
+          reg_phone: string | null
+          reg_postal_code: string | null
+          reg_province: string | null
+          updated_at: string
+          username: string | null
+          vip_level: Database["public"]["Enums"]["vip_level"]
+          wechat_nickname: string | null
+          wechat_openid: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          blacklist_reason?: string | null
+          created_at?: string
+          customer_code?: string | null
+          email?: string | null
+          fee_scheme_preference?: Database["public"]["Enums"]["fee_scheme_preference"]
+          full_name?: string | null
+          id: string
+          invoice_address?: string | null
+          invoice_email?: string | null
+          invoice_phone?: string | null
+          invoice_title?: string | null
+          is_blacklisted?: boolean
+          phone?: string | null
+          points?: number
+          preferred_currency?: string
+          preferred_lang?: string
+          reg_address?: string | null
+          reg_city?: string | null
+          reg_country?: string | null
+          reg_phone?: string | null
+          reg_postal_code?: string | null
+          reg_province?: string | null
+          updated_at?: string
+          username?: string | null
+          vip_level?: Database["public"]["Enums"]["vip_level"]
+          wechat_nickname?: string | null
+          wechat_openid?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          blacklist_reason?: string | null
+          created_at?: string
+          customer_code?: string | null
+          email?: string | null
+          fee_scheme_preference?: Database["public"]["Enums"]["fee_scheme_preference"]
+          full_name?: string | null
+          id?: string
+          invoice_address?: string | null
+          invoice_email?: string | null
+          invoice_phone?: string | null
+          invoice_title?: string | null
+          is_blacklisted?: boolean
+          phone?: string | null
+          points?: number
+          preferred_currency?: string
+          preferred_lang?: string
+          reg_address?: string | null
+          reg_city?: string | null
+          reg_country?: string | null
+          reg_phone?: string | null
+          reg_postal_code?: string | null
+          reg_province?: string | null
+          updated_at?: string
+          username?: string | null
+          vip_level?: Database["public"]["Enums"]["vip_level"]
+          wechat_nickname?: string | null
+          wechat_openid?: string | null
+        }
+        Relationships: []
+      }
+      promotions: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          name: string
+          rules: Json
+          starts_at: string | null
+          type: Database["public"]["Enums"]["promo_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          rules?: Json
+          starts_at?: string | null
+          type?: Database["public"]["Enums"]["promo_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          rules?: Json
+          starts_at?: string | null
+          type?: Database["public"]["Enums"]["promo_type"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      receiving_scans: {
+        Row: {
+          code: string
+          id: string
+          kind: string
+          note: string | null
+          operator_id: string | null
+          receiving_id: string
+          ref_id: string
+          scanned_at: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          kind: string
+          note?: string | null
+          operator_id?: string | null
+          receiving_id: string
+          ref_id: string
+          scanned_at?: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          operator_id?: string | null
+          receiving_id?: string
+          ref_id?: string
+          scanned_at?: string
+        }
+        Relationships: []
+      }
+      receivings: {
+        Row: {
+          batch_id: string | null
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          receiving_no: string
+          status: string
+          updated_at: string
+          warehouse_code: string | null
+        }
+        Insert: {
+          batch_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          receiving_no: string
+          status?: string
+          updated_at?: string
+          warehouse_code?: string | null
+        }
+        Update: {
+          batch_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          receiving_no?: string
+          status?: string
+          updated_at?: string
+          warehouse_code?: string | null
+        }
+        Relationships: []
+      }
+      shipments: {
+        Row: {
+          carrier: string | null
+          created_at: string
+          current_location: string | null
+          eta: string | null
+          id: string
+          order_id: string | null
+          shipping_method: string
+          status: string
+          tracking_no: string
+          updated_at: string
+        }
+        Insert: {
+          carrier?: string | null
+          created_at?: string
+          current_location?: string | null
+          eta?: string | null
+          id?: string
+          order_id?: string | null
+          shipping_method?: string
+          status?: string
+          tracking_no: string
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string | null
+          created_at?: string
+          current_location?: string | null
+          eta?: string | null
+          id?: string
+          order_id?: string | null
+          shipping_method?: string
+          status?: string
+          tracking_no?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shipping_routes: {
+        Row: {
+          allowed_items_text: string | null
+          blacklist_customer_codes: string[]
+          blacklist_vip_levels: Database["public"]["Enums"]["vip_level"]
+          cargo_type: string
+          code: string
+          created_at: string
+          destination_code: string | null
+          destination_warehouse_id: string | null
+          id: string
+          is_active: boolean
+          is_bidirectional: boolean
+          item_field_required: Json
+          item_fields: string[]
+          last_mile_fee_cad: number
+          last_mile_formula: string | null
+          last_mile_rate_cad: number
+          last_mile_step_kg: number
+          last_mile_threshold_kg: number
+          name_en: string | null
+          name_zh: string
+          note: string | null
+          origin_warehouse_id: string | null
+          prohibited_items_text: string | null
+          sales_tax_enabled: boolean
+          sales_tax_rate_pct: number
+          shipping_method: string
+          sort_order: number
+          transit_days_max: number | null
+          transit_days_min: number | null
+          updated_at: string
+          usage_scope: string
+          visible_customer_codes: string[]
+          visible_vip_levels: Database["public"]["Enums"]["vip_level"]
+          wechat_ai_enabled: boolean
+          wechat_ai_price_text: string | null
+        }
+        Insert: {
+          allowed_items_text?: string | null
+          blacklist_customer_codes?: string[]
+          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"]
+          cargo_type?: string
+          code: string
+          created_at?: string
+          destination_code?: string | null
+          destination_warehouse_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_bidirectional?: boolean
+          item_field_required?: Json
+          item_fields?: string[]
+          last_mile_fee_cad?: number
+          last_mile_formula?: string | null
+          last_mile_rate_cad?: number
+          last_mile_step_kg?: number
+          last_mile_threshold_kg?: number
+          name_en?: string | null
+          name_zh: string
+          note?: string | null
+          origin_warehouse_id?: string | null
+          prohibited_items_text?: string | null
+          sales_tax_enabled?: boolean
+          sales_tax_rate_pct?: number
+          shipping_method: string
+          sort_order?: number
+          transit_days_max?: number | null
+          transit_days_min?: number | null
+          updated_at?: string
+          usage_scope?: string
+          visible_customer_codes?: string[]
+          visible_vip_levels?: Database["public"]["Enums"]["vip_level"]
+          wechat_ai_enabled?: boolean
+          wechat_ai_price_text?: string | null
+        }
+        Update: {
+          allowed_items_text?: string | null
+          blacklist_customer_codes?: string[]
+          blacklist_vip_levels?: Database["public"]["Enums"]["vip_level"]
+          cargo_type?: string
+          code?: string
+          created_at?: string
+          destination_code?: string | null
+          destination_warehouse_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_bidirectional?: boolean
+          item_field_required?: Json
+          item_fields?: string[]
+          last_mile_fee_cad?: number
+          last_mile_formula?: string | null
+          last_mile_rate_cad?: number
+          last_mile_step_kg?: number
+          last_mile_threshold_kg?: number
+          name_en?: string | null
+          name_zh?: string
+          note?: string | null
+          origin_warehouse_id?: string | null
+          prohibited_items_text?: string | null
+          sales_tax_enabled?: boolean
+          sales_tax_rate_pct?: number
+          shipping_method?: string
+          sort_order?: number
+          transit_days_max?: number | null
+          transit_days_min?: number | null
+          updated_at?: string
+          usage_scope?: string
+          visible_customer_codes?: string[]
+          visible_vip_levels?: Database["public"]["Enums"]["vip_level"]
+          wechat_ai_enabled?: boolean
+          wechat_ai_price_text?: string | null
+        }
+        Relationships: []
+      }
+      shop_refunds: {
+        Row: {
+          amount_cny: number
+          created_at: string
+          id: string
+          operator_id: string | null
+          order_id: string
+          processed_at: string | null
+          reason: string | null
+          status: string
+        }
+        Insert: {
+          amount_cny?: number
+          created_at?: string
+          id?: string
+          operator_id?: string | null
+          order_id: string
+          processed_at?: string | null
+          reason?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cny?: number
+          created_at?: string
+          id?: string
+          operator_id?: string | null
+          order_id?: string
+          processed_at?: string | null
+          reason?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      surcharges: {
+        Row: {
+          amount_cny: number
+          batch_id: string | null
+          carton_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_code: string | null
+          forwarding_id: string | null
+          id: string
+          note: string
+          pallet_id: string | null
+          scope: Database["public"]["Enums"]["surcharge_scope"]
+          updated_at: string
+          waybill_id: string | null
+        }
+        Insert: {
+          amount_cny?: number
+          batch_id?: string | null
+          carton_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_code?: string | null
+          forwarding_id?: string | null
+          id?: string
+          note?: string
+          pallet_id?: string | null
+          scope: Database["public"]["Enums"]["surcharge_scope"]
+          updated_at?: string
+          waybill_id?: string | null
+        }
+        Update: {
+          amount_cny?: number
+          batch_id?: string | null
+          carton_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_code?: string | null
+          forwarding_id?: string | null
+          id?: string
+          note?: string
+          pallet_id?: string | null
+          scope?: Database["public"]["Enums"]["surcharge_scope"]
+          updated_at?: string
+          waybill_id?: string | null
+        }
+        Relationships: []
+      }
+      tracking_event_presets: {
+        Row: {
+          code: string
+          created_at: string
+          default_location_en: string | null
+          default_location_zh: string | null
+          id: string
+          is_active: boolean
+          label_en: string | null
+          label_zh: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          default_location_en?: string | null
+          default_location_zh?: string | null
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_zh: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          default_location_en?: string | null
+          default_location_zh?: string | null
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_zh?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tracking_events: {
+        Row: {
+          created_at: string
+          event_time: string
+          id: string
+          location_en: string | null
+          location_zh: string | null
+          shipment_id: string
+          source: string
+          source_ref: string | null
+          status_en: string
+          status_zh: string
+        }
+        Insert: {
+          created_at?: string
+          event_time?: string
+          id?: string
+          location_en?: string | null
+          location_zh?: string | null
+          shipment_id: string
+          source?: string
+          source_ref?: string | null
+          status_en: string
+          status_zh: string
+        }
+        Update: {
+          created_at?: string
+          event_time?: string
+          id?: string
+          location_en?: string | null
+          location_zh?: string | null
+          shipment_id?: string
+          source?: string
+          source_ref?: string | null
+          status_en?: string
+          status_zh?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      variant_stocks: {
+        Row: {
+          created_at: string
+          id: string
+          stock: number
+          updated_at: string
+          variant_id: string
+          warehouse_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          stock?: number
+          updated_at?: string
+          variant_id: string
+          warehouse_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          stock?: number
+          updated_at?: string
+          variant_id?: string
+          warehouse_id?: string
+        }
+        Relationships: []
+      }
+      wallet_transactions: {
+        Row: {
+          amount_cad: number
+          amount_cny: number | null
+          channel: string | null
+          created_at: string
+          fx_rate_cny_to_cad: number | null
+          id: string
+          note: string | null
+          ref_no: string | null
+          related_order_id: string | null
+          status: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount_cad: number
+          amount_cny?: number | null
+          channel?: string | null
+          created_at?: string
+          fx_rate_cny_to_cad?: number | null
+          id?: string
+          note?: string | null
+          ref_no?: string | null
+          related_order_id?: string | null
+          status?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount_cad?: number
+          amount_cny?: number | null
+          channel?: string | null
+          created_at?: string
+          fx_rate_cny_to_cad?: number | null
+          id?: string
+          note?: string | null
+          ref_no?: string | null
+          related_order_id?: string | null
+          status?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          balance_cad: number
+          balance_cny: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_cad?: number
+          balance_cny?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_cad?: number
+          balance_cny?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      warehouses: {
+        Row: {
+          address: string | null
+          business_hours: string | null
+          can_destination: boolean
+          can_inventory: boolean
+          can_origin: boolean
+          code: string
+          contact: string | null
+          country: string
+          created_at: string
+          id: string
+          inout_fee_cad_per_cbm: number
+          is_active: boolean
+          name_en: string | null
+          name_zh: string
+          note: string | null
+          phone: string | null
+          sort_order: number
+          storage_fee_cad_per_cbm_day: number
+          storage_free_days: number
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_hours?: string | null
+          can_destination?: boolean
+          can_inventory?: boolean
+          can_origin?: boolean
+          code: string
+          contact?: string | null
+          country: string
+          created_at?: string
+          id?: string
+          inout_fee_cad_per_cbm?: number
+          is_active?: boolean
+          name_en?: string | null
+          name_zh: string
+          note?: string | null
+          phone?: string | null
+          sort_order?: number
+          storage_fee_cad_per_cbm_day?: number
+          storage_free_days?: number
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_hours?: string | null
+          can_destination?: boolean
+          can_inventory?: boolean
+          can_origin?: boolean
+          code?: string
+          contact?: string | null
+          country?: string
+          created_at?: string
+          id?: string
+          inout_fee_cad_per_cbm?: number
+          is_active?: boolean
+          name_en?: string | null
+          name_zh?: string
+          note?: string | null
+          phone?: string | null
+          sort_order?: number
+          storage_fee_cad_per_cbm_day?: number
+          storage_free_days?: number
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      waybills: {
+        Row: {
+          aliases: string[]
+          assigned_batch_id: string | null
+          batch_no: string | null
+          box_no: string | null
+          carton_id: string | null
+          clearance_cad: number
+          created_at: string
+          duty_cad: number
+          eta: string | null
+          forwarding_id: string | null
+          freight_cad: number
+          height_cm: number | null
+          id: string
+          insurance_cad: number
+          intl_tracking_no: string | null
+          items_summary: Json
+          length_cm: number | null
+          mark_no: string | null
+          note: string | null
+          order_id: string | null
+          pallet_id: string | null
+          pallet_no: string | null
+          payment_status: string
+          shipping_method: string | null
+          status: Database["public"]["Enums"]["waybill_status"]
+          surcharge_cad: number
+          updated_at: string
+          user_id: string
+          waybill_no: string
+          weight_kg: number | null
+          weight_snapshot: Json | null
+          width_cm: number | null
+        }
+        Insert: {
+          aliases?: string[]
+          assigned_batch_id?: string | null
+          batch_no?: string | null
+          box_no?: string | null
+          carton_id?: string | null
+          clearance_cad?: number
+          created_at?: string
+          duty_cad?: number
+          eta?: string | null
+          forwarding_id?: string | null
+          freight_cad?: number
+          height_cm?: number | null
+          id?: string
+          insurance_cad?: number
+          intl_tracking_no?: string | null
+          items_summary?: Json
+          length_cm?: number | null
+          mark_no?: string | null
+          note?: string | null
+          order_id?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_status?: string
+          shipping_method?: string | null
+          status?: Database["public"]["Enums"]["waybill_status"]
+          surcharge_cad?: number
+          updated_at?: string
+          user_id: string
+          waybill_no: string
+          weight_kg?: number | null
+          weight_snapshot?: Json | null
+          width_cm?: number | null
+        }
+        Update: {
+          aliases?: string[]
+          assigned_batch_id?: string | null
+          batch_no?: string | null
+          box_no?: string | null
+          carton_id?: string | null
+          clearance_cad?: number
+          created_at?: string
+          duty_cad?: number
+          eta?: string | null
+          forwarding_id?: string | null
+          freight_cad?: number
+          height_cm?: number | null
+          id?: string
+          insurance_cad?: number
+          intl_tracking_no?: string | null
+          items_summary?: Json
+          length_cm?: number | null
+          mark_no?: string | null
+          note?: string | null
+          order_id?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_status?: string
+          shipping_method?: string | null
+          status?: Database["public"]["Enums"]["waybill_status"]
+          surcharge_cad?: number
+          updated_at?: string
+          user_id?: string
+          waybill_no?: string
+          weight_kg?: number | null
+          weight_snapshot?: Json | null
+          width_cm?: number | null
+        }
+        Relationships: []
+      }
+      wechat_ai_admin_audit: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          after_data: Json
+          before_data: Json
+          created_at: string
+          id: string
+          reason: string | null
+          target_id: string | null
+          target_type: string
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          after_data?: Json
+          before_data?: Json
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string | null
+          target_type: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          after_data?: Json
+          before_data?: Json
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string
+        }
+        Relationships: []
+      }
+      wechat_ai_agent_runs: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          input_context_summary: string | null
+          intent: string | null
+          model: string | null
+          openai_duration_ms: number | null
+          openai_status: number | null
+          result_status: string | null
+          state_after: Json
+          state_before: Json
+          state_patch: Json
+          tool_requested: string | null
+          total_duration_ms: number | null
+          user_message_id: string | null
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input_context_summary?: string | null
+          intent?: string | null
+          model?: string | null
+          openai_duration_ms?: number | null
+          openai_status?: number | null
+          result_status?: string | null
+          state_after?: Json
+          state_before?: Json
+          state_patch?: Json
+          tool_requested?: string | null
+          total_duration_ms?: number | null
+          user_message_id?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input_context_summary?: string | null
+          intent?: string | null
+          model?: string | null
+          openai_duration_ms?: number | null
+          openai_status?: number | null
+          result_status?: string | null
+          state_after?: Json
+          state_before?: Json
+          state_patch?: Json
+          tool_requested?: string | null
+          total_duration_ms?: number | null
+          user_message_id?: string | null
+        }
+        Relationships: []
+      }
+      wechat_ai_bind_codes: {
+        Row: {
+          code: string
+          created_at: string
+          expires_at: string
+          used_at: string | null
+          used_by_visitor_biz_id: string | null
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          expires_at: string
+          used_at?: string | null
+          used_by_visitor_biz_id?: string | null
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          expires_at?: string
+          used_at?: string | null
+          used_by_visitor_biz_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wechat_ai_conversations: {
+        Row: {
+          awaiting_field: string | null
+          corp_id_hash: string | null
+          created_at: string
+          current_intent: string | null
+          customer_code: string | null
+          external_userid: string
+          id: string
+          last_message_at: string
+          last_tracking_number: string | null
+          open_kfid: string
+          pending_action: string | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          awaiting_field?: string | null
+          corp_id_hash?: string | null
+          created_at?: string
+          current_intent?: string | null
+          customer_code?: string | null
+          external_userid: string
+          id?: string
+          last_message_at?: string
+          last_tracking_number?: string | null
+          open_kfid: string
+          pending_action?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          awaiting_field?: string | null
+          corp_id_hash?: string | null
+          created_at?: string
+          current_intent?: string | null
+          customer_code?: string | null
+          external_userid?: string
+          id?: string
+          last_message_at?: string
+          last_tracking_number?: string | null
+          open_kfid?: string
+          pending_action?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wechat_ai_messages: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          direction: string
+          id: string
+          media_id: string | null
+          message_type: string
+          msgid: string | null
+          ocr_confidence: number | null
+          ocr_text: string | null
+          origin: number | null
+          processing_status: string | null
+          received_at: string
+          reply_to_message_id: string | null
+          send_time: string | null
+          text_content: string | null
+          wechat_errcode: number | null
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          media_id?: string | null
+          message_type?: string
+          msgid?: string | null
+          ocr_confidence?: number | null
+          ocr_text?: string | null
+          origin?: number | null
+          processing_status?: string | null
+          received_at?: string
+          reply_to_message_id?: string | null
+          send_time?: string | null
+          text_content?: string | null
+          wechat_errcode?: number | null
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          media_id?: string | null
+          message_type?: string
+          msgid?: string | null
+          ocr_confidence?: number | null
+          ocr_text?: string | null
+          origin?: number | null
+          processing_status?: string | null
+          received_at?: string
+          reply_to_message_id?: string | null
+          send_time?: string | null
+          text_content?: string | null
+          wechat_errcode?: number | null
+        }
+        Relationships: []
+      }
+      wechat_ai_tool_runs: {
+        Row: {
+          agent_run_id: string | null
+          conversation_id: string | null
+          created_at: string
+          duration_ms: number | null
+          id: string
+          request_summary: Json
+          response_summary: Json
+          result_code: string | null
+          success: boolean
+          tool_name: string
+        }
+        Insert: {
+          agent_run_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          request_summary?: Json
+          response_summary?: Json
+          result_code?: string | null
+          success?: boolean
+          tool_name: string
+        }
+        Update: {
+          agent_run_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          request_summary?: Json
+          response_summary?: Json
+          result_code?: string | null
+          success?: boolean
+          tool_name?: string
+        }
+        Relationships: []
+      }
+      wechat_bind_states: {
+        Row: {
+          created_at: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wechat_callback_dedup: {
+        Row: {
+          created_at: string
+          expires_at: string
+          hash: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          hash: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          hash?: string
+        }
+        Relationships: []
+      }
+      wechat_forwarding_draft_events: {
+        Row: {
+          after_data: Json
+          before_data: Json
+          changed_fields: Json
+          created_at: string
+          draft_id: string
+          id: string
+          message_id: string | null
+        }
+        Insert: {
+          after_data?: Json
+          before_data?: Json
+          changed_fields?: Json
+          created_at?: string
+          draft_id: string
+          id?: string
+          message_id?: string | null
+        }
+        Update: {
+          after_data?: Json
+          before_data?: Json
+          changed_fields?: Json
+          created_at?: string
+          draft_id?: string
+          id?: string
+          message_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
