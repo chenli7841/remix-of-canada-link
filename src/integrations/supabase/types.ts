@@ -1028,6 +1028,1356 @@ export type Database = {
         }
         Relationships: []
       }
+      forwarding_orders: {
+        Row: {
+          actual_weight_kg: number | null
+          address_id: string | null
+          aliases: string[]
+          batch_no: string | null
+          box_count: number
+          box_no: string | null
+          carton_id: string | null
+          company_code: string | null
+          created_at: string
+          customer_code: string | null
+          customs_cny: number
+          declared_value_cad: number | null
+          destination_code: string | null
+          domestic_tracking_no: string | null
+          eta: string | null
+          eta_label: string | null
+          fee_cny: number | null
+          freight_snapshot: Json | null
+          height_cm: number | null
+          id: string
+          insurance_cny: number
+          insured: boolean
+          intake_at: string | null
+          intake_by: string | null
+          intl_tracking_no: string | null
+          items_desc: string | null
+          length_cm: number | null
+          note: string | null
+          pallet_id: string | null
+          pallet_no: string | null
+          payment_status: string
+          request_no: string | null
+          route_code: string | null
+          route_id: string | null
+          shipping_method: string
+          status: string
+          storage_fee_from: string | null
+          tracking_no: string | null
+          updated_at: string
+          user_id: string
+          warehouse: string
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          actual_weight_kg?: number | null
+          address_id?: string | null
+          aliases?: string[]
+          batch_no?: string | null
+          box_count?: number
+          box_no?: string | null
+          carton_id?: string | null
+          company_code?: string | null
+          created_at?: string
+          customer_code?: string | null
+          customs_cny?: number
+          declared_value_cad?: number | null
+          destination_code?: string | null
+          domestic_tracking_no?: string | null
+          eta?: string | null
+          eta_label?: string | null
+          fee_cny?: number | null
+          freight_snapshot?: Json | null
+          height_cm?: number | null
+          id?: string
+          insurance_cny?: number
+          insured?: boolean
+          intake_at?: string | null
+          intake_by?: string | null
+          intl_tracking_no?: string | null
+          items_desc?: string | null
+          length_cm?: number | null
+          note?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_status?: string
+          request_no?: string | null
+          route_code?: string | null
+          route_id?: string | null
+          shipping_method: string
+          status?: string
+          storage_fee_from?: string | null
+          tracking_no?: string | null
+          updated_at?: string
+          user_id: string
+          warehouse: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          actual_weight_kg?: number | null
+          address_id?: string | null
+          aliases?: string[]
+          batch_no?: string | null
+          box_count?: number
+          box_no?: string | null
+          carton_id?: string | null
+          company_code?: string | null
+          created_at?: string
+          customer_code?: string | null
+          customs_cny?: number
+          declared_value_cad?: number | null
+          destination_code?: string | null
+          domestic_tracking_no?: string | null
+          eta?: string | null
+          eta_label?: string | null
+          fee_cny?: number | null
+          freight_snapshot?: Json | null
+          height_cm?: number | null
+          id?: string
+          insurance_cny?: number
+          insured?: boolean
+          intake_at?: string | null
+          intake_by?: string | null
+          intl_tracking_no?: string | null
+          items_desc?: string | null
+          length_cm?: number | null
+          note?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_status?: string
+          request_no?: string | null
+          route_code?: string | null
+          route_id?: string | null
+          shipping_method?: string
+          status?: string
+          storage_fee_from?: string | null
+          tracking_no?: string | null
+          updated_at?: string
+          user_id?: string
+          warehouse?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: []
+      }
+      freight_rules: {
+        Row: {
+          clearance_fee_batch_cad: number
+          clearance_fee_cad: number
+          clearance_fee_level: string
+          clearance_fee_waybill_cad: number
+          created_at: string
+          delivery_heavy_min_kg: number | null
+          delivery_light_fee_cad: number | null
+          delivery_light_max_kg: number | null
+          delivery_unit_fee_cad: number | null
+          direction: string
+          effective_from: string | null
+          effective_to: string | null
+          extra_fee_cny: number
+          id: string
+          insurance_rate_pct: number
+          is_active: boolean
+          min_charge_batch_cad: number
+          min_charge_cad: number
+          min_charge_cny: number
+          min_charge_level: string
+          min_charge_waybill_cad: number
+          note: string | null
+          oversize_alert_length_cm: number | null
+          overweight_alert_ratio: number | null
+          pallet_max_height_cm: number | null
+          pallet_max_length_cm: number | null
+          pallet_max_weight_kg: number | null
+          pallet_max_width_cm: number | null
+          pallet_overflow_factor: number
+          pallet_unit_price_cad: number
+          pricing_mode: string
+          remote_postal_prefixes: string | null
+          route_id: string
+          unit_price_cad: number
+          unit_price_cny: number
+          updated_at: string
+          volumetric_divisor: number
+          weight_mode: string
+        }
+        Insert: {
+          clearance_fee_batch_cad?: number
+          clearance_fee_cad?: number
+          clearance_fee_level?: string
+          clearance_fee_waybill_cad?: number
+          created_at?: string
+          delivery_heavy_min_kg?: number | null
+          delivery_light_fee_cad?: number | null
+          delivery_light_max_kg?: number | null
+          delivery_unit_fee_cad?: number | null
+          direction?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          extra_fee_cny?: number
+          id?: string
+          insurance_rate_pct?: number
+          is_active?: boolean
+          min_charge_batch_cad?: number
+          min_charge_cad?: number
+          min_charge_cny?: number
+          min_charge_level?: string
+          min_charge_waybill_cad?: number
+          note?: string | null
+          oversize_alert_length_cm?: number | null
+          overweight_alert_ratio?: number | null
+          pallet_max_height_cm?: number | null
+          pallet_max_length_cm?: number | null
+          pallet_max_weight_kg?: number | null
+          pallet_max_width_cm?: number | null
+          pallet_overflow_factor?: number
+          pallet_unit_price_cad?: number
+          pricing_mode?: string
+          remote_postal_prefixes?: string | null
+          route_id: string
+          unit_price_cad?: number
+          unit_price_cny?: number
+          updated_at?: string
+          volumetric_divisor?: number
+          weight_mode?: string
+        }
+        Update: {
+          clearance_fee_batch_cad?: number
+          clearance_fee_cad?: number
+          clearance_fee_level?: string
+          clearance_fee_waybill_cad?: number
+          created_at?: string
+          delivery_heavy_min_kg?: number | null
+          delivery_light_fee_cad?: number | null
+          delivery_light_max_kg?: number | null
+          delivery_unit_fee_cad?: number | null
+          direction?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          extra_fee_cny?: number
+          id?: string
+          insurance_rate_pct?: number
+          is_active?: boolean
+          min_charge_batch_cad?: number
+          min_charge_cad?: number
+          min_charge_cny?: number
+          min_charge_level?: string
+          min_charge_waybill_cad?: number
+          note?: string | null
+          oversize_alert_length_cm?: number | null
+          overweight_alert_ratio?: number | null
+          pallet_max_height_cm?: number | null
+          pallet_max_length_cm?: number | null
+          pallet_max_weight_kg?: number | null
+          pallet_max_width_cm?: number | null
+          pallet_overflow_factor?: number
+          pallet_unit_price_cad?: number
+          pricing_mode?: string
+          remote_postal_prefixes?: string | null
+          route_id?: string
+          unit_price_cad?: number
+          unit_price_cny?: number
+          updated_at?: string
+          volumetric_divisor?: number
+          weight_mode?: string
+        }
+        Relationships: []
+      }
+      hs_codes: {
+        Row: {
+          aliases: string[]
+          anti_dumping_note: string | null
+          anti_dumping_rate: number | null
+          chapter: string | null
+          contains_battery: boolean
+          control_note: string | null
+          created_at: string
+          excise_note: string | null
+          excise_rate: number
+          gst_rate: number | null
+          hs_code: string
+          id: string
+          import_control: string[]
+          is_active: boolean
+          is_hazmat: boolean
+          material: string | null
+          mfn_rate: number | null
+          mfn_text: string | null
+          name_en: string | null
+          name_zh: string
+          note: string | null
+          origin: string | null
+          parent_description: string | null
+          requires_permit: boolean
+          sima_involved: boolean
+          surtax_note: string | null
+          surtax_rate: number
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          anti_dumping_note?: string | null
+          anti_dumping_rate?: number | null
+          chapter?: string | null
+          contains_battery?: boolean
+          control_note?: string | null
+          created_at?: string
+          excise_note?: string | null
+          excise_rate?: number
+          gst_rate?: number | null
+          hs_code: string
+          id?: string
+          import_control?: string[]
+          is_active?: boolean
+          is_hazmat?: boolean
+          material?: string | null
+          mfn_rate?: number | null
+          mfn_text?: string | null
+          name_en?: string | null
+          name_zh: string
+          note?: string | null
+          origin?: string | null
+          parent_description?: string | null
+          requires_permit?: boolean
+          sima_involved?: boolean
+          surtax_note?: string | null
+          surtax_rate?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          anti_dumping_note?: string | null
+          anti_dumping_rate?: number | null
+          chapter?: string | null
+          contains_battery?: boolean
+          control_note?: string | null
+          created_at?: string
+          excise_note?: string | null
+          excise_rate?: number
+          gst_rate?: number | null
+          hs_code?: string
+          id?: string
+          import_control?: string[]
+          is_active?: boolean
+          is_hazmat?: boolean
+          material?: string | null
+          mfn_rate?: number | null
+          mfn_text?: string | null
+          name_en?: string | null
+          name_zh?: string
+          note?: string | null
+          origin?: string | null
+          parent_description?: string | null
+          requires_permit?: boolean
+          sima_involved?: boolean
+          surtax_note?: string | null
+          surtax_rate?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hs_import_staging: {
+        Row: {
+          hs_code: string
+          mfn_text: string | null
+          parent_description: string | null
+        }
+        Insert: {
+          hs_code: string
+          mfn_text?: string | null
+          parent_description?: string | null
+        }
+        Update: {
+          hs_code?: string
+          mfn_text?: string | null
+          parent_description?: string | null
+        }
+        Relationships: []
+      }
+      inventory_movements: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          operator_id: string | null
+          qty_delta: number
+          reason: Database["public"]["Enums"]["inv_reason"]
+          ref_id: string | null
+          ref_type: string | null
+          variant_id: string
+          warehouse_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          operator_id?: string | null
+          qty_delta: number
+          reason: Database["public"]["Enums"]["inv_reason"]
+          ref_id?: string | null
+          ref_type?: string | null
+          variant_id: string
+          warehouse_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          operator_id?: string | null
+          qty_delta?: number
+          reason?: Database["public"]["Enums"]["inv_reason"]
+          ref_id?: string | null
+          ref_type?: string | null
+          variant_id?: string
+          warehouse_id?: string
+        }
+        Relationships: []
+      }
+      invoice_items: {
+        Row: {
+          amount_cny: number
+          created_at: string
+          customs_cny: number
+          description: string
+          forwarding_id: string | null
+          freight_cny: number
+          id: string
+          insurance_cny: number
+          invoice_id: string
+          meta: Json | null
+          order_id: string | null
+          other_cny: number
+          waybill_id: string | null
+        }
+        Insert: {
+          amount_cny?: number
+          created_at?: string
+          customs_cny?: number
+          description: string
+          forwarding_id?: string | null
+          freight_cny?: number
+          id?: string
+          insurance_cny?: number
+          invoice_id: string
+          meta?: Json | null
+          order_id?: string | null
+          other_cny?: number
+          waybill_id?: string | null
+        }
+        Update: {
+          amount_cny?: number
+          created_at?: string
+          customs_cny?: number
+          description?: string
+          forwarding_id?: string | null
+          freight_cny?: number
+          id?: string
+          insurance_cny?: number
+          invoice_id?: string
+          meta?: Json | null
+          order_id?: string | null
+          other_cny?: number
+          waybill_id?: string | null
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          batch_no: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          customs_cny: number
+          due_date: string | null
+          freight_cny: number
+          fx_rate: number
+          id: string
+          insurance_cny: number
+          invoice_no: string
+          note: string | null
+          other_cny: number
+          paid_at: string | null
+          paid_cad: number
+          paid_cny: number
+          payment_method: string
+          period_end: string | null
+          period_start: string | null
+          status: Database["public"]["Enums"]["invoice_status"]
+          subtotal_cny: number
+          total_cny: number
+          type: Database["public"]["Enums"]["invoice_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          customs_cny?: number
+          due_date?: string | null
+          freight_cny?: number
+          fx_rate?: number
+          id?: string
+          insurance_cny?: number
+          invoice_no: string
+          note?: string | null
+          other_cny?: number
+          paid_at?: string | null
+          paid_cad?: number
+          paid_cny?: number
+          payment_method?: string
+          period_end?: string | null
+          period_start?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
+          subtotal_cny?: number
+          total_cny?: number
+          type?: Database["public"]["Enums"]["invoice_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          customs_cny?: number
+          due_date?: string | null
+          freight_cny?: number
+          fx_rate?: number
+          id?: string
+          insurance_cny?: number
+          invoice_no?: string
+          note?: string | null
+          other_cny?: number
+          paid_at?: string | null
+          paid_cad?: number
+          paid_cny?: number
+          payment_method?: string
+          period_end?: string | null
+          period_start?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
+          subtotal_cny?: number
+          total_cny?: number
+          type?: Database["public"]["Enums"]["invoice_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      my_items: {
+        Row: {
+          brand: string | null
+          created_at: string
+          declared_value_cad: number
+          gst_rate: number
+          hs_code: string
+          id: string
+          inner_qty: number | null
+          material: string | null
+          mfn_rate: number
+          name: string
+          origin: string | null
+          sima_involved: boolean
+          sku: string | null
+          unit: string | null
+          updated_at: string
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          declared_value_cad?: number
+          gst_rate?: number
+          hs_code: string
+          id?: string
+          inner_qty?: number | null
+          material?: string | null
+          mfn_rate?: number
+          name: string
+          origin?: string | null
+          sima_involved?: boolean
+          sku?: string | null
+          unit?: string | null
+          updated_at?: string
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          declared_value_cad?: number
+          gst_rate?: number
+          hs_code?: string
+          id?: string
+          inner_qty?: number | null
+          material?: string | null
+          mfn_rate?: number
+          name?: string
+          origin?: string | null
+          sima_involved?: boolean
+          sku?: string | null
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
+      offline_payments: {
+        Row: {
+          amount_cad: number
+          attachment_url: string | null
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          note: string | null
+          paid_at: string
+          recorded_by: string | null
+          reference: string | null
+        }
+        Insert: {
+          amount_cad: number
+          attachment_url?: string | null
+          created_at?: string
+          id?: string
+          invoice_id: string
+          method: string
+          note?: string | null
+          paid_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+        }
+        Update: {
+          amount_cad?: number
+          attachment_url?: string | null
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          method?: string
+          note?: string | null
+          paid_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+        }
+        Relationships: []
+      }
+      order_attachments: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          owner_id: string
+          owner_kind: string
+          user_id: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number
+          id?: string
+          owner_id: string
+          owner_kind: string
+          user_id: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          owner_id?: string
+          owner_kind?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          attrs_snapshot: Json | null
+          created_at: string
+          id: string
+          image_url: string | null
+          name_en: string | null
+          name_zh: string
+          order_id: string
+          paid: boolean
+          product_id: string | null
+          product_slug: string
+          purchase_type: string
+          quantity: number
+          sku: string | null
+          subtotal_cny: number
+          unit_price_cny: number
+          variant_id: string | null
+          waybill_id: string | null
+        }
+        Insert: {
+          attrs_snapshot?: Json | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name_en?: string | null
+          name_zh: string
+          order_id: string
+          paid?: boolean
+          product_id?: string | null
+          product_slug: string
+          purchase_type?: string
+          quantity: number
+          sku?: string | null
+          subtotal_cny?: number
+          unit_price_cny: number
+          variant_id?: string | null
+          waybill_id?: string | null
+        }
+        Update: {
+          attrs_snapshot?: Json | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name_en?: string | null
+          name_zh?: string
+          order_id?: string
+          paid?: boolean
+          product_id?: string | null
+          product_slug?: string
+          purchase_type?: string
+          quantity?: number
+          sku?: string | null
+          subtotal_cny?: number
+          unit_price_cny?: number
+          variant_id?: string | null
+          waybill_id?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          address_snapshot: Json | null
+          aliases: string[]
+          batch_no: string | null
+          box_count: number
+          box_no: string | null
+          buyer_note: string | null
+          carton_id: string | null
+          company_code: string | null
+          completed_at: string | null
+          coupon_id: string | null
+          created_at: string
+          customer_code: string | null
+          customs_cny: number
+          destination_code: string | null
+          discount_cny: number
+          display_currency: string
+          domestic_tracking_no: string | null
+          eta: string | null
+          freight_recalc_at: string | null
+          freight_recalc_by: string | null
+          freight_snapshot: Json | null
+          fx_rate: number
+          id: string
+          insurance_cny: number
+          insured: boolean
+          intl_tracking_no: string | null
+          note: string | null
+          order_no: string
+          paid_at: string | null
+          pallet_id: string | null
+          pallet_no: string | null
+          payment_method: string | null
+          payment_status: string
+          route_code: string | null
+          route_id: string | null
+          shipped_at: string | null
+          shipping_cny: number
+          shipping_method: string
+          source: string
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal_cny: number
+          total_cny: number
+          tracking_no: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_snapshot?: Json | null
+          aliases?: string[]
+          batch_no?: string | null
+          box_count?: number
+          box_no?: string | null
+          buyer_note?: string | null
+          carton_id?: string | null
+          company_code?: string | null
+          completed_at?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          customer_code?: string | null
+          customs_cny?: number
+          destination_code?: string | null
+          discount_cny?: number
+          display_currency?: string
+          domestic_tracking_no?: string | null
+          eta?: string | null
+          freight_recalc_at?: string | null
+          freight_recalc_by?: string | null
+          freight_snapshot?: Json | null
+          fx_rate?: number
+          id?: string
+          insurance_cny?: number
+          insured?: boolean
+          intl_tracking_no?: string | null
+          note?: string | null
+          order_no: string
+          paid_at?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          route_code?: string | null
+          route_id?: string | null
+          shipped_at?: string | null
+          shipping_cny?: number
+          shipping_method?: string
+          source?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cny?: number
+          total_cny?: number
+          tracking_no?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_snapshot?: Json | null
+          aliases?: string[]
+          batch_no?: string | null
+          box_count?: number
+          box_no?: string | null
+          buyer_note?: string | null
+          carton_id?: string | null
+          company_code?: string | null
+          completed_at?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          customer_code?: string | null
+          customs_cny?: number
+          destination_code?: string | null
+          discount_cny?: number
+          display_currency?: string
+          domestic_tracking_no?: string | null
+          eta?: string | null
+          freight_recalc_at?: string | null
+          freight_recalc_by?: string | null
+          freight_snapshot?: Json | null
+          fx_rate?: number
+          id?: string
+          insurance_cny?: number
+          insured?: boolean
+          intl_tracking_no?: string | null
+          note?: string | null
+          order_no?: string
+          paid_at?: string | null
+          pallet_id?: string | null
+          pallet_no?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          route_code?: string | null
+          route_id?: string | null
+          shipped_at?: string | null
+          shipping_cny?: number
+          shipping_method?: string
+          source?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cny?: number
+          total_cny?: number
+          tracking_no?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      oversize_rules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          max_girth_cm: number | null
+          max_height_cm: number | null
+          max_length_cm: number | null
+          max_single_side_cm: number | null
+          max_volume_m3: number | null
+          max_weight_kg: number | null
+          max_width_cm: number | null
+          name: string
+          notes: string | null
+          route_id: string | null
+          shipping_method: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_girth_cm?: number | null
+          max_height_cm?: number | null
+          max_length_cm?: number | null
+          max_single_side_cm?: number | null
+          max_volume_m3?: number | null
+          max_weight_kg?: number | null
+          max_width_cm?: number | null
+          name: string
+          notes?: string | null
+          route_id?: string | null
+          shipping_method?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_girth_cm?: number | null
+          max_height_cm?: number | null
+          max_length_cm?: number | null
+          max_single_side_cm?: number | null
+          max_volume_m3?: number | null
+          max_weight_kg?: number | null
+          max_width_cm?: number | null
+          name?: string
+          notes?: string | null
+          route_id?: string | null
+          shipping_method?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pallets: {
+        Row: {
+          address_snapshot: Json | null
+          batch_id: string | null
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          customer_code: string | null
+          customer_user_id: string | null
+          destination_code: string | null
+          display_name: string | null
+          height_cm: number | null
+          id: string
+          length_cm: number | null
+          notes: string | null
+          pallet_no: string | null
+          pickup_warehouse: string | null
+          route_code: string | null
+          route_id: string | null
+          self_freight_cad: number
+          self_freight_cny: number
+          self_height_cm: number | null
+          self_length_cm: number | null
+          self_volume_m3: number | null
+          self_weight_kg: number | null
+          self_width_cm: number | null
+          sequence_no: number | null
+          status: string
+          unlocked: boolean
+          updated_at: string
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          address_snapshot?: Json | null
+          batch_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_code?: string | null
+          customer_user_id?: string | null
+          destination_code?: string | null
+          display_name?: string | null
+          height_cm?: number | null
+          id?: string
+          length_cm?: number | null
+          notes?: string | null
+          pallet_no?: string | null
+          pickup_warehouse?: string | null
+          route_code?: string | null
+          route_id?: string | null
+          self_freight_cad?: number
+          self_freight_cny?: number
+          self_height_cm?: number | null
+          self_length_cm?: number | null
+          self_volume_m3?: number | null
+          self_weight_kg?: number | null
+          self_width_cm?: number | null
+          sequence_no?: number | null
+          status?: string
+          unlocked?: boolean
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          address_snapshot?: Json | null
+          batch_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_code?: string | null
+          customer_user_id?: string | null
+          destination_code?: string | null
+          display_name?: string | null
+          height_cm?: number | null
+          id?: string
+          length_cm?: number | null
+          notes?: string | null
+          pallet_no?: string | null
+          pickup_warehouse?: string | null
+          route_code?: string | null
+          route_id?: string | null
+          self_freight_cad?: number
+          self_freight_cny?: number
+          self_height_cm?: number | null
+          self_length_cm?: number | null
+          self_volume_m3?: number | null
+          self_weight_kg?: number | null
+          self_width_cm?: number | null
+          sequence_no?: number | null
+          status?: string
+          unlocked?: boolean
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: []
+      }
+      product_categories: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          name_en: string | null
+          parent_id: string | null
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          name_en?: string | null
+          parent_id?: string | null
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          name_en?: string | null
+          parent_id?: string | null
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_variants: {
+        Row: {
+          attrs: Json
+          barcode: string | null
+          created_at: string
+          height_cm: number | null
+          id: string
+          is_active: boolean
+          length_cm: number | null
+          pack_height_cm: number | null
+          pack_length_cm: number | null
+          pack_qty: number | null
+          pack_volume_m3: number | null
+          pack_weight_kg: number | null
+          pack_width_cm: number | null
+          price_cny: number
+          product_id: string
+          sku: string
+          stock: number
+          updated_at: string
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          attrs?: Json
+          barcode?: string | null
+          created_at?: string
+          height_cm?: number | null
+          id?: string
+          is_active?: boolean
+          length_cm?: number | null
+          pack_height_cm?: number | null
+          pack_length_cm?: number | null
+          pack_qty?: number | null
+          pack_volume_m3?: number | null
+          pack_weight_kg?: number | null
+          pack_width_cm?: number | null
+          price_cny?: number
+          product_id: string
+          sku: string
+          stock?: number
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          attrs?: Json
+          barcode?: string | null
+          created_at?: string
+          height_cm?: number | null
+          id?: string
+          is_active?: boolean
+          length_cm?: number | null
+          pack_height_cm?: number | null
+          pack_length_cm?: number | null
+          pack_qty?: number | null
+          pack_volume_m3?: number | null
+          pack_weight_kg?: number | null
+          pack_width_cm?: number | null
+          price_cny?: number
+          product_id?: string
+          sku?: string
+          stock?: number
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          allow_business: boolean
+          allow_personal: boolean
+          available_route_codes: string[]
+          brand: string | null
+          business_air_route_code: string | null
+          business_sea_route_code: string | null
+          cargo_type: string
+          category_id: string | null
+          compare_price_cad: number | null
+          compare_price_cny: number | null
+          cover_url: string | null
+          created_at: string
+          customs_antidumping_rate: number
+          customs_gst_rate: number
+          customs_mfn_rate: number
+          description: string | null
+          description_en: string | null
+          detail_blocks: Json
+          faq_items: Json
+          freight_cny: number
+          height_cm: number | null
+          hs_code: string | null
+          id: string
+          images: Json
+          is_featured: boolean
+          lead_time_note: string | null
+          lead_time_note_en: string | null
+          length_cm: number | null
+          manufacturer: string | null
+          manufacturer_contact: Json
+          moq: number
+          name: string
+          name_en: string | null
+          origin_location: string | null
+          origin_location_en: string | null
+          origin_port_note: string | null
+          origin_port_note_en: string | null
+          pack_height_cm: number | null
+          pack_length_cm: number | null
+          pack_qty: number
+          pack_volume_m3: number | null
+          pack_weight_kg: number | null
+          pack_width_cm: number | null
+          packaging_note: string | null
+          packaging_note_en: string | null
+          personal_air_route_code: string | null
+          personal_freight_mode: string
+          personal_per_unit_freight_air_cny: number
+          personal_per_unit_freight_cny: number
+          personal_per_unit_freight_sea_cny: number
+          personal_sea_route_code: string | null
+          price_cny: number
+          purchase_type: Database["public"]["Enums"]["product_purchase_type"]
+          sku: string
+          slug: string
+          sold_count: number
+          status: Database["public"]["Enums"]["product_status"]
+          subtitle: string | null
+          subtitle_en: string | null
+          tags: string[]
+          total_stock: number
+          trust_points: Json
+          updated_at: string
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          allow_business?: boolean
+          allow_personal?: boolean
+          available_route_codes?: string[]
+          brand?: string | null
+          business_air_route_code?: string | null
+          business_sea_route_code?: string | null
+          cargo_type?: string
+          category_id?: string | null
+          compare_price_cad?: number | null
+          compare_price_cny?: number | null
+          cover_url?: string | null
+          created_at?: string
+          customs_antidumping_rate?: number
+          customs_gst_rate?: number
+          customs_mfn_rate?: number
+          description?: string | null
+          description_en?: string | null
+          detail_blocks?: Json
+          faq_items?: Json
+          freight_cny?: number
+          height_cm?: number | null
+          hs_code?: string | null
+          id?: string
+          images?: Json
+          is_featured?: boolean
+          lead_time_note?: string | null
+          lead_time_note_en?: string | null
+          length_cm?: number | null
+          manufacturer?: string | null
+          manufacturer_contact?: Json
+          moq?: number
+          name: string
+          name_en?: string | null
+          origin_location?: string | null
+          origin_location_en?: string | null
+          origin_port_note?: string | null
+          origin_port_note_en?: string | null
+          pack_height_cm?: number | null
+          pack_length_cm?: number | null
+          pack_qty?: number
+          pack_volume_m3?: number | null
+          pack_weight_kg?: number | null
+          pack_width_cm?: number | null
+          packaging_note?: string | null
+          packaging_note_en?: string | null
+          personal_air_route_code?: string | null
+          personal_freight_mode?: string
+          personal_per_unit_freight_air_cny?: number
+          personal_per_unit_freight_cny?: number
+          personal_per_unit_freight_sea_cny?: number
+          personal_sea_route_code?: string | null
+          price_cny?: number
+          purchase_type?: Database["public"]["Enums"]["product_purchase_type"]
+          sku: string
+          slug: string
+          sold_count?: number
+          status?: Database["public"]["Enums"]["product_status"]
+          subtitle?: string | null
+          subtitle_en?: string | null
+          tags?: string[]
+          total_stock?: number
+          trust_points?: Json
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          allow_business?: boolean
+          allow_personal?: boolean
+          available_route_codes?: string[]
+          brand?: string | null
+          business_air_route_code?: string | null
+          business_sea_route_code?: string | null
+          cargo_type?: string
+          category_id?: string | null
+          compare_price_cad?: number | null
+          compare_price_cny?: number | null
+          cover_url?: string | null
+          created_at?: string
+          customs_antidumping_rate?: number
+          customs_gst_rate?: number
+          customs_mfn_rate?: number
+          description?: string | null
+          description_en?: string | null
+          detail_blocks?: Json
+          faq_items?: Json
+          freight_cny?: number
+          height_cm?: number | null
+          hs_code?: string | null
+          id?: string
+          images?: Json
+          is_featured?: boolean
+          lead_time_note?: string | null
+          lead_time_note_en?: string | null
+          length_cm?: number | null
+          manufacturer?: string | null
+          manufacturer_contact?: Json
+          moq?: number
+          name?: string
+          name_en?: string | null
+          origin_location?: string | null
+          origin_location_en?: string | null
+          origin_port_note?: string | null
+          origin_port_note_en?: string | null
+          pack_height_cm?: number | null
+          pack_length_cm?: number | null
+          pack_qty?: number
+          pack_volume_m3?: number | null
+          pack_weight_kg?: number | null
+          pack_width_cm?: number | null
+          packaging_note?: string | null
+          packaging_note_en?: string | null
+          personal_air_route_code?: string | null
+          personal_freight_mode?: string
+          personal_per_unit_freight_air_cny?: number
+          personal_per_unit_freight_cny?: number
+          personal_per_unit_freight_sea_cny?: number
+          personal_sea_route_code?: string | null
+          price_cny?: number
+          purchase_type?: Database["public"]["Enums"]["product_purchase_type"]
+          sku?: string
+          slug?: string
+          sold_count?: number
+          status?: Database["public"]["Enums"]["product_status"]
+          subtitle?: string | null
+          subtitle_en?: string | null
+          tags?: string[]
+          total_stock?: number
+          trust_points?: Json
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
