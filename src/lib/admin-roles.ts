@@ -8,6 +8,7 @@ export const ROLE_LABEL: Record<AppRole, { zh: string; en: string }> = {
   driver: { zh: "派送司机", en: "Driver" },
   pickup_point: { zh: "取货点", en: "Pickup Point" },
   sales: { zh: "销售", en: "Sales" },
+  sales_rep: { zh: "销售代表", en: "Sales Rep" },
   support: { zh: "客服", en: "Support" },
   customer: { zh: "客人", en: "Customer" },
 };
@@ -36,6 +37,7 @@ export const ROLE_COLOR: Record<AppRole, string> = {
   driver: "bg-blue-500/15 text-blue-600 border-blue-500/30",
   pickup_point: "bg-indigo-500/15 text-indigo-600 border-indigo-500/30",
   sales: "bg-violet-500/15 text-violet-600 border-violet-500/30",
+  sales_rep: "bg-purple-500/15 text-purple-600 border-purple-500/30",
   support: "bg-cyan-500/15 text-cyan-600 border-cyan-500/30",
   customer: "bg-muted text-muted-foreground border-border",
 };
