@@ -9,8 +9,8 @@ function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
 
-function createSupabaseFetch(supabaseKey: string): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
-  return (input, init) => {
+function createSupabaseFetch(supabaseKey: string): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(
       typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
     );
