@@ -11,6 +11,7 @@ export type AppRole =
   | "driver"
   | "pickup_point"
   | "sales"
+  | "sales_rep"
   | "support"
   | "customer";
 
@@ -25,6 +26,7 @@ const ROLE_SORT_ORDER: AppRole[] = [
   "driver",
   "pickup_point",
   "sales",
+  "sales_rep",
   "support",
   "customer",
 ];
