@@ -24,7 +24,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
     headers.set('apikey', supabaseKey);
     return fetch(input, { ...init, headers });
-  };
+  }) as typeof fetch;
 }
 
 
