@@ -4977,10 +4977,14 @@ export type Database = {
           customer_code: string
           error: string | null
           id: string
+          last_checked_at: string | null
           message_id: string
           rendered_content: string
+          sender_userid: string | null
           sent_at: string | null
           status: string
+          submitted_at: string | null
+          wecom_msgid: string | null
         }
         Insert: {
           chat_id: string
@@ -4988,10 +4992,14 @@ export type Database = {
           customer_code: string
           error?: string | null
           id?: string
+          last_checked_at?: string | null
           message_id: string
           rendered_content: string
+          sender_userid?: string | null
           sent_at?: string | null
           status?: string
+          submitted_at?: string | null
+          wecom_msgid?: string | null
         }
         Update: {
           chat_id?: string
@@ -4999,10 +5007,14 @@ export type Database = {
           customer_code?: string
           error?: string | null
           id?: string
+          last_checked_at?: string | null
           message_id?: string
           rendered_content?: string
+          sender_userid?: string | null
           sent_at?: string | null
           status?: string
+          submitted_at?: string | null
+          wecom_msgid?: string | null
         }
         Relationships: [
           {
@@ -5023,6 +5035,7 @@ export type Database = {
           send_result: Json | null
           sent_at: string | null
           status: string
+          submitted_at: string | null
           target_customer_codes: string[]
           target_scope: string
           title: string
@@ -5035,6 +5048,7 @@ export type Database = {
           send_result?: Json | null
           sent_at?: string | null
           status?: string
+          submitted_at?: string | null
           target_customer_codes?: string[]
           target_scope?: string
           title?: string
@@ -5047,6 +5061,7 @@ export type Database = {
           send_result?: Json | null
           sent_at?: string | null
           status?: string
+          submitted_at?: string | null
           target_customer_codes?: string[]
           target_scope?: string
           title?: string

@@ -1,4 +1,8 @@
+-- 手动迁移说明：在 Supabase Dashboard > SQL Editor 中完整执行本文件一次。
+-- 本迁移不会发送任何企业微信消息，也不会修改现有消息内容；重复执行是安全的。
 -- Separate "submitted to WeCom" from "actually sent by the employee".
+begin;
+
 alter table public.wecom_notify_messages
   drop constraint if exists wecom_notify_messages_status_check;
 
@@ -42,3 +46,5 @@ alter table public.wecom_notify_message_targets
 create index if not exists idx_wecom_notify_targets_msgid
   on public.wecom_notify_message_targets (wecom_msgid)
   where wecom_msgid is not null;
+
+commit;
