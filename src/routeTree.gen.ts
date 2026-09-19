@@ -18,10 +18,12 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as PromoRouteImport } from './routes/promo'
 import { Route as ShippingRouteImport } from './routes/shipping'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
@@ -49,6 +51,7 @@ import { Route as AdminTrackingPresetsRouteImport } from './routes/admin/trackin
 import { Route as AdminWalletLedgerRouteImport } from './routes/admin/wallet-ledger'
 import { Route as AdminWarehousesRouteImport } from './routes/admin/warehouses'
 import { Route as AdminWechatAiRecordsRouteImport } from './routes/admin/wechat-ai-records'
+import { Route as AdminWecomNotifyRouteImport } from './routes/admin/wecom-notify'
 import { Route as CgiBinSplatRouteImport } from './routes/cgi-bin/$'
 import { Route as ProductsIndexRouteImport } from './routes/products.index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
@@ -157,6 +160,11 @@ const McpRoute = McpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProductsRoute = ProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -175,6 +183,11 @@ const ShippingRoute = ShippingRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrackRoute = TrackRouteImport.update({
@@ -312,6 +325,11 @@ const AdminWarehousesRoute = AdminWarehousesRouteImport.update({
 const AdminWechatAiRecordsRoute = AdminWechatAiRecordsRouteImport.update({
   id: '/wechat-ai-records',
   path: '/wechat-ai-records',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminWecomNotifyRoute = AdminWecomNotifyRouteImport.update({
+  id: '/wecom-notify',
+  path: '/wecom-notify',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const CgiBinSplatRoute = CgiBinSplatRouteImport.update({
@@ -660,10 +678,12 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
   '/mcp': typeof McpRoute
+  '/privacy': typeof PrivacyRoute
   '/products': typeof ProductsRouteWithChildren
   '/promo': typeof PromoRoute
   '/shipping': typeof ShippingRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/track': typeof TrackRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -690,6 +710,7 @@ export interface FileRoutesByFullPath {
   '/admin/wallet-ledger': typeof AdminWalletLedgerRoute
   '/admin/warehouses': typeof AdminWarehousesRoute
   '/admin/wechat-ai-records': typeof AdminWechatAiRecordsRoute
+  '/admin/wecom-notify': typeof AdminWecomNotifyRoute
   '/cgi-bin/$': typeof CgiBinSplatRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -763,9 +784,11 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
   '/mcp': typeof McpRoute
+  '/privacy': typeof PrivacyRoute
   '/promo': typeof PromoRoute
   '/shipping': typeof ShippingRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/track': typeof TrackRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -792,6 +815,7 @@ export interface FileRoutesByTo {
   '/admin/wallet-ledger': typeof AdminWalletLedgerRoute
   '/admin/warehouses': typeof AdminWarehousesRoute
   '/admin/wechat-ai-records': typeof AdminWechatAiRecordsRoute
+  '/admin/wecom-notify': typeof AdminWecomNotifyRoute
   '/cgi-bin/$': typeof CgiBinSplatRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -868,10 +892,12 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
   '/mcp': typeof McpRoute
+  '/privacy': typeof PrivacyRoute
   '/products': typeof ProductsRouteWithChildren
   '/promo': typeof PromoRoute
   '/shipping': typeof ShippingRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/track': typeof TrackRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -898,6 +924,7 @@ export interface FileRoutesById {
   '/admin/wallet-ledger': typeof AdminWalletLedgerRoute
   '/admin/warehouses': typeof AdminWarehousesRoute
   '/admin/wechat-ai-records': typeof AdminWechatAiRecordsRoute
+  '/admin/wecom-notify': typeof AdminWecomNotifyRoute
   '/cgi-bin/$': typeof CgiBinSplatRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -974,10 +1001,12 @@ export interface FileRouteTypes {
     | '/cart'
     | '/contact'
     | '/mcp'
+    | '/privacy'
     | '/products'
     | '/promo'
     | '/shipping'
     | '/sitemap.xml'
+    | '/terms'
     | '/track'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -1004,6 +1033,7 @@ export interface FileRouteTypes {
     | '/admin/wallet-ledger'
     | '/admin/warehouses'
     | '/admin/wechat-ai-records'
+    | '/admin/wecom-notify'
     | '/cgi-bin/$'
     | '/products/$slug'
     | '/admin/'
@@ -1077,9 +1107,11 @@ export interface FileRouteTypes {
     | '/cart'
     | '/contact'
     | '/mcp'
+    | '/privacy'
     | '/promo'
     | '/shipping'
     | '/sitemap.xml'
+    | '/terms'
     | '/track'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -1106,6 +1138,7 @@ export interface FileRouteTypes {
     | '/admin/wallet-ledger'
     | '/admin/warehouses'
     | '/admin/wechat-ai-records'
+    | '/admin/wecom-notify'
     | '/cgi-bin/$'
     | '/products/$slug'
     | '/admin'
@@ -1181,10 +1214,12 @@ export interface FileRouteTypes {
     | '/cart'
     | '/contact'
     | '/mcp'
+    | '/privacy'
     | '/products'
     | '/promo'
     | '/shipping'
     | '/sitemap.xml'
+    | '/terms'
     | '/track'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -1211,6 +1246,7 @@ export interface FileRouteTypes {
     | '/admin/wallet-ledger'
     | '/admin/warehouses'
     | '/admin/wechat-ai-records'
+    | '/admin/wecom-notify'
     | '/cgi-bin/$'
     | '/products/$slug'
     | '/admin/'
@@ -1287,10 +1323,12 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   ContactRoute: typeof ContactRoute
   McpRoute: typeof McpRoute
+  PrivacyRoute: typeof PrivacyRoute
   ProductsRoute: typeof ProductsRouteWithChildren
   PromoRoute: typeof PromoRoute
   ShippingRoute: typeof ShippingRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TermsRoute: typeof TermsRoute
   TrackRoute: typeof TrackRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -1382,6 +1420,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/products': {
       id: '/products'
       path: '/products'
@@ -1408,6 +1453,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/track': {
@@ -1597,6 +1649,13 @@ declare module '@tanstack/react-router' {
       path: '/wechat-ai-records'
       fullPath: '/admin/wechat-ai-records'
       preLoaderRoute: typeof AdminWechatAiRecordsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/wecom-notify': {
+      id: '/admin/wecom-notify'
+      path: '/wecom-notify'
+      fullPath: '/admin/wecom-notify'
+      preLoaderRoute: typeof AdminWecomNotifyRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/cgi-bin/$': {
@@ -2088,6 +2147,7 @@ interface AdminRouteRouteChildren {
   AdminWalletLedgerRoute: typeof AdminWalletLedgerRoute
   AdminWarehousesRoute: typeof AdminWarehousesRoute
   AdminWechatAiRecordsRoute: typeof AdminWechatAiRecordsRoute
+  AdminWecomNotifyRoute: typeof AdminWecomNotifyRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminBatchesBatchIdRoute: typeof AdminBatchesBatchIdRoute
   AdminCartonsCartonIdRoute: typeof AdminCartonsCartonIdRoute
@@ -2146,6 +2206,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminWalletLedgerRoute: AdminWalletLedgerRoute,
   AdminWarehousesRoute: AdminWarehousesRoute,
   AdminWechatAiRecordsRoute: AdminWechatAiRecordsRoute,
+  AdminWecomNotifyRoute: AdminWecomNotifyRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminBatchesBatchIdRoute: AdminBatchesBatchIdRoute,
   AdminCartonsCartonIdRoute: AdminCartonsCartonIdRoute,
@@ -2235,10 +2296,12 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   ContactRoute: ContactRoute,
   McpRoute: McpRoute,
+  PrivacyRoute: PrivacyRoute,
   ProductsRoute: ProductsRouteWithChildren,
   PromoRoute: PromoRoute,
   ShippingRoute: ShippingRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TermsRoute: TermsRoute,
   TrackRoute: TrackRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:

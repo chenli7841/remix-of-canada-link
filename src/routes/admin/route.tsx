@@ -39,6 +39,7 @@ import {
   Bot,
   Wallet,
   KeyRound,
+  Megaphone,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -93,6 +94,7 @@ const NAV_ICONS: Record<string, any> = {
   Bot,
   Wallet,
   KeyRound,
+  Megaphone,
 };
 
 // Fallback only — used before admin_nav_items has loaded (or if it's ever
@@ -177,6 +179,7 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
       { to: "/admin/nav-settings", label: "菜单权限设置", icon: ShieldCheck, roles: ["owner"] },
       { to: "/admin/wallet-ledger", label: "钱包流水", icon: Wallet },
       { to: "/admin/api-tokens", label: "API 凭证管理", icon: KeyRound, roles: ["owner"] },
+      { to: "/admin/wecom-notify", label: "群发通知", icon: Megaphone, roles: ["owner"] },
     ],
   },
 ];
