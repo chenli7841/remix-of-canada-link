@@ -8,6 +8,7 @@ export type WecomNotifyConfig = {
   corpId: string;
   agentId: string;
   secret: string;
+  apiBaseUrl: string;
 };
 
 export function wecomNotifyConfig(): WecomNotifyConfig {
@@ -15,6 +16,9 @@ export function wecomNotifyConfig(): WecomNotifyConfig {
     corpId: process.env["WECOM_NOTIFY_CORP_ID"] ?? "",
     agentId: process.env["WECOM_NOTIFY_AGENT_ID"] ?? "1000005",
     secret: process.env["WECOM_NOTIFY_SECRET"] ?? "",
+    apiBaseUrl: (
+      process.env["WECOM_API_BASE_URL"] ?? "https://qyapi.weixin.qq.com/cgi-bin"
+    ).replace(/\/$/, ""),
   };
 }
 

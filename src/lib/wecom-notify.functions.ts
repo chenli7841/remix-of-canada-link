@@ -22,7 +22,23 @@ export const getWecomNotifyStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    return { configured: wecomNotifyConfigured(), enabled: wecomNotifyEnabled() };
+    const { wecomNotifyConfig } = await import("@/lib/wecom-notify/config.server");
+    const config = wecomNotifyConfig();
+    return {
+      configured: wecomNotifyConfigured(config),
+      enabled: wecomNotifyEnabled(),
+      usingGateway: config.apiBaseUrl !== "https://qyapi.weixin.qq.com/cgi-bin",
+    };
+  });
+
+export const testWecomNotifyConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!wecomNotifyConfigured()) throw new Error("尚未配置企业微信群发应用凭证");
+    const { testWecomConnection } = await import("@/lib/wecom-notify/client.server");
+    await testWecomConnection();
+    return { ok: true };
   });
 
 // ============ 群列表 ============
@@ -30,7 +46,9 @@ export const listWecomGroups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_groups")
       .select("chat_id, name, owner_userid, member_count, synced_at")
@@ -45,13 +63,18 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    if (!wecomNotifyConfigured()) throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法同步");
+    if (!wecomNotifyConfigured())
+      throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法同步");
     if (!wecomNotifyEnabled()) {
-      throw new Error("WECOM_ENABLED=false（测试环境默认关闭），未完成企业微信授权与可信出口 IP 联调前不能同步真实群数据");
+      throw new Error(
+        "WECOM_ENABLED=false（测试环境默认关闭），未完成企业微信授权与可信出口 IP 联调前不能同步真实群数据",
+      );
     }
     const { listExternalGroups } = await import("@/lib/wecom-notify/client.server");
     const groups = await listExternalGroups();
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const now = new Date().toISOString();
     if (groups.length) {
       const { error } = await supabaseAdmin.from("wecom_notify_groups").upsert(
@@ -80,7 +103,9 @@ export const listWecomBindings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_bindings")
       .select("id, customer_code, chat_id, bound_at, wecom_notify_groups(name, member_count)")
@@ -97,7 +122,9 @@ export const searchCustomersForBinding = createServerFn({ method: "POST" })
     await assertOwner(context.supabase, context.userId);
     const q = data.query.trim();
     if (!q) return { items: [] };
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data: rows, error } = await supabaseAdmin
       .from("profiles")
       .select("id, customer_code, full_name, username")
@@ -115,7 +142,9 @@ export const bindCustomerGroup = createServerFn({ method: "POST" })
     const customerCode = data.customerCode.trim();
     const chatId = data.chatId.trim();
     if (!customerCode || !chatId) throw new Error("客户号和群都必须选择");
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
 
     const { data: prof } = await supabaseAdmin
       .from("profiles")
@@ -150,7 +179,12 @@ export const bindCustomerGroup = createServerFn({ method: "POST" })
     }
 
     const { error } = await supabaseAdmin.from("wecom_notify_bindings").upsert(
-      { customer_code: customerCode, chat_id: chatId, bound_by: context.userId, bound_at: new Date().toISOString() },
+      {
+        customer_code: customerCode,
+        chat_id: chatId,
+        bound_by: context.userId,
+        bound_at: new Date().toISOString(),
+      },
       { onConflict: "customer_code" },
     );
     if (error) throw new Error(error.message);
@@ -169,8 +203,13 @@ export const unbindCustomerGroup = createServerFn({ method: "POST" })
   .inputValidator((d: { customerCode: string }) => d)
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
-    const { error } = await supabaseAdmin.from("wecom_notify_bindings").delete().eq("customer_code", data.customerCode);
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { error } = await supabaseAdmin
+      .from("wecom_notify_bindings")
+      .delete()
+      .eq("customer_code", data.customerCode);
     if (error) throw new Error(error.message);
     await recordAdminLog(supabaseAdmin, {
       entity_type: "wecom_notify_binding",
@@ -183,13 +222,22 @@ export const unbindCustomerGroup = createServerFn({ method: "POST" })
 
 // ============ 群发消息：草稿 / 预览 / 发送 ============
 // 模板变量目前只支持 {{customer_name}} / {{customer_code}}，够用再加。
-function renderTemplate(template: string, vars: { customer_name: string; customer_code: string }): string {
-  return template.replace(/\{\{\s*customer_name\s*\}\}/g, vars.customer_name).replace(/\{\{\s*customer_code\s*\}\}/g, vars.customer_code);
+function renderTemplate(
+  template: string,
+  vars: { customer_name: string; customer_code: string },
+): string {
+  return template
+    .replace(/\{\{\s*customer_name\s*\}\}/g, vars.customer_name)
+    .replace(/\{\{\s*customer_code\s*\}\}/g, vars.customer_code);
 }
 
 async function resolveTargets(
   admin: any,
-  params: { targetScope: "all_bound" | "selected"; targetCustomerCodes: string[]; contentTemplate: string },
+  params: {
+    targetScope: "all_bound" | "selected";
+    targetCustomerCodes: string[];
+    contentTemplate: string;
+  },
 ) {
   let bindingsQuery = admin
     .from("wecom_notify_bindings")
@@ -202,7 +250,10 @@ async function resolveTargets(
   if (error) throw new Error(error.message);
   const codes = ((bindings ?? []) as any[]).map((b) => b.customer_code);
   if (!codes.length) return [];
-  const { data: profs } = await admin.from("profiles").select("customer_code, full_name, username").in("customer_code", codes);
+  const { data: profs } = await admin
+    .from("profiles")
+    .select("customer_code, full_name, username")
+    .in("customer_code", codes);
   const profByCode = new Map(((profs ?? []) as any[]).map((p) => [p.customer_code, p]));
   return ((bindings ?? []) as any[]).map((b) => {
     const prof = profByCode.get(b.customer_code);
@@ -212,7 +263,10 @@ async function resolveTargets(
       chat_id: b.chat_id as string,
       group_name: (b.wecom_notify_groups as any)?.name ?? "",
       owner_userid: (b.wecom_notify_groups as any)?.owner_userid ?? null,
-      rendered_content: renderTemplate(params.contentTemplate, { customer_name: customerName, customer_code: b.customer_code }),
+      rendered_content: renderTemplate(params.contentTemplate, {
+        customer_name: customerName,
+        customer_code: b.customer_code,
+      }),
     };
   });
 }
@@ -220,12 +274,20 @@ async function resolveTargets(
 // 纯本地渲染，不调用企业微信任何接口——WECOM_ENABLED 是什么值都能用。
 export const previewWecomMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { targetScope: "all_bound" | "selected"; targetCustomerCodes: string[]; contentTemplate: string }) => d)
+  .inputValidator(
+    (d: {
+      targetScope: "all_bound" | "selected";
+      targetCustomerCodes: string[];
+      contentTemplate: string;
+    }) => d,
+  )
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     const template = data.contentTemplate.trim();
     if (!template) throw new Error("消息内容不能为空");
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const targets = await resolveTargets(supabaseAdmin, { ...data, contentTemplate: template });
     return { items: targets, count: targets.length };
   });
@@ -233,13 +295,20 @@ export const previewWecomMessage = createServerFn({ method: "POST" })
 export const createWecomMessageDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { title: string; targetScope: "all_bound" | "selected"; targetCustomerCodes: string[]; contentTemplate: string }) => d,
+    (d: {
+      title: string;
+      targetScope: "all_bound" | "selected";
+      targetCustomerCodes: string[];
+      contentTemplate: string;
+    }) => d,
   )
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     const template = data.contentTemplate.trim();
     if (!template) throw new Error("消息内容不能为空");
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const targets = await resolveTargets(supabaseAdmin, { ...data, contentTemplate: template });
     if (!targets.length) throw new Error("没有匹配到任何已绑定专属群的客户，无法创建群发任务");
 
@@ -273,7 +342,9 @@ export const listWecomMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_messages")
       .select("id, title, target_scope, status, created_at, sent_at")
@@ -289,7 +360,9 @@ export const getWecomMessageDetail = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data: msg, error } = await supabaseAdmin
       .from("wecom_notify_messages")
       .select("*")
@@ -315,7 +388,9 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as { supabaseAdmin: any };
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
     const { data: msg, error } = await supabaseAdmin
       .from("wecom_notify_messages")
       .select("id, status, content_template")
@@ -323,7 +398,9 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!msg) throw new Error("消息不存在");
-    if (msg.status === "sent" || msg.status === "preview_only") {
+    if (
+      ["submitted", "waiting_employee_confirmation", "sent", "preview_only"].includes(msg.status)
+    ) {
       return { ok: true, already_processed: true, status: msg.status };
     }
     const { data: targets, error: tErr } = await supabaseAdmin
@@ -334,7 +411,10 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     if (!targets?.length) throw new Error("该消息没有任何目标，无法发送");
 
     if (!wecomNotifyEnabled()) {
-      await supabaseAdmin.from("wecom_notify_messages").update({ status: "preview_only" }).eq("id", data.messageId);
+      await supabaseAdmin
+        .from("wecom_notify_messages")
+        .update({ status: "preview_only" })
+        .eq("id", data.messageId);
       await supabaseAdmin
         .from("wecom_notify_message_targets")
         .update({ status: "skipped_disabled" })
@@ -349,15 +429,22 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       return { ok: true, sent: false, status: "preview_only", reason: "wecom_disabled" };
     }
 
-    if (!wecomNotifyConfigured()) throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法发送");
+    if (!wecomNotifyConfigured())
+      throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法发送");
     const { sendGroupMsgTemplate } = await import("@/lib/wecom-notify/client.server");
 
     // 按 (owner_userid, 渲染后内容) 分组——同一批调用要求 sender 相同且内容相同，
     // 内容不同（比如带了客户姓名变量）就拆成多次调用。
-    const groups = new Map<string, { senderUserId: string; content: string; chatIds: string[]; targetIds: string[] }>();
+    let anyOk = false;
+    let anyFail = false;
+    const groups = new Map<
+      string,
+      { senderUserId: string; content: string; chatIds: string[]; targetIds: string[] }
+    >();
     for (const t of targets as any[]) {
       const owner = t.wecom_notify_groups?.owner_userid;
       if (!owner) {
+        anyFail = true;
         await supabaseAdmin
           .from("wecom_notify_message_targets")
           .update({ status: "failed", error: "群没有群主 owner_userid，无法确定发送人" })
@@ -365,24 +452,36 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
         continue;
       }
       const key = `${owner}::${t.rendered_content}`;
-      const g = groups.get(key) ?? { senderUserId: owner, content: t.rendered_content, chatIds: [] as string[], targetIds: [] as string[] };
+      const g = groups.get(key) ?? {
+        senderUserId: owner,
+        content: t.rendered_content,
+        chatIds: [] as string[],
+        targetIds: [] as string[],
+      };
       g.chatIds.push(t.chat_id);
       g.targetIds.push(t.id);
       groups.set(key, g);
     }
 
-    let anyOk = false;
-    let anyFail = false;
     const results: any[] = [];
     for (const g of groups.values()) {
       try {
-        const r = await sendGroupMsgTemplate({ senderUserId: g.senderUserId, chatIds: g.chatIds, content: g.content });
+        const r = await sendGroupMsgTemplate({
+          senderUserId: g.senderUserId,
+          chatIds: g.chatIds,
+          content: g.content,
+        });
         results.push({ sender: g.senderUserId, ok: r.ok, raw: r.raw });
         if (r.ok) {
           anyOk = true;
           await supabaseAdmin
             .from("wecom_notify_message_targets")
-            .update({ status: "sent", sent_at: new Date().toISOString() })
+            .update({
+              status: "waiting_employee_confirmation",
+              wecom_msgid: r.msgid,
+              sender_userid: g.senderUserId,
+              submitted_at: new Date().toISOString(),
+            })
             .in("id", g.targetIds);
         } else {
           anyFail = true;
@@ -400,10 +499,15 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
           .in("id", g.targetIds);
       }
     }
-    const finalStatus = anyOk && !anyFail ? "sent" : anyOk ? "sent" : "failed";
+    const finalStatus =
+      anyOk && !anyFail ? "waiting_employee_confirmation" : anyOk ? "partially_failed" : "failed";
     await supabaseAdmin
       .from("wecom_notify_messages")
-      .update({ status: finalStatus, sent_at: new Date().toISOString(), send_result: results })
+      .update({
+        status: finalStatus,
+        submitted_at: anyOk ? new Date().toISOString() : null,
+        send_result: results,
+      })
       .eq("id", data.messageId);
     await recordAdminLog(supabaseAdmin, {
       entity_type: "wecom_notify_message",
@@ -415,4 +519,70 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     // sent 只代表"群发任务已提交给企业微信"，不代表客户已经在群里看到消息——
     // 该任务通常还要求对应群主在自己的企业微信客户端里确认执行。
     return { ok: true, sent: anyOk, status: finalStatus, results };
+  });
+
+export const refreshWecomMessageStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
+    if (!wecomNotifyConfigured() || !wecomNotifyEnabled()) {
+      throw new Error("企业微信连接未启用，无法刷新发送状态");
+    }
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: targets, error } = await supabaseAdmin
+      .from("wecom_notify_message_targets")
+      .select("id, wecom_msgid, sender_userid")
+      .eq("message_id", data.messageId)
+      .not("wecom_msgid", "is", null);
+    if (error) throw new Error(error.message);
+    if (!targets?.length) throw new Error("该任务没有可查询的企业微信 msgid");
+
+    const { getGroupMsgSendResult } = await import("@/lib/wecom-notify/client.server");
+    const tasks = new Map<string, { msgid: string; senderUserId: string; targetIds: string[] }>();
+    for (const target of targets as any[]) {
+      if (!target.wecom_msgid || !target.sender_userid) continue;
+      const key = `${target.wecom_msgid}:${target.sender_userid}`;
+      const task = tasks.get(key) ?? {
+        msgid: target.wecom_msgid,
+        senderUserId: target.sender_userid,
+        targetIds: [] as string[],
+      };
+      task.targetIds.push(target.id);
+      tasks.set(key, task);
+    }
+
+    const checkedAt = new Date().toISOString();
+    for (const task of tasks.values()) {
+      const result = await getGroupMsgSendResult(task);
+      await supabaseAdmin
+        .from("wecom_notify_message_targets")
+        .update({
+          status: result.status,
+          last_checked_at: checkedAt,
+          sent_at: result.status === "sent" ? checkedAt : null,
+        })
+        .in("id", task.targetIds);
+    }
+
+    const { data: refreshed } = await supabaseAdmin
+      .from("wecom_notify_message_targets")
+      .select("status")
+      .eq("message_id", data.messageId);
+    const statuses = (refreshed ?? []).map((row: { status: string }) => row.status);
+    const finalStatus = statuses.every((status: string) => status === "sent")
+      ? "sent"
+      : statuses.every((status: string) => status === "failed")
+        ? "failed"
+        : statuses.some((status: string) => status === "failed")
+          ? "partially_failed"
+          : "waiting_employee_confirmation";
+    await supabaseAdmin
+      .from("wecom_notify_messages")
+      .update({ status: finalStatus, sent_at: finalStatus === "sent" ? checkedAt : null })
+      .eq("id", data.messageId);
+    return { ok: true, status: finalStatus };
   });

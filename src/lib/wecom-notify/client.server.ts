@@ -3,13 +3,11 @@
  * 跟 src/lib/wechat-kf/api.server.ts 是同样的 access_token 缓存套路，但完全
  * 独立一套凭证 / 一张缓存表，互不调用。
  *
- * 重要：这里每一个会真正发请求给企业微信的函数，调用方都必须先自己检查
- * wecomNotifyEnabled()——本文件不在内部做总开关拦截，是为了让"预览"这类纯本地
- * 逻辑可以放心 import 这个文件的类型/常量而不会意外触发网络请求。真正会发请求
- * 的三个函数（getAccessToken / listExternalGroups / sendGroupMsgTemplate）
- * 在文件顶部注释里逐一标注。
+ * 重要：同步、发送和状态刷新由调用方检查 wecomNotifyEnabled()。管理员显式点击
+ * “测试连接”时允许在总开关关闭状态下只获取一次 access_token，以便先完成可信 IP
+ * 联调，再开启真实同步/发送。
  *
- * 也需要提前说明：客户群发送用的 add_group_msg_template 接口，官方语义是
+ * 也需要提前说明：客户群发送用的 add_msg_template 接口，官方语义是
  * "创建一个群发任务模板"，最终仍需要 sender 对应的企业微信成员在客户端里
  * 确认/执行发送——调用这个接口成功只代表"任务已提交"，不代表消息已经送达
  * 客户群。真正联调之前，这个假设没有被验证过，联调时需要对照企业微信最新
@@ -17,7 +15,7 @@
  */
 import { wecomNotifyConfig } from "./config.server";
 
-const BASE = "https://qyapi.weixin.qq.com/cgi-bin";
+const REQUEST_TIMEOUT_MS = 12_000;
 const TOKEN_ROW_ID = "notify";
 
 let memToken: { token: string; expiresAt: number } | null = null;
@@ -45,11 +43,12 @@ export async function getAccessToken(force = false): Promise<string> {
     }
   }
 
-  const { corpId, secret } = wecomNotifyConfig();
+  const { corpId, secret, apiBaseUrl } = wecomNotifyConfig();
   if (!corpId || !secret) throw new Error("wecom_notify_not_configured");
-  const res = await fetch(
-    `${BASE}/gettoken?corpid=${encodeURIComponent(corpId)}&corpsecret=${encodeURIComponent(secret)}`,
+  const res = await fetchWithTimeout(
+    `${apiBaseUrl}/gettoken?corpid=${encodeURIComponent(corpId)}&corpsecret=${encodeURIComponent(secret)}`,
   );
+  if (!res.ok) throw new Error(`gettoken_http_${res.status}`);
   const json: any = await res.json();
   if (json?.errcode) throw new Error(`gettoken_failed_${json.errcode}:${json.errmsg ?? ""}`);
 
@@ -64,19 +63,47 @@ export async function getAccessToken(force = false): Promise<string> {
   return json.access_token as string;
 }
 
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("wecom_request_timeout");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callApi(path: string, body: unknown, retry = true): Promise<any> {
   const token = await getAccessToken();
-  const res = await fetch(`${BASE}${path}?access_token=${encodeURIComponent(token)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const { apiBaseUrl } = wecomNotifyConfig();
+  const res = await fetchWithTimeout(
+    `${apiBaseUrl}${path}?access_token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    if (retry && res.status >= 500) return callApi(path, body, false);
+    throw new Error(`wecom_http_${res.status}`);
+  }
   const json: any = await res.json();
   if (retry && (json?.errcode === 40014 || json?.errcode === 42001)) {
     await getAccessToken(true);
     return callApi(path, body, false);
   }
   return json;
+}
+
+export async function testWecomConnection(): Promise<{ ok: true }> {
+  await getAccessToken(true);
+  return { ok: true };
 }
 
 export type WecomExternalGroup = {
@@ -97,10 +124,14 @@ export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
       limit: 100,
       ...(cursor ? { cursor } : {}),
     });
-    if (listRes?.errcode) throw new Error(`groupchat_list_failed_${listRes.errcode}:${listRes.errmsg ?? ""}`);
+    if (listRes?.errcode)
+      throw new Error(`groupchat_list_failed_${listRes.errcode}:${listRes.errmsg ?? ""}`);
     const chatIds: string[] = (listRes?.group_chat_list ?? []).map((g: any) => g.chat_id);
     for (const chatId of chatIds) {
-      const detail = await callApi("/externalcontact/groupchat/get", { chat_id: chatId, need_name: 1 });
+      const detail = await callApi("/externalcontact/groupchat/get", {
+        chat_id: chatId,
+        need_name: 1,
+      });
       if (detail?.errcode) {
         // 单个群拉详情失败不影响其它群——记下来跳过，别让一个坏数据卡住整批同步。
         continue;
@@ -120,14 +151,14 @@ export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
 }
 
 // 会发网络请求：调用方必须先确认 wecomNotifyEnabled()。
-// 客户群发：externalcontact/add_group_msg_template —— 见文件顶部注释，这只是
+// 客户群发：externalcontact/add_msg_template —— 见文件顶部注释，这只是
 // "提交群发任务"，不是"消息已送达"，调用方的返回文案不能说成已送达。
 export async function sendGroupMsgTemplate(params: {
   senderUserId: string;
   chatIds: string[];
   content: string;
 }): Promise<{ ok: boolean; msgid?: string; raw: any }> {
-  const json = await callApi("/externalcontact/add_group_msg_template", {
+  const json = await callApi("/externalcontact/add_msg_template", {
     chat_type: "group",
     sender: params.senderUserId,
     chat_id_list: params.chatIds,
@@ -135,4 +166,28 @@ export async function sendGroupMsgTemplate(params: {
   });
   if (json?.errcode) return { ok: false, raw: json };
   return { ok: true, msgid: json?.msgid, raw: json };
+}
+
+export type WecomGroupSendResult = {
+  status: "waiting_employee_confirmation" | "sent" | "failed";
+  raw: unknown;
+};
+
+export async function getGroupMsgSendResult(params: {
+  msgid: string;
+  senderUserId: string;
+}): Promise<WecomGroupSendResult> {
+  const json = await callApi("/externalcontact/get_groupmsg_send_result", {
+    msgid: params.msgid,
+    userid: params.senderUserId,
+    limit: 1000,
+  });
+  if (json?.errcode) throw new Error(`groupmsg_result_failed_${json.errcode}:${json.errmsg ?? ""}`);
+
+  const rows = Array.isArray(json?.send_list) ? json.send_list : [];
+  if (!rows.length) return { status: "waiting_employee_confirmation", raw: json };
+  const statuses = rows.map((row: { status?: number }) => Number(row.status));
+  if (statuses.some((status: number) => status >= 2)) return { status: "failed", raw: json };
+  if (statuses.every((status: number) => status === 1)) return { status: "sent", raw: json };
+  return { status: "waiting_employee_confirmation", raw: json };
 }

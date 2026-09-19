@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   getWecomNotifyStatus,
+  testWecomNotifyConnection,
   listWecomGroups,
   syncWecomGroups,
   listWecomBindings,
@@ -16,6 +17,7 @@ import {
   listWecomMessages,
   getWecomMessageDetail,
   sendWecomMessage,
+  refreshWecomMessageStatus,
 } from "@/lib/wecom-notify.functions";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
 import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink } from "lucide-react";
@@ -28,7 +30,22 @@ function WecomNotifyPage() {
   const [tab, setTab] = useState<Tab>("bindings");
   const fetchStatus = useServerFn(getWecomNotifyStatus);
   const statusQ = useQuery({ queryKey: ["wecom-notify-status"], queryFn: () => fetchStatus() });
-  const status = statusQ.data as { configured: boolean; enabled: boolean } | undefined;
+  const testConnection = useServerFn(testWecomNotifyConnection);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const status = statusQ.data as
+    { configured: boolean; enabled: boolean; usingGateway: boolean } | undefined;
+
+  const doTestConnection = async () => {
+    setTestingConnection(true);
+    try {
+      await testConnection();
+      toast.success("企业微信连接成功");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "企业微信连接失败");
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   return (
     <Page
@@ -43,9 +60,22 @@ function WecomNotifyPage() {
             <div>
               WECOM_ENABLED = {status?.enabled ? "true" : "false"}
               {!status?.enabled && "（默认关闭）"}
-              ——关闭状态下「同步群列表」和「真实发送」均不可用，只能做绑定管理和发送预览，不会调用企业微信任何接口，也不会产生真实推送。
+              ——关闭状态下「同步群列表」和「真实发送」均不可用，只能做绑定管理、发送预览和管理员主动连接测试，不会产生真实推送。
             </div>
           </div>
+        </div>
+      )}
+
+      {statusQ.isSuccess && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
+          <span>出口方式：{status?.usingGateway ? "固定出口网关" : "Lovable/Cloudflare 直连"}</span>
+          <button
+            onClick={doTestConnection}
+            disabled={!status?.configured || testingConnection}
+            className="rounded-md border border-white/10 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {testingConnection ? "测试中…" : "测试企业微信连接"}
+          </button>
         </div>
       )}
 
@@ -62,7 +92,9 @@ function WecomNotifyPage() {
             key={key}
             onClick={() => setTab(key)}
             className={`px-3 py-2 text-sm font-medium ${
-              tab === key ? "border-b-2 border-brand text-slate-100" : "text-slate-400 hover:text-slate-200"
+              tab === key
+                ? "border-b-2 border-brand text-slate-100"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
             {label}
@@ -110,7 +142,11 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
           title={enabled ? undefined : "WECOM_ENABLED=false，未开启真实接口调用"}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {syncing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
           同步群列表
         </button>
       }
@@ -164,7 +200,10 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
   const unbind = useServerFn(unbindCustomerGroup);
   const [showBind, setShowBind] = useState(false);
   const [unbindCode, setUnbindCode] = useState<string | null>(null);
-  const bindingsQ = useQuery({ queryKey: ["wecom-notify-bindings"], queryFn: () => fetchBindings() });
+  const bindingsQ = useQuery({
+    queryKey: ["wecom-notify-bindings"],
+    queryFn: () => fetchBindings(),
+  });
   const rows = ((bindingsQ.data as any)?.items ?? []) as any[];
 
   const reload = () => qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
@@ -223,8 +262,12 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
             {rows.map((b) => (
               <tr key={b.id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{b.customer_code}</td>
-                <td className="text-xs text-slate-300">{b.wecom_notify_groups?.name || b.chat_id}</td>
-                <td className="text-xs text-slate-400">{b.wecom_notify_groups?.member_count ?? "—"}</td>
+                <td className="text-xs text-slate-300">
+                  {b.wecom_notify_groups?.name || b.chat_id}
+                </td>
+                <td className="text-xs text-slate-400">
+                  {b.wecom_notify_groups?.member_count ?? "—"}
+                </td>
                 <td className="text-xs text-slate-400">{fmtDate(b.bound_at)}</td>
                 <td className="px-3 py-2 text-right">
                   <button
@@ -258,13 +301,20 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
             <h2 className="font-display text-lg font-bold">解绑客户专属群</h2>
           </div>
           <p className="mb-4 text-sm text-slate-300">
-            确认解除客户号 <span className="font-mono text-slate-100">{unbindCode}</span> 与其专属群的绑定？
+            确认解除客户号 <span className="font-mono text-slate-100">{unbindCode}</span>{" "}
+            与其专属群的绑定？
           </p>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setUnbindCode(null)} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300">
+            <button
+              onClick={() => setUnbindCode(null)}
+              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300"
+            >
               取消
             </button>
-            <button onClick={doUnbind} className="rounded-md bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white">
+            <button
+              onClick={doUnbind}
+              className="rounded-md bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white"
+            >
               确认解绑
             </button>
           </div>
@@ -327,7 +377,10 @@ function BindModal({ onClose, onBound }: { onClose: () => void; onBound: () => v
               className="flex-1 rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
               placeholder="例如 C00123 或客户姓名"
             />
-            <button onClick={doSearch} className="rounded-md border border-white/10 px-3 text-sm text-slate-200">
+            <button
+              onClick={doSearch}
+              className="rounded-md border border-white/10 px-3 text-sm text-slate-200"
+            >
               搜索
             </button>
           </div>
@@ -346,7 +399,9 @@ function BindModal({ onClose, onBound }: { onClose: () => void; onBound: () => v
               ))}
             </div>
           )}
-          {customerCode && <div className="mt-1 text-xs text-emerald-400">已选择：{customerCode}</div>}
+          {customerCode && (
+            <div className="mt-1 text-xs text-emerald-400">已选择：{customerCode}</div>
+          )}
         </div>
         <div>
           <label className="text-xs text-slate-400">目标群</label>
@@ -362,9 +417,15 @@ function BindModal({ onClose, onBound }: { onClose: () => void; onBound: () => v
               </option>
             ))}
           </select>
-          {groups.length === 0 && <div className="mt-1 text-[11px] text-amber-400/80">尚无同步过的群，请先到「群列表」同步</div>}
+          {groups.length === 0 && (
+            <div className="mt-1 text-[11px] text-amber-400/80">
+              尚无同步过的群，请先到「群列表」同步
+            </div>
+          )}
         </div>
-        {err && <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>}
+        {err && (
+          <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>
+        )}
         <button
           onClick={submit}
           disabled={busy}
@@ -392,7 +453,11 @@ function ComposeTab() {
   const [err, setErr] = useState<string | null>(null);
 
   const targetCustomerCodes = useMemo(
-    () => codesText.split(/[,\s，]+/).map((s) => s.trim()).filter(Boolean),
+    () =>
+      codesText
+        .split(/[,\s，]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
     [codesText],
   );
 
@@ -400,7 +465,9 @@ function ComposeTab() {
     setErr(null);
     setBusy(true);
     try {
-      const r: any = await preview({ data: { targetScope: scope, targetCustomerCodes, contentTemplate: template } });
+      const r: any = await preview({
+        data: { targetScope: scope, targetCustomerCodes, contentTemplate: template },
+      });
       setPreviewRows(r.items ?? []);
       if (!r.items?.length) toast.info("没有匹配到任何已绑定专属群的客户");
     } catch (e: any) {
@@ -414,7 +481,9 @@ function ComposeTab() {
     setErr(null);
     setBusy(true);
     try {
-      const r: any = await createDraft({ data: { title, targetScope: scope, targetCustomerCodes, contentTemplate: template } });
+      const r: any = await createDraft({
+        data: { title, targetScope: scope, targetCustomerCodes, contentTemplate: template },
+      });
       toast.success(`已创建群发任务草稿，共 ${r.count} 个目标；请到「历史任务」查看并发送`);
       setTitle("");
       setTemplate("");
@@ -443,11 +512,19 @@ function ComposeTab() {
           <label className="text-xs text-slate-400">发送范围</label>
           <div className="mt-1 flex gap-4 text-sm text-slate-200">
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={scope === "all_bound"} onChange={() => setScope("all_bound")} />
+              <input
+                type="radio"
+                checked={scope === "all_bound"}
+                onChange={() => setScope("all_bound")}
+              />
               全部已绑定专属群的客户
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={scope === "selected"} onChange={() => setScope("selected")} />
+              <input
+                type="radio"
+                checked={scope === "selected"}
+                onChange={() => setScope("selected")}
+              />
               指定客户号
             </label>
           </div>
@@ -474,7 +551,9 @@ function ComposeTab() {
             placeholder={"您好 {{customer_name}}，..."}
           />
         </div>
-        {err && <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>}
+        {err && (
+          <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>
+        )}
         <div className="flex gap-2">
           <button
             onClick={doPreview}
@@ -513,7 +592,9 @@ function ComposeTab() {
                   <tr key={r.customer_code}>
                     <td className="px-3 py-2 text-xs text-slate-300">{r.customer_code}</td>
                     <td className="text-xs text-slate-400">{r.group_name || r.chat_id}</td>
-                    <td className="max-w-md whitespace-pre-wrap text-xs text-slate-300">{r.rendered_content}</td>
+                    <td className="max-w-md whitespace-pre-wrap text-xs text-slate-300">
+                      {r.rendered_content}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -531,10 +612,14 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
   const fetchMessages = useServerFn(listWecomMessages);
   const fetchDetail = useServerFn(getWecomMessageDetail);
   const send = useServerFn(sendWecomMessage);
+  const refreshStatus = useServerFn(refreshWecomMessageStatus);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [confirmSendId, setConfirmSendId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const messagesQ = useQuery({ queryKey: ["wecom-notify-messages"], queryFn: () => fetchMessages() });
+  const messagesQ = useQuery({
+    queryKey: ["wecom-notify-messages"],
+    queryFn: () => fetchMessages(),
+  });
   const rows = ((messagesQ.data as any)?.items ?? []) as any[];
   const detailQ = useQuery({
     queryKey: ["wecom-notify-message-detail", detailId],
@@ -546,9 +631,23 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
     draft: "草稿",
     previewed: "待发送",
     sending: "发送中",
-    sent: "已提交发送",
+    submitted: "已提交企业微信",
+    waiting_employee_confirmation: "等待群主确认发送",
+    sent: "已确认发送",
+    partially_failed: "部分失败",
     preview_only: "仅预览（未真实发送）",
     failed: "发送失败",
+  };
+
+  const doRefreshStatus = async (messageId: string) => {
+    try {
+      const result = await refreshStatus({ data: { messageId } });
+      toast.success(`状态已更新：${STATUS_LABEL[result.status] ?? result.status}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-messages"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-message-detail", messageId] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "刷新状态失败");
+    }
   };
 
   const doSend = async () => {
@@ -559,7 +658,9 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
       if (r.status === "preview_only") {
         toast.warning("WECOM_ENABLED=false，本次未真实发送，仅生成预览记录");
       } else if (r.sent) {
-        toast.success("群发任务已提交给企业微信——注意：这只代表任务已提交，是否真正送达仍取决于对应群主在企业微信客户端确认执行");
+        toast.success(
+          "群发任务已提交给企业微信——注意：这只代表任务已提交，是否真正送达仍取决于对应群主在企业微信客户端确认执行",
+        );
       } else {
         toast.error("发送失败，请查看任务详情");
       }
@@ -603,13 +704,29 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
             {rows.map((m) => (
               <tr key={m.id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{m.title || "(未命名)"}</td>
-                <td className="text-xs text-slate-400">{m.target_scope === "all_bound" ? "全部已绑定" : "指定客户"}</td>
+                <td className="text-xs text-slate-400">
+                  {m.target_scope === "all_bound" ? "全部已绑定" : "指定客户"}
+                </td>
                 <td className="text-xs text-slate-300">{STATUS_LABEL[m.status] ?? m.status}</td>
                 <td className="text-xs text-slate-400">{fmtDate(m.created_at)}</td>
                 <td className="px-3 py-2 text-right">
-                  <button onClick={() => setDetailId(m.id)} className="mr-3 text-xs text-slate-400 hover:text-brand">
+                  <button
+                    onClick={() => setDetailId(m.id)}
+                    className="mr-3 text-xs text-slate-400 hover:text-brand"
+                  >
                     详情
                   </button>
+                  {["submitted", "waiting_employee_confirmation", "partially_failed"].includes(
+                    m.status,
+                  ) && (
+                    <button
+                      onClick={() => doRefreshStatus(m.id)}
+                      disabled={!enabled}
+                      className="mr-3 text-xs text-slate-400 hover:text-brand disabled:opacity-40"
+                    >
+                      刷新状态
+                    </button>
+                  )}
                   {(m.status === "previewed" || m.status === "failed") && (
                     <button
                       onClick={() => setConfirmSendId(m.id)}
@@ -638,11 +755,15 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
             </p>
           ) : (
             <p className="mb-4 text-sm text-slate-300">
-              当前 WECOM_ENABLED=false（测试环境默认），点击后不会真实发送，只会把该任务标记为"仅预览"。
+              当前
+              WECOM_ENABLED=false（测试环境默认），点击后不会真实发送，只会把该任务标记为"仅预览"。
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={() => setConfirmSendId(null)} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300">
+            <button
+              onClick={() => setConfirmSendId(null)}
+              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300"
+            >
               取消
             </button>
             <button
@@ -674,7 +795,9 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
                     <span>{t.customer_code}</span>
                     <span>{t.status}</span>
                   </div>
-                  <div className="mt-1 whitespace-pre-wrap text-slate-400">{t.rendered_content}</div>
+                  <div className="mt-1 whitespace-pre-wrap text-slate-400">
+                    {t.rendered_content}
+                  </div>
                   {t.error && <div className="mt-1 text-rose-400">{t.error}</div>}
                 </div>
               ))}
@@ -689,7 +812,10 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
 function ModalShell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0A0F1A] p-5">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0A0F1A] p-5"
+      >
         {children}
       </div>
     </div>
