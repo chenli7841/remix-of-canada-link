@@ -1,14 +1,16 @@
 # EPLUS 客服：ChatGPT 公开上架草稿
 
+最新进度（2026-09-18）：审核账号已通过网站邮箱/密码登录实测并进入 /account，没有出现额外验证码步骤；这只验证当前网站登录，不代表全新浏览器、审核方网络或 ChatGPT 五个业务场景都已通过。政策保留方案已获运营方同意，要求发布前落实。注册地、物流条款、存储地区和备份周期待查。政策审核稿见 chatgpt-privacy-policy-review.md 与 chatgpt-terms-review.md；执行清单见 chatgpt-privacy-operations.md；录像脚本见 chatgpt-review-recording-plan.md。
+
 状态：未提交。2026-09-18 发布者身份已显示 Verified，并已创建门户草稿。名称、简介、说明、网站与 MCP 地址已填写，认证选择 OAuth。首次授权回跳后已扫描出 48 个工具；用户已发布本地更新，公开连接检查通过，门户域名验证显示 Domain verified。重新扫描已成功：48 个工具均具备三项显式声明，门户不再提示缺失 destructiveHint。
 
 门户草稿：https://platform.openai.com/plugins/edit/asdk_app_6aad77eb3588819194fa2b6e5ad334d1/asdk_app_v_6aad77ec882881918f9edfdf7e853fe5
 
-用户后续确认：专用测试账号已准备好，由用户直接在 Testing → Test credentials 填写登录资料；本文件不记录密码。客服及隐私申请邮箱更新为 epluscanada001@gmail.com，保留期限和处理时限仍未确定。
+用户后续确认：专用测试账号已准备好，用户提供的登录资料已填写至 OpenAI Testing → Test credentials；本文件不记录账号密码。客服及隐私申请邮箱为 epluscanada001@gmail.com，保留期限和处理时限仍未确定。工具扫描成功不代表所有业务用例已实测。
 
-2026-09-18 后续审核：门户已填写并保存 141/144 项工具声明说明。逐项检查发现 save_my_item、save_my_address、update_my_profile 的 destructiveHint 仍错误地为 false；这三个工具会覆盖已有数据，本地已改为 true，并将其加入验证断言、重新生成清单且通过 mcp:validate。需用户再次发布后重扫，最后补入这三个 destructive 说明，不能沿用 false 的解释。目录与输入框图标已使用现有 EPLUS 品牌图片转成的 public/eplus-plugin-icon.png（828×828 PNG）上传。
+2026-09-18 后续审核：用户已再次发布。重新扫描确认 save_my_item、save_my_address、update_my_profile 的 destructiveHint 均为 true，门户已补齐 144/144 项工具声明说明。目录与输入框图标已使用现有 EPLUS 品牌图片转成的 public/eplus-plugin-icon.png（828×828 PNG）上传。
 
-这三个待填说明：
+本次补齐的三个说明：
 - save_my_item: The update path overwrites existing saved-item fields, so this is destructive even though the create path is additive.
 - save_my_address: The update path overwrites an existing delivery address and can replace the default-address selection.
 - update_my_profile: Replaces existing personal and invoice-contact values in the customer profile.

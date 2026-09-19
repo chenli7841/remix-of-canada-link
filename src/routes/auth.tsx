@@ -302,9 +302,13 @@ function AuthPage() {
           </form>
 
           <p className="mt-6 text-center text-xs text-ink-soft">
-            {tr("继续即表示同意我们的", "By continuing you agree to our")}{" "}
-            <Link to="/about" className="underline">
-              {tr("服务条款", "Terms")}
+            {tr("ChatGPT 客服连接：", "ChatGPT connection: ")}{" "}
+            <Link to="/terms" className="underline">
+              {tr("客服条款", "Service terms")}
+            </Link>
+            {" · "}
+            <Link to="/privacy" className="underline">
+              {tr("隐私政策", "Privacy")}
             </Link>
             {" · "}
             <Link to="/contact" className="underline">

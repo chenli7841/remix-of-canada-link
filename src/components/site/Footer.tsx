@@ -3,7 +3,7 @@ import { useApp } from "@/lib/i18n";
 import { useCompanyInfo } from "@/lib/company";
 
 export function Footer() {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const company = useCompanyInfo();
   return (
     <footer className="mt-24 border-t border-border bg-surface">
@@ -52,6 +52,16 @@ export function Footer() {
             <li>
               <Link to="/contact" className="hover:text-foreground">
                 {t("nav.contact")}
+              </Link>
+            </li>
+            <li>
+              <Link to="/privacy" className="hover:text-foreground">
+                {lang === "zh" ? "ChatGPT 客服隐私政策" : "ChatGPT service privacy"}
+              </Link>
+            </li>
+            <li>
+              <Link to="/terms" className="hover:text-foreground">
+                {lang === "zh" ? "ChatGPT 客服条款" : "ChatGPT service terms"}
               </Link>
             </li>
           </ul>
