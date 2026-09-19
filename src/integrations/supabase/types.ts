@@ -4904,6 +4904,184 @@ export type Database = {
         }
         Relationships: []
       }
+      wecom_notify_bindings: {
+        Row: {
+          bound_at: string
+          bound_by: string | null
+          chat_id: string
+          customer_code: string
+          id: string
+        }
+        Insert: {
+          bound_at?: string
+          bound_by?: string | null
+          chat_id: string
+          customer_code: string
+          id?: string
+        }
+        Update: {
+          bound_at?: string
+          bound_by?: string | null
+          chat_id?: string
+          customer_code?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_notify_bindings_bound_by_fkey"
+            columns: ["bound_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wecom_notify_bindings_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: true
+            referencedRelation: "wecom_notify_groups"
+            referencedColumns: ["chat_id"]
+          },
+        ]
+      }
+      wecom_notify_groups: {
+        Row: {
+          chat_id: string
+          created_at: string
+          member_count: number
+          name: string
+          owner_userid: string | null
+          synced_at: string
+        }
+        Insert: {
+          chat_id: string
+          created_at?: string
+          member_count?: number
+          name?: string
+          owner_userid?: string | null
+          synced_at?: string
+        }
+        Update: {
+          chat_id?: string
+          created_at?: string
+          member_count?: number
+          name?: string
+          owner_userid?: string | null
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      wecom_notify_message_targets: {
+        Row: {
+          chat_id: string
+          created_at: string
+          customer_code: string
+          error: string | null
+          id: string
+          message_id: string
+          rendered_content: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          chat_id: string
+          created_at?: string
+          customer_code: string
+          error?: string | null
+          id?: string
+          message_id: string
+          rendered_content: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          chat_id?: string
+          created_at?: string
+          customer_code?: string
+          error?: string | null
+          id?: string
+          message_id?: string
+          rendered_content?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_notify_message_targets_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "wecom_notify_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wecom_notify_messages: {
+        Row: {
+          content_template: string
+          created_at: string
+          created_by: string | null
+          id: string
+          send_result: Json | null
+          sent_at: string | null
+          status: string
+          target_customer_codes: string[]
+          target_scope: string
+          title: string
+        }
+        Insert: {
+          content_template: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          send_result?: Json | null
+          sent_at?: string | null
+          status?: string
+          target_customer_codes?: string[]
+          target_scope?: string
+          title?: string
+        }
+        Update: {
+          content_template?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          send_result?: Json | null
+          sent_at?: string | null
+          status?: string
+          target_customer_codes?: string[]
+          target_scope?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_notify_messages_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wecom_notify_token: {
+        Row: {
+          access_token: string
+          expires_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          expires_at: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          expires_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
