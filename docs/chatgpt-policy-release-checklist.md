@@ -6,6 +6,8 @@
 
 ## 已采用的事实与方案
 
+更新：已在 Lovable / Supabase 设置中核实主数据库为加拿大中部 ca-central-1，当前 Pro 每日备份窗口 7 天，未启用 PITR，数据库备份不包含 Storage 文件。平台 API/数据库日志的套餐窗口为 7 天。证据及边界见 `chatgpt-infrastructure-verification.md`；业务审计记录、其他处理商安排和实际执行流程仍未确认。
+
 - 主体：eplus international service inc.；客服及隐私邮箱：epluscanada001@gmail.com。
 - 公司网站：https://shopper.epluscanada.com。
 - 使用 OAuth、Supabase、Lovable 和 ChatGPT；未承诺任何未经核实的数据所在地。

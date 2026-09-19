@@ -22,7 +22,7 @@ export function ChatGPTPolicyPage({
         >
           <strong>待生效稿 / Draft — not yet effective</strong>
           <p>
-            正文已整理，数据保留流程、存储地区和备份周期等事实仍待核实。本页暂不能作为已生效政策用于公开上架审核。
+            主数据库地区和每日备份范围已核实；数据保留执行流程、业务审计日志及其他服务商的处理安排仍待确认。本页暂不能作为已生效政策用于公开上架审核。
           </p>
         </aside>
       )}

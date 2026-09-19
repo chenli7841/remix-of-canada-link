@@ -23,6 +23,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Supabase CLI local state (includes a live DB connection string with password)
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
