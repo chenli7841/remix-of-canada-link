@@ -110,6 +110,7 @@ import { Route as ApiPublicHooksOttpayCardRouteImport } from './routes/api/publi
 import { Route as ApiPublicHooksReconcileOttRouteImport } from './routes/api/public/hooks/reconcile-ott'
 import { Route as ApiPublicWechatCallbackRouteImport } from './routes/api/public/wechat.callback'
 import { Route as ApiPublicWechatLoginRouteImport } from './routes/api/public/wechat.login'
+import { Route as ApiPublicWecomNotifyCallbackRouteImport } from './routes/api/public/wecom-notify.callback'
 import { Route as IntlChannelCallbackSplatRouteImport } from './routes/intl/channel/callback/$'
 import { Route as IntlChannelCallbackWxkfGptRouteImport } from './routes/intl/channel/callback/wxkf-gpt'
 import { Route as ApiPartnersV1CustomersExternalCustomerIdProfileRouteImport } from './routes/api/partners/v1/customers.$externalCustomerId.profile'
@@ -638,6 +639,12 @@ const ApiPublicWechatLoginRoute = ApiPublicWechatLoginRouteImport.update({
   path: '/api/public/wechat/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWecomNotifyCallbackRoute =
+  ApiPublicWecomNotifyCallbackRouteImport.update({
+    id: '/api/public/wecom-notify/callback',
+    path: '/api/public/wecom-notify/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const IntlChannelCallbackSplatRoute =
   IntlChannelCallbackSplatRouteImport.update({
     id: '/intl/channel/callback/$',
@@ -767,6 +774,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
+  '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
   '/admin/shop/carts/': typeof AdminShopCartsIndexRoute
@@ -872,6 +880,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
+  '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
   '/admin/shop/carts': typeof AdminShopCartsIndexRoute
@@ -981,6 +990,7 @@ export interface FileRoutesById {
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
+  '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
   '/intl/channel/callback/$': typeof IntlChannelCallbackSplatRoute
   '/intl/channel/callback/wxkf-gpt': typeof IntlChannelCallbackWxkfGptRoute
   '/admin/shop/carts/': typeof AdminShopCartsIndexRoute
@@ -1090,6 +1100,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
+    | '/api/public/wecom-notify/callback'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
     | '/admin/shop/carts/'
@@ -1195,6 +1206,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
+    | '/api/public/wecom-notify/callback'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
     | '/admin/shop/carts'
@@ -1303,6 +1315,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-ott'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
+    | '/api/public/wecom-notify/callback'
     | '/intl/channel/callback/$'
     | '/intl/channel/callback/wxkf-gpt'
     | '/admin/shop/carts/'
@@ -1350,6 +1363,7 @@ export interface RootRouteChildren {
   ApiPublicHooksReconcileOttRoute: typeof ApiPublicHooksReconcileOttRoute
   ApiPublicWechatCallbackRoute: typeof ApiPublicWechatCallbackRoute
   ApiPublicWechatLoginRoute: typeof ApiPublicWechatLoginRoute
+  ApiPublicWecomNotifyCallbackRoute: typeof ApiPublicWecomNotifyCallbackRoute
   IntlChannelCallbackSplatRoute: typeof IntlChannelCallbackSplatRoute
   IntlChannelCallbackWxkfGptRoute: typeof IntlChannelCallbackWxkfGptRoute
   ApiPartnersV1CustomersExternalCustomerIdProfileRoute: typeof ApiPartnersV1CustomersExternalCustomerIdProfileRoute
@@ -2064,6 +2078,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWechatLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/wecom-notify/callback': {
+      id: '/api/public/wecom-notify/callback'
+      path: '/api/public/wecom-notify/callback'
+      fullPath: '/api/public/wecom-notify/callback'
+      preLoaderRoute: typeof ApiPublicWecomNotifyCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/intl/channel/callback/$': {
       id: '/intl/channel/callback/$'
       path: '/intl/channel/callback/$'
@@ -2324,6 +2345,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksReconcileOttRoute: ApiPublicHooksReconcileOttRoute,
   ApiPublicWechatCallbackRoute: ApiPublicWechatCallbackRoute,
   ApiPublicWechatLoginRoute: ApiPublicWechatLoginRoute,
+  ApiPublicWecomNotifyCallbackRoute: ApiPublicWecomNotifyCallbackRoute,
   IntlChannelCallbackSplatRoute: IntlChannelCallbackSplatRoute,
   IntlChannelCallbackWxkfGptRoute: IntlChannelCallbackWxkfGptRoute,
   ApiPartnersV1CustomersExternalCustomerIdProfileRoute:

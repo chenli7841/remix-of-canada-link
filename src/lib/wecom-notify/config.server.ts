@@ -8,6 +8,8 @@ export type WecomNotifyConfig = {
   corpId: string;
   agentId: string;
   secret: string;
+  callbackToken: string;
+  callbackAesKey: string;
   apiBaseUrl: string;
 };
 
@@ -16,10 +18,16 @@ export function wecomNotifyConfig(): WecomNotifyConfig {
     corpId: process.env["WECOM_NOTIFY_CORP_ID"] ?? "",
     agentId: process.env["WECOM_NOTIFY_AGENT_ID"] ?? "1000005",
     secret: process.env["WECOM_NOTIFY_SECRET"] ?? "",
+    callbackToken: process.env["WECOM_NOTIFY_CALLBACK_TOKEN"] ?? "",
+    callbackAesKey: process.env["WECOM_NOTIFY_CALLBACK_AES_KEY"] ?? "",
     apiBaseUrl: (
       process.env["WECOM_API_BASE_URL"] ?? "https://qyapi.weixin.qq.com/cgi-bin"
     ).replace(/\/$/, ""),
   };
+}
+
+export function wecomNotifyCallbackConfigured(c: WecomNotifyConfig = wecomNotifyConfig()): boolean {
+  return Boolean(c.corpId && c.callbackToken && c.callbackAesKey);
 }
 
 export function wecomNotifyConfigured(c: WecomNotifyConfig = wecomNotifyConfig()): boolean {

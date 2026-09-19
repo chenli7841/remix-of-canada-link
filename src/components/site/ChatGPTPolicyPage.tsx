@@ -15,6 +15,9 @@ export function ChatGPTPolicyPage({
       <p className="mt-4 text-sm text-ink-soft">
         版本：{policyStatus.version} · {policyStatus.company}
       </p>
+      {!policyStatus.draft && (
+        <p className="mt-2 text-sm text-ink-soft">生效日期：{policyStatus.effectiveDate}</p>
+      )}
       {policyStatus.draft && (
         <aside
           role="note"
@@ -22,7 +25,7 @@ export function ChatGPTPolicyPage({
         >
           <strong>待生效稿 / Draft — not yet effective</strong>
           <p>
-            主数据库地区和每日备份范围已核实；数据保留执行流程、业务审计日志及其他服务商的处理安排仍待确认。本页暂不能作为已生效政策用于公开上架审核。
+            主数据库地区和每日备份范围已核实，运营方已确认落实隐私申请及人工清理流程；业务审计日志及其他服务商的处理安排仍待确认。本页暂不能作为已生效政策用于公开上架审核。
           </p>
         </aside>
       )}
@@ -42,6 +45,17 @@ export function ChatGPTPolicyPage({
               {section.paragraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
+              {section.links && (
+                <ul className="list-disc space-y-2 pl-5">
+                  {section.links.map((link) => (
+                    <li key={link.href}>
+                      <a href={link.href} className="underline underline-offset-4">
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
         ))}
