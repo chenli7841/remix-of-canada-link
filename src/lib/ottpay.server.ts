@@ -5,8 +5,8 @@ import crypto from "crypto";
 export type OttChannel = "wechat" | "alipay" | "card";
 
 export function ottConfig() {
-  const appId = process.env["OTTPAY_APP_ID"];
-  const appKey = process.env["OTTPAY_APP_KEY"];
+  const appId = process.env["OTTPAY_APP_ID"]?.trim();
+  const appKey = process.env["OTTPAY_APP_KEY"]?.trim();
   if (!appId || !appKey) throw new Error("OTT Pay 未配置（缺少 OTTPAY_APP_ID / OTTPAY_APP_KEY）");
   return {
     appId,
@@ -30,7 +30,18 @@ export async function ottToken(): Promise<string> {
   });
   const json: any = await res.json().catch(() => null);
   if (!res.ok || json?.status !== "SUCCESS" || !json?.result?.token) {
-    throw new Error(`OTT Pay 授权失败: ${json?.message ?? json?.msg ?? res.status}`);
+    // OTT errors are nested under result, not top-level message/msg.
+    // Only expose a numeric code and our own explanation, never raw responses or credentials.
+    const rawCode = json?.result?.code ?? json?.code;
+    const code = /^\d{4,6}$/.test(String(rawCode)) ? String(rawCode) : "unknown";
+    const reasons: Record<string, string> = {
+      "10003": "App ID 与 App Key 未通过 OTT 校验，请管理员核对 Lovable 中的支付凭证",
+      "10005": "OTT 授权参数格式不正确，请管理员检查支付配置",
+      "20004": "OTT 服务端数据库错误，请稍后重试",
+    };
+    const reason = reasons[code] ?? "OTT 未返回有效授权，请管理员检查支付配置或联系 OTT";
+    console.error("[ottpay] authorization failed", { httpStatus: res.status, code });
+    throw new Error(`OTT Pay 授权失败（HTTP ${res.status}，代码 ${code}）：${reason}`);
   }
   _token = { value: json.result.token as string, expired: Number(json.result.expired ?? Date.now() + 600_000) };
   return _token.value;
@@ -104,7 +115,8 @@ export function ottCallbackMd5Matches(suppliedMd5: string, decrypted: Record<str
   return String(suppliedMd5).toUpperCase() === recomputed;
 }
 
-export const OTT_SUCCESS_STATES = new Set(["success", "captured", "authorised", "authorized"]);
+// Authorization alone has not captured funds and must never credit a wallet.
+export const OTT_SUCCESS_STATES = new Set(["success", "captured"]);
 
 // Only explicit terminal failures may close a pending recharge.
 export const OTT_FAILED_STATES = new Set(["failure", "orderclosed"]);

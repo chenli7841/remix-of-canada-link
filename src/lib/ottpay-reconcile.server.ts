@@ -60,7 +60,7 @@ export async function verifyOttRecharge(tx: OttTx): Promise<OttDecision> {
   const cmpAmt = Number(cmp?.totalAmount ?? cmp?.total_amount ?? cmp?.amount ?? 0) / 100;
   const provStatus = pStatus || stateCode;
 
-  if (REFUND_STATES.has(pStatus)) {
+  if (REFUND_STATES.has(pStatus) || ["P00004", "P00005", "P00009", "P00012", "P00016"].includes(stateCode)) {
     return {
       decision: "refund",
       providerStatus: provStatus,
@@ -70,10 +70,12 @@ export async function verifyOttRecharge(tx: OttTx): Promise<OttDecision> {
     };
   }
 
-  const success = pStatus === "success" || stateCode === "P00003";
+  // CMP also uses "success" for refund/void operations; prefer its specific state code.
+  const success = stateCode ? stateCode === "P00003" && (!pStatus || pStatus === "success") : pStatus === "success";
   const pidMatch = !localPid || (!!cmpPid && cmpPid === localPid);
-  const refMatch = !cmpRef || cmpRef === localRef;
-  const amtMatch = !cmpAmt || Math.abs(cmpAmt - localAmt) <= 0.01;
+  const refMatch = cmpRef ? cmpRef === localRef : !!localPid;
+  const amtMatch = Number.isFinite(cmpAmt) && cmpAmt > 0 && Number.isFinite(localAmt) && localAmt > 0
+    && Math.round(cmpAmt * 100) === Math.round(localAmt * 100);
 
   if (success && pidMatch && refMatch && amtMatch) {
     return { decision: "settle", providerStatus: provStatus, providerPaymentId: cmpPid || localPid, providerResponse: sane };

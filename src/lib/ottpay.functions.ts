@@ -339,7 +339,6 @@ export const syncOttTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { reference: string }) => d)
   .handler(async ({ data, context }) => {
-    const { ottPost } = await import("@/lib/ottpay.server");
     const supabaseAdmin = ((await import("@/integrations/supabase/client.server")).supabaseAdmin) as any;
 
     const { data: tx } = await supabaseAdmin
@@ -368,12 +367,21 @@ export const syncOttTopup = createServerFn({ method: "POST" })
       if (HOSTED_PAID_STATES.has(st)) hostedNext = "completed";
       else if (HOSTED_FAILED_STATES.has(st)) hostedNext = "failed";
       // status='pending' 条件更新 —— 已被回调/对账处理过的不再改，触发器只加一次余额
-      if (hostedNext)
-        await supabaseAdmin
+      if (hostedNext === "completed") {
+        const cents = Number(q.total_amount);
+        if (String(q.order_id ?? "") !== data.reference || !Number.isSafeInteger(cents) || cents <= 0
+          || cents !== Math.round(Number(tx.amount_cad) * 100)) {
+          throw new Error("OTT 返回的订单或金额不匹配，充值保持待核验");
+        }
+      }
+      if (hostedNext) {
+        const { error } = await supabaseAdmin
           .from("wallet_transactions")
           .update({ status: hostedNext, verified_at: new Date().toISOString() })
           .eq("id", tx.id)
           .eq("status", "pending");
+        if (error) throw new Error("充值状态保存失败，请稍后重试");
+      }
       return { status: hostedNext ?? "pending" };
     }
 
@@ -381,16 +389,18 @@ export const syncOttTopup = createServerFn({ method: "POST" })
     const pid = (tx as any).provider_payment_id || /pid=([\w-]+)/.exec(tx.note ?? "")?.[1];
     if (!pid) return { status: "pending" };
 
-    const r = await ottPost<any>("/api/v1/payment/status-query", { paymentId: pid });
-    const s = String(r.paymentStatus ?? "").toLowerCase();
+    const { verifyOttRecharge } = await import("@/lib/ottpay-reconcile.server");
+    const verified = await verifyOttRecharge(tx);
     let next: string | null = null;
-    if (["success", "captured", "authorised", "authorized"].includes(s)) next = "completed";
-    else if (["failure", "orderclosed"].includes(s)) next = "failed";
+    if (verified.decision === "settle") next = "completed";
+    else if (verified.decision === "fail") next = "failed";
+    else if (verified.decision === "error") throw new Error(verified.error);
 
     if (next) {
       const patch: any = { status: next, verified_at: new Date().toISOString() };
       if (!(tx as any).provider_payment_id) patch.provider_payment_id = pid;
-      await supabaseAdmin.from("wallet_transactions").update(patch).eq("id", tx.id).eq("status", "pending");
+      const { error } = await supabaseAdmin.from("wallet_transactions").update(patch).eq("id", tx.id).eq("status", "pending");
+      if (error) throw new Error("充值状态保存失败，请稍后重试");
     }
     return { status: next ?? "pending" };
   });

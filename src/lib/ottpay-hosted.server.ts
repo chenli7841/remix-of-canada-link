@@ -105,5 +105,5 @@ export async function hostedPost(action: string, version: string, data: Record<s
   return { rsp_code: code, rsp_msg: json?.rsp_msg, ...result };
 }
 
-export const HOSTED_PAID_STATES = new Set(["success", "paid", "trade_success", "captured", "authorised", "authorized"]);
+export const HOSTED_PAID_STATES = new Set(["success", "paid", "trade_success", "captured"]);
 export const HOSTED_FAILED_STATES = new Set(["fail", "failure", "closed", "orderclosed", "cancelled", "canceled", "revoked"]);

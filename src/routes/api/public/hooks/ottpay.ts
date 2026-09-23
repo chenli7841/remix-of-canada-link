@@ -44,12 +44,8 @@ export const Route = createFileRoute("/api/public/hooks/ottpay")({
         if (readError || !tx) return new Response("transaction unavailable", { status: 503 });
         if (tx.status === "completed") return new Response("SUCCESS"); // idempotent
 
-        // order_status is a real field on the decrypted (signKey-verified)
-        // callback data per OTT Pay's integration docs (example values
-        // "authorised"/"captured" — same strings OTT_SUCCESS_STATES already
-        // matches), not something wallet callbacks omit. A callback that's
-        // missing or has an unrecognized status is anomalous — treat it as
-        // still-pending rather than defaulting to paid.
+        // Only a captured/successful payment credits the wallet. Authorization,
+        // processing, and missing/unknown statuses remain pending for verification.
         const status = String(info.order_status ?? "").toLowerCase();
         const paid = OTT_SUCCESS_STATES.has(status);
         const failed = OTT_FAILED_STATES.has(status);

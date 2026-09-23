@@ -11,7 +11,7 @@ const env = {
   OTTPAY_APP_ID: "test-app", OTTPAY_APP_KEY: "test-app-key",
   OTTPAY_MERCHANT_ID: "test-merchant", OTTPAY_SIGN_KEY: "test-sign-key",
 };
-function load(path, deps = {}) {
+function load(path, deps = {}, runtime = {}) {
   const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
@@ -24,11 +24,119 @@ function load(path, deps = {}) {
       if (!(id in deps)) throw new Error(`Unexpected dependency: ${id}`);
       return deps[id];
     },
+    ...runtime,
   });
   return exports;
 }
 const wallet = load("src/lib/ottpay.server.ts");
 const card = load("src/lib/ottpay-hosted.server.ts");
+
+test("CMP only settles captured funds with matching identity and amount", async () => {
+  const tx = { id: "tx", ref_no: "TEST", amount_cad: 2, provider_payment_id: "pid", note: null };
+  const valid = { paymentStatus: "success", stateCode: "P00003", paymentId: "pid", reference: "TEST", totalAmount: "200" };
+  for (const [patch, decision] of [
+    [{}, "settle"],
+    [{ paymentStatus: "authorized", stateCode: "P00002" }, "pending"],
+    [{ stateCode: "P00012" }, "refund"],
+    [{ stateCode: "P00016" }, "refund"],
+    [{ totalAmount: undefined }, "mismatch"],
+    [{ totalAmount: "0" }, "mismatch"],
+    [{ totalAmount: "201" }, "mismatch"],
+    [{ totalAmount: "NaN" }, "mismatch"],
+    [{ paymentId: "other" }, "mismatch"],
+    [{ reference: "other" }, "mismatch"],
+    [{ paymentStatus: "authorized" }, "pending"],
+  ]) {
+    const api = load("src/lib/ottpay-reconcile.server.ts", {
+      "@/lib/ottpay.server": { ottPost: async () => ({ ...valid, ...patch }) },
+    });
+    assert.equal((await api.verifyOttRecharge(tx)).decision, decision, JSON.stringify(patch));
+  }
+  const api = load("src/lib/ottpay-reconcile.server.ts", {
+    "@/lib/ottpay.server": { ottPost: async () => ({ ...valid, reference: null }) },
+  });
+  assert.equal((await api.verifyOttRecharge({ ...tx, provider_payment_id: null })).decision, "mismatch");
+});
+
+test("OTT nested authorization codes are explained without exposing the response", async () => {
+  for (const code of [10003, 10005, 20004]) {
+    const api = load("src/lib/ottpay.server.ts", {}, {
+      fetch: async () => new Response(JSON.stringify({ status: "ERROR", result: {
+        code, errorMessage: "DO_NOT_EXPOSE_SECRET", token: "DO_NOT_EXPOSE_TOKEN",
+      } }), { status: 400 }),
+    });
+    await assert.rejects(api.ottToken(), (error) => {
+      assert.match(error.message, new RegExp(`代码 ${code}`));
+      assert.doesNotMatch(error.message, /DO_NOT_EXPOSE/);
+      return true;
+    });
+  }
+});
+
+test("Hosted polling verifies identity and amount before writing and propagates write errors", async () => {
+  for (const scenario of ["valid", "authorized", "wrong-order", "wrong-amount", "missing-amount", "db-error"]) {
+    let writes = 0;
+    const response = { order_status: "success", order_id: "TEST", total_amount: "200" };
+    if (scenario === "authorized") response.order_status = "authorized";
+    if (scenario === "wrong-order") response.order_id = "OTHER";
+    if (scenario === "wrong-amount") response.total_amount = "201";
+    if (scenario === "missing-amount") delete response.total_amount;
+    const query = {
+      select() { return this; }, eq() { return this; },
+      async maybeSingle() { return { data: { id: "tx", status: "pending", amount_cad: 2, note: "hosted=1" } }; },
+      update() { writes++; return this; },
+      then(resolve) { resolve({ error: scenario === "db-error" ? { message: "offline" } : null }); },
+    };
+    const api = load("src/lib/ottpay.functions.ts", {
+      "@tanstack/react-start": { createServerFn: () => ({
+        middleware() { return this; }, inputValidator() { return this; }, handler(fn) { return fn; },
+      }) },
+      "@/integrations/supabase/auth-middleware": { requireSupabaseAuth: {} },
+      "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query } },
+      "@/lib/ottpay-hosted.server": { ...card, hostedPost: async () => response },
+    });
+    const run = () => api.syncOttTopup({ data: { reference: "TEST" }, context: { userId: "user" } });
+    if (scenario === "valid") assert.equal((await run()).status, "completed");
+    else if (scenario === "authorized") assert.equal((await run()).status, "pending");
+    else await assert.rejects(run(), /不匹配|保存失败/);
+    assert.equal(writes, ["valid", "db-error"].includes(scenario) ? 1 : 0, scenario);
+  }
+});
+
+test("OTT trims copied credentials and caches a successful token", async () => {
+  let calls = 0;
+  const api = load("src/lib/ottpay.server.ts", {}, {
+    process: { env: { ...env, OTTPAY_APP_ID: " test-app\n", OTTPAY_APP_KEY: " test-app-key\r\n" } },
+    fetch: async (url, options) => {
+      calls++;
+      assert.equal(url, "https://ecom-api.ottpay.com/api/v1/auth/token");
+      assert.deepEqual(JSON.parse(options.body), { appId: "test-app", appKey: "test-app-key" });
+      return Response.json({ status: "SUCCESS", result: { token: "test-token", expired: Date.now() + 600000 } });
+    },
+  });
+  assert.equal(await api.ottToken(), "test-token");
+  assert.equal(await api.ottToken(), "test-token");
+  assert.equal(calls, 1);
+});
+
+test("OTT blank credentials fail before making a request", async () => {
+  const api = load("src/lib/ottpay.server.ts", {}, {
+    process: { env: { ...env, OTTPAY_APP_KEY: " \n" } },
+    fetch: () => { assert.fail("No request should be sent"); },
+  });
+  await assert.rejects(api.ottToken(), /未配置/);
+});
+
+test("OTT non-JSON errors retain HTTP status without disclosing raw response", async () => {
+  const api = load("src/lib/ottpay.server.ts", {}, {
+    fetch: async () => new Response("<html>DO_NOT_EXPOSE</html>", { status: 502 }),
+  });
+  await assert.rejects(api.ottToken(), (error) => {
+    assert.match(error.message, /HTTP 502/);
+    assert.doesNotMatch(error.message, /DO_NOT_EXPOSE/);
+    return true;
+  });
+});
 
 function fixture(channel) {
   const state = {
@@ -94,7 +202,7 @@ for (const channel of ["ottpay", "ottpay-card"]) {
   }
   test(`${channel}: processing and unknown notifications allow later success`, async () => {
     const { state, send } = fixture(channel);
-    for (const status of ["processing", "init", "unknown", ""]) {
+    for (const status of ["processing", "init", "authorized", "authorised", "unknown", ""]) {
       assert.equal((await send({ order_status: status })).status, 200);
       assert.equal(state.row.status, "pending");
     }
