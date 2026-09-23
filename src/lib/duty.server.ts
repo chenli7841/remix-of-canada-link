@@ -207,16 +207,24 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
   let declared_total = 0;
 
   for (const it of (fi ?? []) as any[]) {
-    const explicitInner = Number(it?.extras?.items_per_carton ?? 0);
+    const explicitInner = Number(it?.extras?.items_per_carton ?? it?.extras?.inner_qty ?? 0);
+    const itemBoxes = Number(it?.extras?.box_count ?? 0);
     const totalQty = Number(it.quantity ?? 0);
     let rawPerWb: number;
     let source: DutyItemRow["quantity_source"];
-    if (summaryByName.has(it.name)) {
-      rawPerWb = Number(summaryByName.get(it.name) || 0);
-      source = "quantity";
-    } else if (explicitInner > 0) {
+    // An item's own split annotation (customer-declared: this item spans N of
+    // its own boxes) always wins — items_summary is copied verbatim onto every
+    // waybill of the order, so treating its raw quantity as "this waybill's
+    // share" would count the item's full value on each box it touches.
+    if (explicitInner > 0) {
       rawPerWb = explicitInner;
       source = "items_per_carton";
+    } else if (itemBoxes > 1) {
+      rawPerWb = totalQty / itemBoxes;
+      source = "quantity/box_count";
+    } else if (summaryByName.has(it.name)) {
+      rawPerWb = Number(summaryByName.get(it.name) || 0);
+      source = "quantity";
     } else {
       rawPerWb = boxCount > 0 ? totalQty / boxCount : totalQty;
       source = boxCount > 1 ? "quantity/box_count" : "quantity";

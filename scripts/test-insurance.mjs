@@ -9,8 +9,8 @@ async function load(file) {
 }
 const { insuranceCad, uniqueWaybills, supportsInsurance } = await load('insurance');
 const { routeInsuranceRate } = await load('insurance-rate.server');
-const { allocatedWaybillValueCad } = await load('waybill-value.server');
 const { effectiveWaybillInsurance } = await load('insurance.server');
+const { computeWaybillDutyBreakdown } = await load('duty.server');
 test('uninsured 10.52 CAD shipment is zero; insured rounds to 0.32', () => {
   assert.equal(insuranceCad(10.52, 3, false), 0);
   assert.equal(insuranceCad(10.52, 3, true), 0.32);
@@ -42,6 +42,50 @@ test('overlapping direct and carton membership charges a waybill only once', () 
   assert.equal(result.reduce((s, w) => s + w.insurance_cad, 0), 1.32);
 });
 
+// ---- computeWaybillDutyBreakdown: per-item quantity split ----
+// forwarding_items is the whole order's item list; intake copies it verbatim
+// onto every waybill's items_summary (same raw quantity on each one). A
+// single item that itself spans N of its own boxes (extras.box_count) must
+// have its declared value divided by N — otherwise every waybill carrying a
+// piece of it gets billed the item's full value.
+function dutyDb({ items = [], boxCount = 1, hsCodes = [] } = {}) {
+  return { from(table) {
+    if (table === 'forwarding_orders') return { select() { return { eq() { return { maybeSingle: async () => ({ data: { id: 'f', box_count: boxCount, route_id: 'r' } }) }; } }; } };
+    if (table === 'forwarding_items') return { select() { return { eq: async () => ({ data: items, error: null }) }; } };
+    if (table === 'hs_codes') return { select() { return { order() { return { range: async () => ({ data: hsCodes, error: null }) }; } }; } };
+    if (table === 'customs_rules') return { select() { return { eq() { return { maybeSingle: async () => ({ data: null }) }; } }; } };
+    if (table === 'app_settings') return { select() { return { eq() { return { maybeSingle: async () => ({ data: null }) }; } }; } };
+    throw new Error(`unexpected table ${table}`);
+  } };
+}
+test('an item split across its own boxes divides declared value by that split, not the whole order box count', async () => {
+  const items = [{ id: 'i1', name: '吧椅', quantity: 1, unit_price_cad: 300, extras: { box_count: 2 } }];
+  const wbSummary = { items_summary: [{ name: '吧椅', quantity: 1 }] };
+  const a = await computeWaybillDutyBreakdown(dutyDb({ items, boxCount: 5 }), { forwarding_id: 'f', ...wbSummary });
+  const b = await computeWaybillDutyBreakdown(dutyDb({ items, boxCount: 5 }), { forwarding_id: 'f', ...wbSummary });
+  assert.equal(a.declared_cad, 150);
+  assert.equal(b.declared_cad, 150);
+  assert.equal(a.items[0].quantity_source, 'quantity/box_count');
+});
+test('explicit items_per_carton/inner_qty on an item wins over its box_count', async () => {
+  const items = [{ id: 'i1', name: 'X', quantity: 10, unit_price_cad: 10, extras: { box_count: 5, inner_qty: 3 } }];
+  const br = await computeWaybillDutyBreakdown(dutyDb({ items }), { forwarding_id: 'f', items_summary: [{ name: 'X', quantity: 10 }] });
+  assert.equal(br.declared_cad, 30); // 3 units * $10, not 10/5=2 units
+  assert.equal(br.items[0].quantity_source, 'items_per_carton');
+});
+test('an item without a split annotation still falls back to the waybill summary quantity', async () => {
+  const items = [{ id: 'i1', name: 'Y', quantity: 4, unit_price_cad: 5, extras: null }];
+  const br = await computeWaybillDutyBreakdown(dutyDb({ items }), { forwarding_id: 'f', items_summary: [{ name: 'Y', quantity: 4 }] });
+  assert.equal(br.declared_cad, 20);
+  assert.equal(br.items[0].quantity_source, 'quantity');
+});
+test('an item absent from the summary falls back to the order box count', async () => {
+  const items = [{ id: 'i1', name: 'Z', quantity: 10, unit_price_cad: 1, extras: null }];
+  const br = await computeWaybillDutyBreakdown(dutyDb({ items, boxCount: 5 }), { forwarding_id: 'f', items_summary: [] });
+  assert.equal(br.declared_cad, 2); // 10 / 5 boxes
+  assert.equal(br.items[0].quantity_source, 'quantity/box_count');
+});
+
 function extract(file, name) {
   const text = readFileSync(new URL(`../src/lib/${file}.ts`, import.meta.url), 'utf8');
   const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
@@ -53,17 +97,18 @@ function extract(file, name) {
   const dependencies = {
     getFxCadPerCny: async () => .19,
     computeWaybillDeclaredCad: () => 10.52,
-    computeWaybillDutyBreakdown: async () => ({ duty_cad: 0 }),
-    computeAnyWaybillDutyBreakdown: async () => ({ duty_cad: 0 }),
+    // Both duty breakdown flavors now double as the single source of declared
+    // value for insurance too — the stub must return declared_cad, not just duty_cad.
+    computeWaybillDutyBreakdown: async () => ({ duty_cad: 0, declared_cad: 10.52 }),
+    computeAnyWaybillDutyBreakdown: async () => ({ duty_cad: 0, declared_cad: 10.52 }),
     buildInvoiceLineMeta: async () => null,
   };
-  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', 'allocatedWaybillValueCad', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate, allocatedWaybillValueCad);
+  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate);
 }
-function pricingDb(insured, cargoType = 'general', allocated = [{ declared_value_cad: 10.52 }]) {
+function pricingDb(insured, cargoType = 'general') {
   return { from(table) {
     let columns;
     const values = {
-      waybill_items: allocated,
       shipping_routes: { cargo_type: cargoType },
       forwarding_orders: { route_id: 'r', declared_value_cad: 10.52, box_count: 1, insured },
       forwarding_items: [],
@@ -119,30 +164,17 @@ test('invoice records stored premium, including zero, without consulting eligibi
   await assert.rejects(invoice(invoiceDb(4.5), 'w', 0));
 });
 
-
-test('insurance uses existing allocation, not conflicting summary or parent declaration', async () => {
+test('measuring and recompute both price insurance off the same duty-breakdown declared value', async () => {
   const measure = extract('scan.functions', 'computeWaybillFeesCad');
-  const wb = { id: 'w', forwarding_id: 'f', weight_kg: 1, items_summary: [{ name: 'old', quantity: 100, unit_price_cad: 999 }] };
-  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 80 }, { declared_value_cad: 20 }]), wb)).insurance_cad, 3);
-  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 200 }]), wb)).insurance_cad, 6);
-  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 0 }]), wb)).insurance_cad, 0);
-  await assert.rejects(measure(pricingDb(true, 'general', []), wb), /尚未分配/);
-  assert.equal((await measure(pricingDb(false, 'general', []), wb)).insurance_cad, 0);
-  assert.equal((await measure(pricingDb(true, 'sensitive', []), wb)).insurance_cad, 0);
+  const wb = { id: 'w', forwarding_id: 'f', weight_kg: 1, length_cm: 10, width_cm: 10, height_cm: 10 };
+  assert.equal((await measure(pricingDb(true), wb)).insurance_cad, +(10.52 * 0.03).toFixed(2));
+  assert.equal((await measure(pricingDb(false), wb)).insurance_cad, 0);
 });
 
-test('allocated value rejects incomplete values and failed reads', async () => {
-  await assert.rejects(allocatedWaybillValueCad(pricingDb(true, 'general', [{ declared_value_cad: null }]), 'w'));
-  await assert.rejects(allocatedWaybillValueCad(pricingDb(true, 'general', [{ declared_value_cad: -1 }]), 'w'));
-  const failing = { from() { return { select() { return { eq: async () => ({ error: { message: 'offline' } }) }; } }; } };
-  await assert.rejects(allocatedWaybillValueCad(failing, 'w'), /读取运单货值失败/);
-});
-
-
-test('recompute saves premium and allocated value together and surfaces write failure', async () => {
+test('recompute saves premium off the duty breakdown and surfaces write failure', async () => {
   const calculate = extract('orders.functions', 'computeAndPersistWaybillFees');
   function savingDb(insured, fail = false) {
-    const base = pricingDb(insured, 'general', [{ declared_value_cad: 100 }]);
+    const base = pricingDb(insured);
     const saved = [];
     const admin = { from(table) {
       if (table !== 'waybills') return base.from(table);
@@ -152,9 +184,8 @@ test('recompute saves premium and allocated value together and surfaces write fa
   }
   const yes = savingDb(true);
   await calculate(yes.admin, 'w');
-  assert.equal(yes.saved[0].insurance_cad, 3);
-  assert.equal(yes.saved[0].weight_snapshot.declared_cad, 100);
-  assert.equal(yes.saved[0].weight_snapshot.insurance_cad, 3);
+  assert.equal(yes.saved[0].insurance_cad, +(10.52 * 0.03).toFixed(2));
+  assert.equal(yes.saved[0].weight_snapshot.declared_cad, 10.52);
   const no = savingDb(false);
   await calculate(no.admin, 'w');
   assert.equal(no.saved[0].insurance_cad, 0);

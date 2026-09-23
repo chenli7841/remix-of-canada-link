@@ -1,4 +1,3 @@
-import { allocatedWaybillValueCad } from "./waybill-value.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
@@ -291,7 +290,6 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     declared_cad = br.declared_cad;
   }
   const ins_rate = await routeInsuranceRate(admin, fo.route_id, rule.insurance_rate_pct);
-  if (fo.insured === true && ins_rate > 0) declared_cad = await allocatedWaybillValueCad(admin, waybillId);
   const declared_cny = fx > 0 ? +(declared_cad / fx).toFixed(2) : 0;
   const insurance_cad = insuranceCad(declared_cad, ins_rate, fo.insured === true);
 

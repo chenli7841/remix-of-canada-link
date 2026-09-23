@@ -1,4 +1,3 @@
-import { allocatedWaybillValueCad } from "./waybill-value.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
@@ -1321,13 +1320,13 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     const { computeWaybillDutyBreakdown } = await import("./duty.server");
     const br = await computeWaybillDutyBreakdown(admin, wb);
     duty_cad = br.duty_cad;
+    declared_cad = br.declared_cad;
   } else if (customs?.enabled && declared_cad >= Number(customs.threshold_cad ?? 0)) {
     // 电商订单（无 forwarding_id）暂沿用线路 rate_pct，避免影响商城
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
   const ins_rate = await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
-  const insured_value_cad = insured && ins_rate > 0 ? await allocatedWaybillValueCad(admin, wb.id) : 0;
-  const insurance_cad = insuranceCad(insured_value_cad, ins_rate, insured);
+  const insurance_cad = insuranceCad(declared_cad, ins_rate, insured);
   return {
     freight_cad,
     duty_cad,
