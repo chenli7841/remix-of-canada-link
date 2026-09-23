@@ -57,11 +57,11 @@ export const startOttTopup = createServerFn({ method: "POST" })
     if (prev?.pay_session?.pay_info) {
       const pr = prev.pay_session;
       if (pr.mode === "qr") {
-        const QRCode = await import("qrcode");
+        const { paymentQrDataUrl } = await import("@/lib/payment-qr.server");
         return {
           mode: "qr",
           payInfo: pr.pay_info,
-          qrDataUrl: await QRCode.toDataURL(pr.pay_info, { width: 320, margin: 1 }),
+          qrDataUrl: paymentQrDataUrl(pr.pay_info),
           reference: prev.ref_no,
           paymentId: prev.provider_payment_id ?? null,
           notice: pr.notice ?? undefined,
@@ -219,11 +219,11 @@ export const startOttTopup = createServerFn({ method: "POST" })
         const pr = (won as any)?.pay_session;
         if (pr?.pay_info) {
           if (pr.mode === "qr") {
-            const QRCode = await import("qrcode");
+            const { paymentQrDataUrl } = await import("@/lib/payment-qr.server");
             return {
               mode: "qr",
               payInfo: pr.pay_info,
-              qrDataUrl: await QRCode.toDataURL(pr.pay_info, { width: 320, margin: 1 }),
+              qrDataUrl: paymentQrDataUrl(pr.pay_info),
               reference: (won as any).ref_no,
               paymentId: (won as any).provider_payment_id ?? null,
               notice: pr.notice ?? undefined,
@@ -242,8 +242,8 @@ export const startOttTopup = createServerFn({ method: "POST" })
     }
 
     if (mode === "qr") {
-      const QRCode = await import("qrcode");
-      const qrDataUrl = await QRCode.toDataURL(payInfo, { width: 320, margin: 1 });
+      const { paymentQrDataUrl } = await import("@/lib/payment-qr.server");
+      const qrDataUrl = paymentQrDataUrl(payInfo);
       return { mode, payInfo, qrDataUrl, reference, paymentId, notice, openUrl };
     }
     return { mode: "redirect", url: payInfo, reference, paymentId };

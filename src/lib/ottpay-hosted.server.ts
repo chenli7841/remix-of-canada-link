@@ -42,7 +42,8 @@ export function encryptHosted(data: Record<string, string>): { data: string; md5
   const raw = JSON.stringify(data);
   const md5 = md5Upper(joinSorted(data));
   const key = aesKeyFrom(md5, cfg.signKey);
-  const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key, "utf8"), null);
+  // ECB has no IV; an empty Buffer also works on runtimes that reject null.
+  const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key, "utf8"), Buffer.alloc(0));
   cipher.setAutoPadding(true);
   const out = Buffer.concat([cipher.update(Buffer.from(raw, "utf8")), cipher.final()]).toString("base64");
   return { data: out, md5 };

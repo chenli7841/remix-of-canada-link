@@ -4,6 +4,52 @@ import { test } from "node:test";
 import vm from "node:vm";
 import crypto from "node:crypto";
 import ts from "typescript";
+import { createRequire } from "node:module";
+
+const requireQr = createRequire(import.meta.url);
+
+test("Payment QR renders without loading pngjs, zlib, or stream", () => {
+  const loaded = Object.keys(requireQr.cache);
+  assert.ok(!loaded.some((path) => /[\\/]pngjs[\\/]/.test(path)));
+  for (const text of ["weixin://wxpay/bizpayurl?pr=TEST123", "https://example.com/pay?x=1&y=中文"]) {
+    const url = paymentQr.paymentQrDataUrl(text);
+    assert.ok(url.startsWith("data:image/svg+xml;charset=utf-8,"));
+    const svg = decodeURIComponent(url.split(",")[1]);
+    assert.match(svg, /<svg[^>]+width="320"/);
+    assert.match(svg, /<path[^>]+stroke="#000000"/);
+    assert.ok(!svg.includes(text), "Payload must be encoded as QR modules, not interpolated into SVG");
+  }
+});
+
+test("Payment QR works for new orders, retries, and concurrent duplicate orders", async () => {
+  for (const scenario of ["new", "retry", "concurrent"]) {
+    let requests = 0;
+    const payInfo = "weixin://wxpay/bizpayurl?pr=TEST123";
+    const prior = { ref_no: "TEST", status: "pending", provider_payment_id: "pid", pay_session: { mode: "qr", pay_info: payInfo } };
+    const query = {
+      select() { return this; }, eq() { return this; }, order() { return this; },
+      limit() { return this; }, gte() { return this; },
+      then(resolve) { resolve({ data: scenario === "retry" ? [prior] : [] }); },
+      async maybeSingle() { return { data: prior }; },
+      async insert() { return { error: scenario === "concurrent" ? { code: "23505" } : null }; },
+    };
+    const api = load("src/lib/ottpay.functions.ts", {
+      "@tanstack/react-start": { createServerFn: () => ({
+        middleware() { return this; }, inputValidator() { return this; }, handler(fn) { return fn; },
+      }) },
+      "@/integrations/supabase/auth-middleware": { requireSupabaseAuth: {} },
+      "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query } },
+      "@/lib/orders.functions": { getFxCadPerCny: async () => 0.2 },
+      "@/lib/ottpay.server": { ...wallet, ottPost: async () => { requests++; return { payInfo, paymentId: "pid" }; } },
+      "@tanstack/react-start/server": { getRequestHeader: () => "Desktop" },
+      "@/lib/payment-qr.server": paymentQr,
+    });
+    const result = await api.startOttTopup({ data: { amountCad: 2, channel: "wechat", device: "desktop", idempotencyKey: "test" }, context: { userId: "user" } });
+    assert.equal(result.mode, "qr");
+    assert.equal(result.qrDataUrl, paymentQr.paymentQrDataUrl(payInfo));
+    assert.equal(requests, scenario === "retry" ? 0 : 1);
+  }
+});
 
 // Execute the real handlers and cryptographic helpers; only the database is mocked.
 // No environment file, network request, or real payment is used.
@@ -30,6 +76,32 @@ function load(path, deps = {}, runtime = {}) {
 }
 const wallet = load("src/lib/ottpay.server.ts");
 const card = load("src/lib/ottpay-hosted.server.ts");
+const paymentQr = load("src/lib/payment-qr.server.ts", {
+  "qrcode/lib/core/qrcode.js": requireQr("qrcode/lib/core/qrcode.js"),
+  "qrcode/lib/renderer/svg-tag.js": requireQr("qrcode/lib/renderer/svg-tag.js"),
+});
+
+test("Hosted encryption supports runtimes requiring a Buffer IV and preserves ECB ciphertext", () => {
+  const strictCrypto = {
+    ...crypto,
+    createCipheriv(algorithm, key, iv) {
+      assert.ok(Buffer.isBuffer(iv), "Deployment runtime requires a Buffer IV");
+      assert.equal(iv.length, 0, "ECB must use an empty IV");
+      return crypto.createCipheriv(algorithm, key, iv);
+    },
+  };
+  const api = load("src/lib/ottpay-hosted.server.ts", {}, {
+    require: (id) => { assert.equal(id, "crypto"); return strictCrypto; },
+  });
+  const data = { orderId: "TEST", txnAmt: "200", merchant_id: "test-merchant" };
+  const encrypted = api.encryptHosted(data);
+  const key = crypto.createHash("md5").update(encrypted.md5 + env.OTTPAY_SIGN_KEY)
+    .digest("hex").toUpperCase().slice(8, 24);
+  const legacy = crypto.createCipheriv("aes-128-ecb", Buffer.from(key), null);
+  const expected = Buffer.concat([legacy.update(JSON.stringify(data), "utf8"), legacy.final()]).toString("base64");
+  assert.equal(encrypted.data, expected);
+  assert.equal(JSON.stringify(api.decryptHosted(encrypted)), JSON.stringify(data));
+});
 
 test("CMP only settles captured funds with matching identity and amount", async () => {
   const tx = { id: "tx", ref_no: "TEST", amount_cad: 2, provider_payment_id: "pid", note: null };
