@@ -355,7 +355,9 @@ export const syncOttTopup = createServerFn({ method: "POST" })
       const { hostedConfig, hostedPost, txnTime, HOSTED_PAID_STATES, HOSTED_FAILED_STATES } =
         await import("@/lib/ottpay-hosted.server");
       const cfg = hostedConfig();
+      // frontapi 的 STATUS_QUERY 用 snake_case order_id（orderId 会报 "order_id is missing"）
       const q = await hostedPost("STATUS_QUERY", "1.0", {
+        order_id: data.reference,
         orderId: data.reference,
         merchant_id: cfg.merchantId,
         bizType: "converge_hosted",
