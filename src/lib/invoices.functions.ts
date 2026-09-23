@@ -79,7 +79,7 @@ export const getInvoice = createServerFn({ method: "POST" })
   });
 
 // ---- Compute freight breakdown for a waybill ----
-// freight_cny/insurance_cny are computed directly against the route's
+// Insurance records the persisted waybill premium. Freight uses the route's
 // freight_rules (unchanged from before); customs_cny now comes from
 // computeAnyWaybillDutyBreakdown (duty.server.ts) — the HS-code/product-rate
 // per-item calculation that settleBatchForCustomer's persisted waybill
@@ -89,26 +89,25 @@ export const getInvoice = createServerFn({ method: "POST" })
 async function computeWaybillFees(admin: any, waybillId: string, fx: number) {
   const { data: wb } = await admin.from("waybills").select("*").eq("id", waybillId).maybeSingle();
   if (!wb) throw new Error("waybill not found");
+  if (!Number.isFinite(fx) || fx <= 0) throw new Error("Invalid invoice exchange rate");
+  const insurance_cny = +(Number(wb.insurance_cad ?? 0) / fx).toFixed(2);
   let route_id: string | null = null;
-  let declared_cad = 0;
   if (wb.order_id) {
     const { data: ord } = await admin
       .from("orders")
-      .select("route_id, subtotal_cny")
+      .select("route_id")
       .eq("id", wb.order_id)
       .maybeSingle();
     route_id = ord?.route_id ?? null;
-    declared_cad = +(Number(ord?.subtotal_cny ?? 0) * fx).toFixed(2);
   } else if (wb.forwarding_id) {
     const { data: fo } = await admin
       .from("forwarding_orders")
-      .select("route_id, declared_value_cad")
+      .select("route_id")
       .eq("id", wb.forwarding_id)
       .maybeSingle();
     route_id = fo?.route_id ?? null;
-    declared_cad = Number(fo?.declared_value_cad ?? 0);
   }
-  if (!route_id) return { freight_cny: 0, customs_cny: 0, insurance_cny: 0, meta: null, ref: { wb } };
+  if (!route_id) return { freight_cny: 0, customs_cny: 0, insurance_cny, meta: null, ref: { wb } };
 
   const { data: rule } = await admin
     .from("freight_rules")
@@ -116,7 +115,7 @@ async function computeWaybillFees(admin: any, waybillId: string, fx: number) {
     .eq("route_id", route_id)
     .eq("is_active", true)
     .maybeSingle();
-  if (!rule) return { freight_cny: 0, customs_cny: 0, insurance_cny: 0, meta: null, ref: { wb } };
+  if (!rule) return { freight_cny: 0, customs_cny: 0, insurance_cny, meta: null, ref: { wb } };
 
   const w = Number(wb.weight_kg ?? 0);
   const v = Number(wb.length_cm ?? 0) * Number(wb.width_cm ?? 0) * Number(wb.height_cm ?? 0);
@@ -124,10 +123,7 @@ async function computeWaybillFees(admin: any, waybillId: string, fx: number) {
   const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
   let freight_cny = chargeable * Number(rule.unit_price_cny) + Number(rule.extra_fee_cny);
   if (freight_cny < Number(rule.min_charge_cny)) freight_cny = Number(rule.min_charge_cny);
-  const insurance_cny =
-    declared_cad && Number(rule.insurance_rate_pct ?? 0) > 0
-      ? +((declared_cad * (Number(rule.insurance_rate_pct) / 100)) / fx).toFixed(2)
-      : 0;
+
 
   const { computeAnyWaybillDutyBreakdown, buildInvoiceLineMeta } = await import("./duty.server");
   const duty = await computeAnyWaybillDutyBreakdown(admin, wb);

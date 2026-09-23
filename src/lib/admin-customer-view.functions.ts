@@ -639,7 +639,7 @@ export const listShippingOptions = createServerFn({ method: "POST" })
       context.supabase
         .from("shipping_routes")
         .select(
-          "id,code,name_zh,name_en,shipping_method,origin_warehouse_id,destination_warehouse_id,is_bidirectional,item_fields,item_field_required",
+          "id,code,name_zh,name_en,cargo_type,shipping_method,origin_warehouse_id,destination_warehouse_id,is_bidirectional,item_fields,item_field_required",
         )
         .eq("is_active", true)
         .in("usage_scope", ["forwarding", "both"])

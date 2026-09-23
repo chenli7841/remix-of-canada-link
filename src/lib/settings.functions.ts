@@ -331,7 +331,7 @@ export const upsertRoute = createServerFn({ method: "POST" })
       unit_price_cny: 0,
       min_charge_cny: 0,
       extra_fee_cny: 0,
-      insurance_rate_pct: f.insurance_rate_pct ?? 0,
+      insurance_rate_pct: data.route.cargo_type === "sensitive" ? 0 : (f.insurance_rate_pct ?? 0),
       is_active: true,
       note: f.note ?? null,
       pricing_mode: f.pricing_mode ?? "weight",
@@ -440,7 +440,7 @@ export const quoteFreight = createServerFn({ method: "POST" })
       context.supabase.from("customs_rules").select("*").eq("route_id", data.route_id).maybeSingle(),
       context.supabase
         .from("shipping_routes")
-        .select("sales_tax_enabled, sales_tax_rate_pct")
+        .select("sales_tax_enabled, sales_tax_rate_pct, cargo_type")
         .eq("id", data.route_id)
         .maybeSingle(),
     ]);
@@ -487,7 +487,7 @@ export const quoteFreight = createServerFn({ method: "POST" })
       duty_cad = +(data.declared_cad * (Number(customs.rate_pct) / 100)).toFixed(2);
     }
 
-    const insurance_rate_pct = Number(rule.insurance_rate_pct ?? 0);
+    const insurance_rate_pct = route?.cargo_type === "sensitive" ? 0 : Number(rule.insurance_rate_pct ?? 0);
     const insurance_cad =
       data.declared_cad && insurance_rate_pct > 0 ? +(data.declared_cad * (insurance_rate_pct / 100)).toFixed(2) : 0;
 

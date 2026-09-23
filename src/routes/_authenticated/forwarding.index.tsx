@@ -1,3 +1,4 @@
+import { supportsInsurance, SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +47,7 @@ interface WarehouseRow {
   phone: string | null;
 }
 interface RouteRow {
+  cargo_type: string;
   id: string;
   code: string;
   name_zh: string;
@@ -252,7 +254,7 @@ function ForwardingPage() {
         sb
           .from("shipping_routes")
           .select(
-            "id,code,name_zh,name_en,shipping_method,destination_code,origin_warehouse_id,destination_warehouse_id,is_bidirectional,transit_days_min,transit_days_max,item_fields,item_field_required,visible_vip_levels,visible_customer_codes,blacklist_vip_levels,blacklist_customer_codes",
+            "id,code,name_zh,name_en,cargo_type,shipping_method,destination_code,origin_warehouse_id,destination_warehouse_id,is_bidirectional,transit_days_min,transit_days_max,item_fields,item_field_required,visible_vip_levels,visible_customer_codes,blacklist_vip_levels,blacklist_customer_codes",
           )
           .eq("is_active", true)
           .in("usage_scope", ["forwarding", "both"])
@@ -326,6 +328,8 @@ function ForwardingPage() {
 
   const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) ?? null;
   const selectedRoute = availableRoutes.find((r) => r.code === routeCode) ?? null;
+  const insuranceAllowed = supportsInsurance(selectedRoute);
+  useEffect(() => { if (!insuranceAllowed) setInsured(false); }, [insuranceAllowed]);
   const selectedRule = selectedRoute ? rules[selectedRoute.id] : null;
   const selectedAddress = addresses.find((x) => x.id === addressId) ?? null;
 
@@ -457,8 +461,8 @@ function ForwardingPage() {
         route_code: selectedRoute.code,
         address_id: addressId,
         domestic_tracking_no: t || null,
-        note: [insured ? (lang === "zh" ? "[已购买保险]" : "[Insured]") : null, note].filter(Boolean).join(" ") || null,
-        insured,
+        note: [insuranceAllowed && insured ? (lang === "zh" ? "[已购买保险]" : "[Insured]") : null, note].filter(Boolean).join(" ") || null,
+        insured: insuranceAllowed && insured,
         items: parcel.items
           .filter((i) => i.name.trim())
           .map((i) => ({
@@ -751,7 +755,7 @@ function ForwardingPage() {
                               {Number(rule.clearance_fee_cad || rule.extra_fee_cny * 0.19).toFixed(2)}
                             </li>
                           )}
-                          {Number(rule.insurance_rate_pct) > 0 && (
+                          {r.cargo_type !== "sensitive" && Number(rule.insurance_rate_pct) > 0 && (
                             <li>
                               {tr("保险费率", "Insurance rate")}: {Number(rule.insurance_rate_pct).toFixed(2)}%
                             </li>
@@ -1064,8 +1068,8 @@ function ForwardingPage() {
         <Step n={5} icon={<ShieldCheck className="h-4 w-4" />} title={tr("其他", "Other")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={insured} onChange={(e) => setInsured(e.target.checked)} />
-              {tr("购买运输保险", "Add insurance")}
+              <input type="checkbox" disabled={!insuranceAllowed} checked={insuranceAllowed && insured} onChange={(e) => setInsured(e.target.checked)} />
+              {selectedRoute?.cargo_type === "sensitive" ? SENSITIVE_INSURANCE_NOTICE : tr("购买运输保险", "Add insurance")}
             </label>
             <button
               type="button"

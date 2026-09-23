@@ -4,9 +4,9 @@ export async function effectiveWaybillInsurance<T extends { forwarding_id?: stri
   const ids = [...new Set(rows.map(w => w.forwarding_id).filter(Boolean))];
   const choices = new Map<string, boolean>();
   for (let i = 0; i < ids.length; i += 200) {
-    const { data, error } = await admin.from("forwarding_orders").select("id,insured").in("id", ids.slice(i, i + 200));
+    const { data, error } = await admin.from("forwarding_orders").select("id,insured,shipping_routes:route_id(cargo_type)").in("id", ids.slice(i, i + 200));
     if (error) throw new Error("无法核对投保状态，请重试");
-    for (const fo of data ?? []) choices.set(fo.id, fo.insured === true);
+    for (const fo of data ?? []) choices.set(fo.id, fo.insured === true && fo.shipping_routes?.cargo_type !== "sensitive");
   }
   return rows.map(w => {
     if (!w.forwarding_id || w.payment_status === "paid") return w;

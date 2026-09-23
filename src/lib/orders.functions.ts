@@ -1,3 +1,4 @@
+import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
 import { createServerFn } from "@tanstack/react-start";
@@ -167,7 +168,7 @@ export async function computeFreight(
   if (customs_applies && declared_cad && declared_cad >= Number(customs.threshold_cad ?? 0)) {
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
-  const insurance_rate_pct = Number(rule.insurance_rate_pct ?? 0);
+  const insurance_rate_pct = await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
   const insurance_cad =
     insuranceCad(declared_cad, insurance_rate_pct, insured);
   return {
@@ -301,7 +302,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     });
     duty_cad = br.duty_cad;
   }
-  const ins_rate = Number(rule.insurance_rate_pct ?? 0);
+  const ins_rate = await routeInsuranceRate(admin, fo.route_id, rule.insurance_rate_pct);
   const insurance_cad = insuranceCad(declared_cad, ins_rate, fo.insured === true);
 
   const snapshot = {
@@ -862,7 +863,7 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
     const [foR, itemsR, waybillsR, logsR] = await Promise.all([
       supabaseAdmin
         .from("forwarding_orders")
-        .select("*, shipping_routes:route_id(code, name_zh, name_en)")
+        .select("*, shipping_routes:route_id(code, name_zh, name_en, cargo_type)")
         .eq("id", data.id)
         .maybeSingle(),
       supabaseAdmin.from("forwarding_items").select("*").eq("forwarding_id", data.id),
@@ -3911,7 +3912,7 @@ async function ensureUnpaidBatchInvoice(
       .or(filters.join(","));
     wbsAll = (wbs ?? []) as any[];
   }
-  const wbList = await effectiveWaybillInsurance(admin, wbsAll.filter((w) => w.payment_status !== "paid"));
+  const wbList = wbsAll.filter((w) => w.payment_status !== "paid");
 
   const { buildInvoiceLineMeta } = await import("./duty.server");
   let f = 0,
@@ -4949,10 +4950,11 @@ export const setForwardingInsured = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin
       .from("forwarding_orders")
-      .select("insured")
+      .select("insured, route_id")
       .eq("id", data.id)
       .maybeSingle();
     if (!before) throw new Error("Not found");
+    if (data.insured && before.route_id && await routeInsuranceRate(supabaseAdmin, before.route_id, 1) === 0) throw new Error("敏感线路不支持购买保险");
     const { error } = await supabaseAdmin.from("forwarding_orders").update({ insured: data.insured }).eq("id", data.id);
     if (error) throw new Error(error.message);
     await recordLog(supabaseAdmin, {

@@ -1,3 +1,4 @@
+import { SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -235,6 +236,7 @@ function FwDetail() {
         <Card title="物品声明">
           <InsuranceBlock
             insured={!!fo.insured}
+            sensitive={fo.shipping_routes?.cargo_type === "sensitive"}
             desc={fo.items_desc}
             canEdit={canIntake}
             onSave={async (next) => { await setInsured({ data: { id, insured: next } }); await qc.invalidateQueries({ queryKey: ["admin-fo", id] }); }}
@@ -613,7 +615,7 @@ const fmtItemsSummary = (s: any): string => {
   return s.map((it: any) => `${it.name ?? "—"}×${it.quantity ?? 1}`).join("、");
 };
 
-function InsuranceBlock({ insured, desc, canEdit, onSave }: { insured: boolean; desc: string | null; canEdit: boolean; onSave: (next: boolean) => Promise<void> }) {
+function InsuranceBlock({ insured, desc, canEdit, onSave, sensitive }: { sensitive: boolean; insured: boolean; desc: string | null; canEdit: boolean; onSave: (next: boolean) => Promise<void> }) {
   const [val, setVal] = useState(insured);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setVal(insured); }, [insured]);
@@ -625,7 +627,8 @@ function InsuranceBlock({ insured, desc, canEdit, onSave }: { insured: boolean; 
         <span className="font-semibold">{insured ? "已购买运输保险" : "未购买运输保险"}</span>
       </div>
       <div className="whitespace-pre-wrap text-slate-400">{desc ?? "—"}</div>
-      {canEdit && (
+      {sensitive && <p>{SENSITIVE_INSURANCE_NOTICE}</p>}
+      {canEdit && !sensitive && (
         <div className="flex items-center gap-2 pt-1">
           <label className="inline-flex items-center gap-1.5">
             <input type="checkbox" checked={val} onChange={(e) => setVal(e.target.checked)}/>

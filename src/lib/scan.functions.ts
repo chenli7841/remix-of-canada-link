@@ -1,3 +1,4 @@
+import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -1343,7 +1344,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     // 电商订单（无 forwarding_id）暂沿用线路 rate_pct，避免影响商城
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
-  const ins_rate = Number(rule.insurance_rate_pct ?? 0);
+  const ins_rate = await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
   const insurance_cad = insuranceCad(declared_cad, ins_rate, insured);
   return {
     freight_cad,

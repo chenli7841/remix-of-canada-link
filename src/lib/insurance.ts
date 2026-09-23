@@ -6,3 +6,8 @@ export function insuranceCad(declared: number | null, rate: number, insured: boo
 export function uniqueWaybills<T extends { id: string }>(rows: T[]): T[] {
   return [...new Map(rows.map(row => [row.id, row])).values()];
 }
+export const SENSITIVE_INSURANCE_NOTICE = "敏感线路 不支持购买保险，若丢失按照最高每kg7刀赔付。";
+
+export function supportsInsurance(route: { cargo_type?: string | null } | null | undefined): boolean {
+  return !!route && route.cargo_type !== "sensitive";
+}

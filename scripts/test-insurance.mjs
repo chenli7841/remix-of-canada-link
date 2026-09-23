@@ -7,7 +7,8 @@ async function load(file) {
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 }
-const { insuranceCad, uniqueWaybills } = await load('insurance');
+const { insuranceCad, uniqueWaybills, supportsInsurance } = await load('insurance');
+const { routeInsuranceRate } = await load('insurance-rate.server');
 const { effectiveWaybillInsurance } = await load('insurance.server');
 test('uninsured 10.52 CAD shipment is zero; insured rounds to 0.32', () => {
   assert.equal(insuranceCad(10.52, 3, false), 0);
@@ -52,13 +53,16 @@ function extract(file, name) {
     getFxCadPerCny: async () => .19,
     computeWaybillDeclaredCad: () => 10.52,
     computeWaybillDutyBreakdown: async () => ({ duty_cad: 0 }),
+    computeAnyWaybillDutyBreakdown: async () => ({ duty_cad: 0 }),
+    buildInvoiceLineMeta: async () => null,
   };
-  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies);
+  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate);
 }
-function pricingDb(insured) {
+function pricingDb(insured, cargoType = 'general') {
   return { from(table) {
     let columns;
     const values = {
+      shipping_routes: { cargo_type: cargoType },
       forwarding_orders: { route_id: 'r', declared_value_cad: 10.52, box_count: 1, insured },
       forwarding_items: [],
       freight_rules: { insurance_rate_pct: 3, unit_price_cad: 3, min_charge_waybill_cad: 2, volumetric_divisor: 5000 },
@@ -82,4 +86,33 @@ test('real freight preview calculator requires explicit insurance opt-in', async
   const calculate = extract('orders.functions', 'computeFreight');
   assert.equal((await calculate(pricingDb(false), 'r', .32, 3240, 10.52)).insurance_cad, 0);
   assert.equal((await calculate(pricingDb(true), 'r', .32, 3240, 10.52, true)).insurance_cad, .32);
+});
+
+test('sensitive cargo blocks insurance even with an old 100 percent rate and opt-in', async () => {
+  assert.equal(supportsInsurance({ cargo_type: 'sensitive' }), false);
+  assert.equal(supportsInsurance({ cargo_type: 'general' }), true);
+  assert.equal(supportsInsurance(null), false);
+  assert.equal(await routeInsuranceRate(pricingDb(true, 'sensitive'), 'r', 100), 0);
+  const preview = extract('orders.functions', 'computeFreight');
+  assert.equal((await preview(pricingDb(true, 'sensitive'), 'r', 1, 3240, 55, true)).insurance_cad, 0);
+  const measure = extract('scan.functions', 'computeWaybillFeesCad');
+  assert.equal((await measure(pricingDb(true, 'sensitive'), { forwarding_id: 'f', weight_kg: 1 })).insurance_cad, 0);
+  const rows = await effectiveWaybillInsurance(db([{ id: 'f', insured: true, shipping_routes: { cargo_type: 'sensitive' } }]), [{ forwarding_id: 'f', payment_status: 'unpaid', insurance_cad: 55 }]);
+  assert.equal(rows[0].insurance_cad, 0);
+});
+
+
+test('invoice records stored premium, including zero, without consulting eligibility', async () => {
+  const invoice = extract('invoices.functions', 'computeWaybillFees');
+  function invoiceDb(premium, hasRule = true) {
+    return { from(table) {
+      assert.notEqual(table, 'shipping_routes');
+      const data = { waybills: { forwarding_id: 'f', insurance_cad: premium, weight_kg: 1 }, forwarding_orders: { route_id: 'r', insured: false, declared_value_cad: 9999 }, freight_rules: hasRule ? { insurance_rate_pct: 100, unit_price_cny: 1, extra_fee_cny: 0, min_charge_cny: 0 } : null }[table];
+      const q = { select() { return q; }, eq() { return q; }, maybeSingle: async () => ({ data }) }; return q;
+    } };
+  }
+  assert.equal((await invoice(invoiceDb(0), 'w', .2)).insurance_cny, 0);
+  assert.equal((await invoice(invoiceDb(4.5), 'w', .2)).insurance_cny, 22.5);
+  assert.equal((await invoice(invoiceDb(4.5, false), 'w', .2)).insurance_cny, 22.5);
+  await assert.rejects(invoice(invoiceDb(4.5), 'w', 0));
 });

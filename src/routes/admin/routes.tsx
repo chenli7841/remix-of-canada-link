@@ -827,7 +827,7 @@ function RouteEditor({ initial, warehouses, onClose }: { initial: any; warehouse
             </Section>
 
             <Section title={route.is_bidirectional ? "运费公式 · 正向（起点→终点）" : "运费公式（金额按 CAD 计算）"}>
-              <FreightFields value={freight} onChange={setFreight} />
+              <FreightFields sensitive={route.cargo_type === "sensitive"} value={freight} onChange={setFreight} />
               <p className="mt-2 text-[11px] text-slate-500">
                 运单运费 = 计费重量/板数 × 单价 + 清关费 + 关税 +
                 保费；不足最低收费时按最低收费。若启用消费税，会按以上合计 × 税率额外加收。
@@ -836,7 +836,7 @@ function RouteEditor({ initial, warehouses, onClose }: { initial: any; warehouse
 
             {route.is_bidirectional && (
               <Section title="运费公式 · 返程（终点→起点）">
-                <FreightFields value={freightReverse} onChange={setFreightReverse} />
+                <FreightFields sensitive={route.cargo_type === "sensitive"} value={freightReverse} onChange={setFreightReverse} />
                 <p className="mt-2 text-[11px] text-slate-500">用户在前端从「终点仓」发货时使用此返程价格。</p>
               </Section>
             )}
@@ -1086,10 +1086,11 @@ function Field({ label, full, children }: { label: string; full?: boolean; child
     </div>
   );
 }
-function Input(props: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
+function Input(props: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string; disabled?: boolean }) {
   return (
     <input
       type={props.type ?? "text"}
+      disabled={props.disabled}
       value={props.value}
       placeholder={props.placeholder}
       onChange={(e) => props.onChange(e.target.value)}
@@ -1121,7 +1122,7 @@ function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   );
 }
 
-function FreightFields({ value: f, onChange }: { value: FreightRule; onChange: (v: FreightRule) => void }) {
+function FreightFields({ value: f, onChange, sensitive }: { value: FreightRule; onChange: (v: FreightRule) => void; sensitive: boolean }) {
   const set = (patch: Partial<FreightRule>) => onChange({ ...f, ...patch });
   return (
     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -1298,11 +1299,12 @@ function FreightFields({ value: f, onChange }: { value: FreightRule; onChange: (
 
 
 
-      <Field label="保险费率 %  (申报价值 × 费率 = 保费)" full>
+      <Field label={sensitive ? "敏感货：不支持购买保险，保费固定为 0" : "保险费率 %  (申报价值 × 费率 = 保费)"} full>
         <Input
           type="number"
-          value={String(f.insurance_rate_pct)}
-          onChange={(v) => set({ insurance_rate_pct: Number(v) })}
+          value={String(sensitive ? 0 : f.insurance_rate_pct)}
+          disabled={sensitive}
+          onChange={(v) => set({ insurance_rate_pct: sensitive ? 0 : Number(v) })}
         />
       </Field>
     </div>

@@ -1,6 +1,7 @@
+import { supportsInsurance, SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   listShippingOptions,
   listCustomerAddresses,
@@ -78,6 +79,8 @@ export function CustomerForwardingForm({ userId }: { userId: string }) {
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const selectedRoute = routes.find((r) => r.code === routeCode) ?? null;
+  const insuranceAllowed = supportsInsurance(selectedRoute);
+  useEffect(() => { if (!insuranceAllowed) setInsured(false); }, [insuranceAllowed]);
   // 线路可配置「物品必填项」（shipping_routes.item_field_required），后端
   // place_forwarding 会二次校验并直接报错，这里提前提示，字段名与客户端一致。
   const FIELD_LABEL: Record<string, string> = {
@@ -165,8 +168,8 @@ export function CustomerForwardingForm({ userId }: { userId: string }) {
         route_code: routeCode,
         address_id: addressId,
         domestic_tracking_no: parcel.tracking_no.trim().replace(/\s+/g, ""),
-        note: ["[代客发起集运]", insured ? "[已购买保险]" : null, note.trim() || null].filter(Boolean).join(" "),
-        insured,
+        note: ["[代客发起集运]", insuranceAllowed && insured ? "[已购买保险]" : null, note.trim() || null].filter(Boolean).join(" "),
+        insured: insuranceAllowed && insured,
         items: parcel.items
           .filter((i) => i.name.trim())
           .map((i) => ({
@@ -483,8 +486,8 @@ export function CustomerForwardingForm({ userId }: { userId: string }) {
           添加包裹
         </button>
         <label className="inline-flex items-center gap-2 text-xs text-slate-400">
-          <input type="checkbox" checked={insured} onChange={(e) => setInsured(e.target.checked)} />
-          购买保险
+          <input type="checkbox" disabled={!insuranceAllowed} checked={insuranceAllowed && insured} onChange={(e) => setInsured(e.target.checked)} />
+          {selectedRoute?.cargo_type === "sensitive" ? SENSITIVE_INSURANCE_NOTICE : "购买保险"}
         </label>
         <input
           value={note}
