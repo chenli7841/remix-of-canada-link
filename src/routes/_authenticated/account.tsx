@@ -856,9 +856,10 @@ function AccountSecurityCard({ profile, setProfile }: { profile: Profile; setPro
   }, []);
   const linkGoogle = async () => {
     setGoogleBusy(true);
+    const { googleReturnUrl } = await import("@/lib/google-auth");
     const { error } = await supabase.auth.linkIdentity({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/account` },
+      options: { redirectTo: googleReturnUrl(window.location.origin, "/account") },
     });
     setGoogleBusy(false);
     if (error)

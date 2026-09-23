@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-r
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { safeAuthReturnTo, signInWithGoogle } from "@/lib/google-auth";
 import { useAuth } from "@/lib/auth";
 import { useApp } from "@/lib/i18n";
 import { useCompanyInfo } from "@/lib/company";
@@ -47,7 +47,15 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user && !search.reauth) navigate({ to: search.redirect || "/account" });
+    const url = new URL(window.location.href);
+    const hash = new URLSearchParams(url.hash.slice(1));
+    if (url.searchParams.has("error") || hash.has("error")) {
+      toast.error(lang === "zh" ? "Google 授权未完成，请重试或使用邮箱登录。" : "Google authorization was not completed. Retry or sign in with email.");
+    }
+  }, [lang]);
+
+  useEffect(() => {
+    if (user && !search.reauth) navigate({ to: safeAuthReturnTo(search.redirect) });
   }, [user, navigate, search.redirect, search.reauth]);
 
   useEffect(() => {
@@ -127,18 +135,10 @@ function AuthPage() {
   const handleGoogle = async () => {
     setBusy(true);
     try {
-      const returnTo =
-        search.redirect && search.redirect.startsWith("/") ? search.redirect : "/account";
-      // Must be a PUBLIC same-origin URL: /account & friends are behind the auth
-      // gate, and the gate can run before the OAuth session is hydrated.
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}/auth?redirect=${encodeURIComponent(returnTo)}`,
-        extraParams: { prompt: "select_account" },
-      });
-      if (result.error) throw new Error(result.error.message || "Google sign-in failed");
-      if (result.redirected) return;
+      await signInWithGoogle(search.redirect);
     } catch (err: any) {
       toast.error(err.message ?? "Google sign-in failed");
+    } finally {
       setBusy(false);
     }
   };

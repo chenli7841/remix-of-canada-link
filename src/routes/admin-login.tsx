@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { signInWithGoogle } from "@/lib/google-auth";
 import { ROLE_LABEL, ADMIN_CONSOLE_ROLES } from "@/lib/admin-roles";
 import { Loader2, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -106,16 +106,10 @@ function AdminLoginPage() {
   const handleGoogle = async () => {
     setBusy(true);
     try {
-      const returnTo = "/admin";
-      // /auth 是公开路由，OAuth 回跳后由它在 session 就绪时再跳转到后台。
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}/auth?redirect=${encodeURIComponent(returnTo)}`,
-        extraParams: { prompt: "select_account" },
-      });
-      if (result.error) throw new Error(result.error.message || "Google 登录失败");
-      if (result.redirected) return;
+      await signInWithGoogle("/admin");
     } catch (err: any) {
       toast.error(err.message ?? "Google 登录失败");
+    } finally {
       setBusy(false);
     }
   };
