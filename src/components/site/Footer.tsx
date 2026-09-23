@@ -55,6 +55,11 @@ export function Footer() {
               </Link>
             </li>
             <li>
+              <Link to="/google-privacy" className="hover:text-foreground">
+                {lang === "zh" ? "Google 登录隐私说明" : "Google sign-in privacy"}
+              </Link>
+            </li>
+            <li>
               <Link to="/privacy" className="hover:text-foreground">
                 {lang === "zh" ? "ChatGPT 客服隐私政策" : "ChatGPT service privacy"}
               </Link>

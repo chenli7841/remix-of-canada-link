@@ -17,6 +17,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as GooglePrivacyRouteImport } from './routes/google-privacy'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProductsRouteImport } from './routes/products'
@@ -154,6 +155,11 @@ const CartRoute = CartRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GooglePrivacyRoute = GooglePrivacyRouteImport.update({
+  id: '/google-privacy',
+  path: '/google-privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -684,6 +690,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
+  '/google-privacy': typeof GooglePrivacyRoute
   '/mcp': typeof McpRoute
   '/privacy': typeof PrivacyRoute
   '/products': typeof ProductsRouteWithChildren
@@ -791,6 +798,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
+  '/google-privacy': typeof GooglePrivacyRoute
   '/mcp': typeof McpRoute
   '/privacy': typeof PrivacyRoute
   '/promo': typeof PromoRoute
@@ -900,6 +908,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/contact': typeof ContactRoute
+  '/google-privacy': typeof GooglePrivacyRoute
   '/mcp': typeof McpRoute
   '/privacy': typeof PrivacyRoute
   '/products': typeof ProductsRouteWithChildren
@@ -1010,6 +1019,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/contact'
+    | '/google-privacy'
     | '/mcp'
     | '/privacy'
     | '/products'
@@ -1117,6 +1127,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/contact'
+    | '/google-privacy'
     | '/mcp'
     | '/privacy'
     | '/promo'
@@ -1225,6 +1236,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/contact'
+    | '/google-privacy'
     | '/mcp'
     | '/privacy'
     | '/products'
@@ -1335,6 +1347,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   CartRoute: typeof CartRoute
   ContactRoute: typeof ContactRoute
+  GooglePrivacyRoute: typeof GooglePrivacyRoute
   McpRoute: typeof McpRoute
   PrivacyRoute: typeof PrivacyRoute
   ProductsRoute: typeof ProductsRouteWithChildren
@@ -1425,6 +1438,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/google-privacy': {
+      id: '/google-privacy'
+      path: '/google-privacy'
+      fullPath: '/google-privacy'
+      preLoaderRoute: typeof GooglePrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -2316,6 +2336,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   CartRoute: CartRoute,
   ContactRoute: ContactRoute,
+  GooglePrivacyRoute: GooglePrivacyRoute,
   McpRoute: McpRoute,
   PrivacyRoute: PrivacyRoute,
   ProductsRoute: ProductsRouteWithChildren,

@@ -215,6 +215,11 @@ function AuthPage() {
             </svg>
             {tr("使用 Google 继续", "Continue with Google")}
           </button>
+          <p className="mb-4 text-center text-xs text-muted-foreground">
+            <Link to="/google-privacy" className="underline">
+              {tr("Google 登录隐私说明", "Google sign-in privacy")}
+            </Link>
+          </p>
 
           {/* WeChat sign-in hidden until the WeChat Open Platform app is approved. */}
 
