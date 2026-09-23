@@ -3,7 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 function pubClient() {
-  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+  // 服务端进程偶尔拿不到非 VITE_ 前缀的环境变量（例如 .env 更新后热重载），
+  // 这里回退到公开的 VITE_ 值，避免整页因为 "supabaseUrl is required" 白屏。
+  const url = process.env.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("Supabase 公共配置缺失，请检查项目环境变量");
+  return createClient<Database>(url, key, {
     auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
   });
 }
