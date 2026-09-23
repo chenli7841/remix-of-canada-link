@@ -11,6 +11,7 @@
     "mcp:manifest": "lovable-mcp-extract-manifest",
     "mcp:validate": "node scripts/validate-mcp.mjs && node scripts/validate-chatgpt-migrations.mjs && node scripts/validate-chatgpt-release-config.mjs && npm run test:oauth",
     "test:oauth": "node --test scripts/test-oauth-consent.mjs",
+    "test:payment": "node --test scripts/test-payment-callbacks.mjs",
     "mcp:check": "npm run mcp:manifest && npm run mcp:validate && npm run build",
     "mcp:probe": "node scripts/check-chatgpt-connection.mjs",
     "lint": "eslint .",

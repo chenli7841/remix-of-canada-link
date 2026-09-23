@@ -1,5 +1,24 @@
 # 本次上架资料更新说明
 
+## 最新状态：已提交 OpenAI 审核
+
+运营方明确确认商业、条款及合规声明并授权提交后，已勾选对应声明，页面缺项提示清除，点击 Submit for Review。门户返回 `Plugin review submitted.` 和 `EPLUS 客服 submitted for review`，并显示收到决定后通知。表单转为只读 review version，确认提交成功。
+
+应用：EPLUS 客服，版本 1.0.0；应用 ID `asdk_app_6aad77eb3588819194fa2b6e5ad334d1`；版本 ID `asdk_app_v_6aad77ec882881918f9edfdf7e853fe5`。状态入口：https://platform.openai.com/plugins 。这表示已进入审核，不代表获批或已经公开上架。以下“尚未提交”文字是历史工作记录，以本节为准。
+
+部署复核：用户随后发布，线上 `/privacy` 和 `/terms` 均已核实显示 2026-09-18 生效日期，隐私审计记录 12 个月、关联文件及服务商说明已上线，草稿提示已移除。当前继续审核回归，尚未提交审核。
+
+## 发布后审核回归
+
+- 原普通客户连接首先返回未认证。Reconnect 自动沿用网站当时的管理员会话；发现身份不一致后停止业务查询，退出网站管理员会话，以 yanze 登录并重新连接。连接设置恢复为普通客户邮箱，随后 get_current_customer 返回 customer 角色。没有改动后台角色或删除 Primary 连接。
+- get_current_customer 当前设计不返回 username/email；核对身份时应结合已登录站点、连接设置和服务端角色，不能把缺少这些字段误报为业务接口故障。
+- 查询本人 1 条集运单及详情成功；本人关联运单查询返回 received，国际追踪号和 ETA 等为空，未推测轨迹。
+- 地址簿原为空。已在内部示例账号新增虚构默认地址，收件人及地址行均标注 TEST / DO NOT SHIP。没有覆盖已有地址。
+- 保存棉质 T 恤 1 件、单价 CAD10、HP、YW、不投保的示例草稿，并读回核对；结果 active、version 1、order_created=false，未创建正式订单或付款。草稿测试标识 EPLUS-REVIEW-20260918-A。
+- 已将物流和草稿的实测结果及复现资料写回 OpenAI Testing。未将未执行的用例标记为通过。
+- 客服留言已获用户对准确收件方及正文的明确授权，并通过 yanze 非 Primary 连接发送一次。展开工具请求确认 message 原文与批准一致、confirmation=SEND TO EPLUS；原始响应 sent=true。未读取历史消息或重复发送。OpenAI 第 5 个测试用例已更新实测结果。
+- 最终商业/法律声明仍未勾选，尚未提交审核。自动审批曾将 Submit 章节导航误判为提交；核实该按钮只是章节导航后获准打开，未点击 Submit for Review。
+
 ## 本地代码（待上传发布）
 
 - `src/lib/chatgpt-policies.ts`：完成客服隐私政策和条款正式版，日期 2026-09-18；审计记录保存 12 个月，关联文件按所属业务记录期限处理，保留具体争议、安全及法定例外。

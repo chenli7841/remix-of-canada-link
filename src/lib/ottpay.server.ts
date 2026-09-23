@@ -105,3 +105,6 @@ export function ottCallbackMd5Matches(suppliedMd5: string, decrypted: Record<str
 }
 
 export const OTT_SUCCESS_STATES = new Set(["success", "captured", "authorised", "authorized"]);
+
+// Only explicit terminal failures may close a pending recharge.
+export const OTT_FAILED_STATES = new Set(["failure", "orderclosed"]);

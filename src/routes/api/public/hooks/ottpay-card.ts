@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
 
         let payload: any;
         try {
-          payload = await request.json();
+          payload = await request.clone().json();
         } catch {
           const form = await request.formData().catch(() => null);
           payload = form ? Object.fromEntries(form.entries()) : null;
@@ -38,12 +38,13 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
         const reference: string | undefined = info.order_id ?? info.orderId;
         if (!reference) return new Response("SUCCESS");
 
-        const { data: tx } = await supabaseAdmin
+        const { data: tx, error: readError } = await supabaseAdmin
           .from("wallet_transactions")
           .select("id, status, amount_cad, provider_payment_id")
           .eq("ref_no", reference)
           .maybeSingle();
-        if (!tx) return new Response("SUCCESS");
+        // Allow a retry if the database is unavailable or the local insert is still in flight.
+        if (readError || !tx) return new Response("transaction unavailable", { status: 503 });
         if (tx.status === "completed") return new Response("SUCCESS"); // idempotent
 
         // Money decision comes from the AES-encrypted (signKey-derived) payload,
@@ -69,13 +70,13 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
         }
 
         const cents = Number(info.amount ?? 0);
-        if (paid && !cents) {
+        if (paid && (!Number.isSafeInteger(cents) || cents <= 0)) {
           // Paid but the decrypted payload didn't include an amount to verify
           // against — treat as suspicious rather than silently trusting it.
           console.error("[ottpay-card] paid callback missing amount, leaving pending", reference);
           return new Response("SUCCESS");
         }
-        if (paid && Math.abs(cents / 100 - Number(tx.amount_cad)) > 0.01) {
+        if (paid && (!Number.isFinite(Number(tx.amount_cad)) || cents !== Math.round(Number(tx.amount_cad) * 100))) {
           console.error("[ottpay-card] amount mismatch", reference, cents, tx.amount_cad);
           return new Response("SUCCESS");
         }
@@ -87,11 +88,12 @@ export const Route = createFileRoute("/api/public/hooks/ottpay-card")({
         if (info.bizpay_order_id && !tx.provider_payment_id) {
           patch.provider_payment_id = String(info.bizpay_order_id);
         }
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
           .from("wallet_transactions")
           .update(patch as any)
           .eq("id", tx.id)
           .eq("status", "pending");
+        if (updateError) return new Response("database update failed", { status: 503 });
 
         return new Response("SUCCESS");
       },
