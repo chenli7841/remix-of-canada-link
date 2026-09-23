@@ -35,12 +35,16 @@ export const Route = createFileRoute("/_authenticated/forwarding/$forwardingId")
 
 const sb = supabase as any;
 
-// 只读后端算好存下来的快照值——不在前端猜一个除数现算。线路的体积重除数是
-// 可配置的（不一定是 6000），前端猜错了会显示一个跟最终计费对不上的数字，
-// 不如老实显示"还没算出来"。快照还没生成时返回 null，调用方自己决定怎么显示。
+// Read saved backend values only; never infer a route divisor in the client.
+function savedVolumetricWeight(snapshot: any): number | null {
+  const raw = snapshot?.volumetric_weight;
+  if (raw == null || raw === "" || (typeof raw !== "number" && typeof raw !== "string")) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function volumetricWeightKg(w: any): number | null {
-  const saved = Number(w?.weight_snapshot?.volumetric_weight ?? 0);
-  return saved > 0 ? saved : null;
+  return savedVolumetricWeight(w?.weight_snapshot);
 }
 
 function ForwardingDetailPage() {
@@ -184,15 +188,15 @@ function ForwardingDetailPage() {
       h = Number(w.height_cm ?? 0);
     return a + (l && wd && h ? (l * wd * h) / 1_000_000 : 0);
   }, 0);
-  // 只要有一张运单的体积重快照还没生成，总数就不该显示一个悄悄偏小的部分和——
-  // 那样看起来是个完整数字，其实是错的。宁可整体显示"计算中"。
-  const perWaybillVolWeights = waybills.map((w) => volumetricWeightKg(w));
-  const totalVolumetricWeight = perWaybillVolWeights.some((v) => v === null)
-    ? null
-    : (perWaybillVolWeights as number[]).reduce((sum, v) => sum + v, 0);
-  // CAD is source of truth. total_cad is authoritative — it's what the admin list "费用" shows,
-  // computed server-side as: freight + duty + (insured ? insurance : 0) + surcharges (CNY×fx).
+  // Same authoritative order snapshot as the admin's “当前运费快照”.
+  // Only fall back to a complete sum of saved waybill snapshots when absent.
   const snap: any = fo.freight_snapshot ?? null;
+  const perWaybillVolWeights = waybills.map((w) => volumetricWeightKg(w));
+  const totalVolumetricWeight = savedVolumetricWeight(snap) ?? (
+    waybills.length > 0 && perWaybillVolWeights.every((v) => v !== null)
+      ? (perWaybillVolWeights as number[]).reduce((sum, v) => sum + v, 0)
+      : null
+  );
   const feeCad = Number(snap?.freight_cad ?? Number(fo.fee_cny ?? 0) * (snap?.fx_rate || 0.19));
   const insCad = fo.insured ? Number(snap?.insurance_cad ?? 0) : 0;
   const cusCad = Number(snap?.duty_cad ?? 0);
@@ -335,8 +339,8 @@ function ForwardingDetailPage() {
                   value={
                     totalVolume > 0
                       ? totalVolumetricWeight !== null
-                        ? `${totalVolume.toFixed(3)} m³ / ${totalVolumetricWeight.toFixed(2)} kg ${tr("体积重", "vol. wt.")}`
-                        : `${totalVolume.toFixed(3)} m³ / ${tr("体积重计算中", "vol. wt. pending")}`
+                        ? `${totalVolume.toFixed(3)} m³ / ${totalVolumetricWeight.toFixed(3)} kg ${tr("体积重", "vol. wt.")}`
+                        : `${totalVolume.toFixed(3)} m³ / ${tr("体积重暂无数据", "vol. wt. unavailable")}`
                       : "—"
                   }
                 />
@@ -456,7 +460,7 @@ function ForwardingDetailPage() {
                                 const dims = `${w.length_cm}×${w.width_cm}×${w.height_cm} cm`;
                                 return vw !== null
                                   ? `${dims} / ${vw.toFixed(2)} kg ${tr("体积重", "vol. wt.")}`
-                                  : `${dims} / ${tr("体积重计算中", "vol. wt. pending")}`;
+                                  : `${dims} / ${tr("体积重暂无数据", "vol. wt. unavailable")}`;
                               })()
                             : "—"}
                         </td>
