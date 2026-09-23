@@ -1,3 +1,5 @@
+import { insuranceCad } from "./insurance";
+import { effectiveWaybillInsurance } from "./insurance.server";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -116,6 +118,7 @@ export async function computeFreight(
   weight_kg: number,
   volume_cm3: number,
   declared_cad: number | null,
+  insured = false,
 ) {
   const [{ data: rule }, { data: customs }] = await Promise.all([
     admin
@@ -166,7 +169,7 @@ export async function computeFreight(
   }
   const insurance_rate_pct = Number(rule.insurance_rate_pct ?? 0);
   const insurance_cad =
-    declared_cad && insurance_rate_pct > 0 ? +(declared_cad * (insurance_rate_pct / 100)).toFixed(2) : 0;
+    insuranceCad(declared_cad, insurance_rate_pct, insured);
   return {
     chargeable_weight: +chargeable.toFixed(3),
     actual_weight: +w.toFixed(3),
@@ -299,7 +302,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     duty_cad = br.duty_cad;
   }
   const ins_rate = Number(rule.insurance_rate_pct ?? 0);
-  const insurance_cad = fo.insured && ins_rate > 0 ? +((declared_cad * ins_rate) / 100).toFixed(2) : 0;
+  const insurance_cad = insuranceCad(declared_cad, ins_rate, fo.insured === true);
 
   const snapshot = {
     actual_weight: +wt.toFixed(3),
@@ -370,7 +373,7 @@ export async function recomputeForwardingTotal(admin: any, forwardingId: string)
       if ((s as any).customs_applies) anyCustomsApplies = true;
     } else {
       duty_cad += Number(w.duty_cad ?? 0);
-      insurance_cad += Number(w.insurance_cad ?? 0);
+      insurance_cad += fo.insured === true ? Number(w.insurance_cad ?? 0) : 0;
       freight_cad += Number(w.freight_cad ?? 0);
       totActual += Number(w.weight_kg ?? 0);
     }
@@ -749,6 +752,7 @@ export const recalcOrderFreight = createServerFn({ method: "POST" })
       data.weight_kg ?? 0,
       data.volume_cm3 ?? 0,
       data.declared_cad ?? null,
+      true, // Preserve the separate shop pricing policy.
     );
     if (!snapshot) throw new Error("No active freight rule");
     const update: any = {
@@ -894,7 +898,7 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
     }
     // Timeline: follow the FIRST waybill only (avoids duplicating events per waybill).
     const events: any[] = [];
-    const wbList = (waybillsR.data ?? []) as any[];
+    const wbList = await effectiveWaybillInsurance(supabaseAdmin, (waybillsR.data ?? []) as any[]);
     if (waybillsR.error) throw new Error("运单装载信息读取失败，请重试");
     const { getForwardingLoading } = await import("@/lib/forwarding-loading.server");
     const loading = await getForwardingLoading(supabaseAdmin, wbList);
@@ -990,6 +994,7 @@ export const intakeForwarding = createServerFn({ method: "POST" })
       total_weight,
       total_vol,
       data.declared_value_cad ?? null,
+      before.insured === true,
     );
     if (!snapshot) throw new Error("线路无运费规则");
     const update: any = {
@@ -1032,6 +1037,8 @@ export const previewForwardingFreight = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: fo, error: insuranceError } = await supabaseAdmin.from("forwarding_orders").select("insured").eq("id", data.id).single();
+    if (insuranceError || !fo) throw new Error("无法核对投保状态，请重试");
     const { data: wbs } = await supabaseAdmin
       .from("waybills")
       .select("weight_kg, length_cm, width_cm, height_cm")
@@ -1045,7 +1052,7 @@ export const previewForwardingFreight = createServerFn({ method: "POST" })
     }
     let snapshot: any =
       total_weight > 0 && total_vol > 0
-        ? await computeFreight(supabaseAdmin, data.route_id, total_weight, total_vol, data.declared_value_cad ?? null)
+        ? await computeFreight(supabaseAdmin, data.route_id, total_weight, total_vol, data.declared_value_cad ?? null, fo.insured === true)
         : null;
     // 与 recomputeForwardingTotal 一致：预览运费 = 计费重 * 单价（不加最低收费 / 清关费）
     if (snapshot) {
@@ -1519,7 +1526,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     : { data: [] as any[] };
   const palletCartonWbs: any[] = (palletCartonWbsR as any).data ?? [];
 
-  const allWbs = [...directWbs, ...cartonWbs, ...palletDirectWbs, ...palletCartonWbs];
+  const allWbs = await effectiveWaybillInsurance(admin, [...directWbs, ...cartonWbs, ...palletDirectWbs, ...palletCartonWbs]);
   const allCartons = [...cartons, ...palletCartons];
 
   // === 2. Resolve parents (orders/forwardings/profiles) ===
@@ -3904,7 +3911,7 @@ async function ensureUnpaidBatchInvoice(
       .or(filters.join(","));
     wbsAll = (wbs ?? []) as any[];
   }
-  const wbList = wbsAll.filter((w) => w.payment_status !== "paid");
+  const wbList = await effectiveWaybillInsurance(admin, wbsAll.filter((w) => w.payment_status !== "paid"));
 
   const { buildInvoiceLineMeta } = await import("./duty.server");
   let f = 0,

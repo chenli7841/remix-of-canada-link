@@ -1,5 +1,14 @@
 # ChatGPT 域名与数据库迁移更新（2026-09-22）
 
+## 最新结果：2026-09-23 已重新提交审核
+
+- 用户发布新验证文件后，OpenAI 门户显示 Domain verified。
+- 使用普通测试账号完成新的 OAuth 授权后，重新运行 Scan Tools；提交页校验通过，Submit for Review 可用。
+- 已重新提交 EPLUS 客服 1.0.0。门户明确显示 `Plugin review submitted.` 和 `EPLUS 客服 submitted for review`。
+- 本次提交使用 https://shopper.epluscanada.com/mcp 和新 Supabase 项目 fhfsrrbzubgjrjhgwerv；客服、隐私、条款链接均已更新。
+- 当前为已提交待审核，并非已批准或公开上架。本次没有重新执行全部业务测试；此前记录的迁移与运营核对事项仍应按实际情况落实。
+- 下方草稿与待提交描述为本次操作的历史过程，以本节最新结果为准。
+
 ## 2026-09-23 门户更新进度
 
 - 用户明确授权取消旧审核、更新地址后重新提交。1.0.0 已从 Review 退回 Draft。

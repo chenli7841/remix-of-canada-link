@@ -1,3 +1,5 @@
+import { uniqueWaybills } from "./insurance";
+import { effectiveWaybillInsurance } from "./insurance.server";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getFxCadPerCny, markBatchFeesDirty, markBatchFeesDirtyMany, resolveWaybillBatchIds } from "@/lib/orders.functions";
@@ -364,10 +366,10 @@ async function feeTotalsForCarton(admin: any, row: any) {
   const { data: wbs } = await admin
     .from("waybills")
     .select(
-      "id, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
+      "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
     .eq("carton_id", row.id);
-  const list = wbs ?? [];
+  const list = await effectiveWaybillInsurance(admin, wbs ?? []);
   const wbIds = list.map((w: any) => w.id);
   let cf = 0,
     cc = 0,
@@ -433,7 +435,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
   const { data: directWbs } = await admin
     .from("waybills")
     .select(
-      "id, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
+      "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
     .eq("pallet_id", row.id);
   const { data: cns } = await admin
@@ -447,12 +449,12 @@ async function feeTotalsForPallet(admin: any, row: any) {
     const { data } = await admin
       .from("waybills")
       .select(
-        "id, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, carton_id",
+        "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, carton_id",
       )
       .in("carton_id", cartonIds);
     cnWbs = data ?? [];
   }
-  const allWbs = [...(directWbs ?? []), ...cnWbs];
+  const allWbs = await effectiveWaybillInsurance(admin, uniqueWaybills<any>([...(directWbs ?? []), ...cnWbs]));
   const wbIds = allWbs.map((w: any) => w.id);
 
   // 关税/保险/清关：全部 leaf waybill 之和（两方案通用）

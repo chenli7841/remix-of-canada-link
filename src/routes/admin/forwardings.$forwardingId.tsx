@@ -90,7 +90,7 @@ function FwDetail() {
       } catch { setPreviewData(null); }
     }, 300);
     return () => clearTimeout(t);
-  }, [routeId, decl, id, detailQ.data?.waybills?.length]);
+  }, [routeId, decl, id, detailQ.data?.waybills?.length, detailQ.data?.fo?.insured]);
 
   if (detailQ.isLoading) return <div className="grid place-items-center p-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500"/></div>;
   if (detailQ.isError) return <div className="p-6 text-rose-400">{(detailQ.error as Error).message}</div>;

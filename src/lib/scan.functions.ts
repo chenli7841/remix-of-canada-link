@@ -1,3 +1,4 @@
+import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { detectScanKind, type ScanKind } from "@/lib/scan-detect";
@@ -1246,6 +1247,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
   const fx = await getFxCadPerCny(admin);
   let route_id: string | null = null;
   let declared_cad = 0;
+  let insured = !!wb.order_id; // Shop pricing remains unchanged.
   if (wb.order_id) {
     const { data: ord } = await admin
       .from("orders")
@@ -1258,10 +1260,12 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
   } else if (wb.forwarding_id) {
     const { data: fo } = await admin
       .from("forwarding_orders")
-      .select("route_id, declared_value_cad, box_count")
+      .select("route_id, declared_value_cad, box_count, insured")
       .eq("id", wb.forwarding_id)
       .maybeSingle();
-    route_id = fo?.route_id ?? null;
+    if (!fo) throw new Error("无法核对投保状态，请重试");
+    insured = fo.insured === true;
+    route_id = fo.route_id ?? null;
     // 集运单: 每张运单声明价 = 该运单包含物品数量 × 单价 (from forwarding_items)
     // 若 items_summary 缺失, 回落到 forwarding 总声明价 / 箱数
     const { computeWaybillDeclaredCad } = await import("./orders.functions");
@@ -1340,7 +1344,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
   const ins_rate = Number(rule.insurance_rate_pct ?? 0);
-  const insurance_cad = declared_cad && ins_rate > 0 ? +(declared_cad * (ins_rate / 100)).toFixed(2) : 0;
+  const insurance_cad = insuranceCad(declared_cad, ins_rate, insured);
   return {
     freight_cad,
     duty_cad,
@@ -1721,7 +1725,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
     for (const fid of touchedForwardingIds) {
       const { data: fo } = await supabaseAdmin
         .from("forwarding_orders")
-        .select("id, route_id, declared_value_cad, fee_cny, freight_snapshot, status, box_count")
+        .select("id, route_id, declared_value_cad, fee_cny, freight_snapshot, status, box_count, insured")
         .eq("id", fid)
         .maybeSingle();
       if (!fo?.route_id) continue;
@@ -1745,7 +1749,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         tv += l * wd * h;
       }
       if (!complete || tw <= 0 || tv <= 0) continue;
-      const snap = await computeFreight(supabaseAdmin, fo.route_id, tw, tv, fo.declared_value_cad ?? null);
+      const snap = await computeFreight(supabaseAdmin, fo.route_id, tw, tv, fo.declared_value_cad ?? null, fo.insured === true);
       if (!snap) continue;
       await supabaseAdmin
         .from("forwarding_orders")
