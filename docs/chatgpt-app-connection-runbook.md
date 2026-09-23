@@ -1,5 +1,7 @@
 # EPLUS ChatGPT App 连接与测试手册
 
+> 2026-09-22 迁移说明：当前网站已改为 https://shopper.epluscanada.com，Supabase 项目已改为 fhfsrrbzubgjrjhgwerv。请先阅读 [本次迁移更新](./chatgpt-domain-migration-2026-09-22.md)；下文旧域名和旧项目地址保留为历史操作背景，不再作为当前配置值。
+
 本手册用于数据库迁移完成、代码发布以后，将 EPLUS MCP 服务连接到 ChatGPT。开发阶段不需要 OpenAI API Key；ChatGPT 负责对话，EPLUS 只提供经过 OAuth 和账号权限保护的工具。
 
 ## 1. Lovable 发布环境变量

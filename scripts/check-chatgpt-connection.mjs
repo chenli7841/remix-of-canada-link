@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 // Public, read-only checks. Never send credentials or invoke business tools.
-const origin = new URL(process.argv[2] ?? "https://china-to-canada-connect.lovable.app");
+const origin = new URL(process.argv[2] ?? "https://shopper.epluscanada.com");
 assert.equal(origin.protocol, "https:", "Use the deployed HTTPS site");
 assert.ok(!origin.username && !origin.password && origin.pathname === "/" && !origin.search && !origin.hash, "Pass only the website origin");
 const manifest = JSON.parse(await readFile(new URL("../.lovable/mcp/manifest.json", import.meta.url), "utf8"));

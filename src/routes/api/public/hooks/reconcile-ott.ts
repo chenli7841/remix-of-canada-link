@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 // 定时对账入口：由 pg_cron -> pg_net 每 2 分钟带共享密钥 POST 过来。
 // 逐笔 OTT 待处理充值调 CMP 核验并原子入账/标记失败——用户关掉付款页也能补录。
-// 密钥只存应用环境变量 OTT_RECONCILE_SECRET（与数据库参数 app.ott_reconcile_secret 一致）。
+// 应用环境变量 OTT_RECONCILE_SECRET 必须与 Supabase Vault 中同名密钥一致。
 export const Route = createFileRoute("/api/public/hooks/reconcile-ott")({
   server: {
     handlers: {
