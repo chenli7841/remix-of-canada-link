@@ -1,3 +1,4 @@
+import { allocatedWaybillValueCad } from "./waybill-value.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
@@ -1267,27 +1268,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     if (!fo) throw new Error("无法核对投保状态，请重试");
     insured = fo.insured === true;
     route_id = fo.route_id ?? null;
-    // 集运单: 每张运单声明价 = 该运单包含物品数量 × 单价 (from forwarding_items)
-    // 若 items_summary 缺失, 回落到 forwarding 总声明价 / 箱数
-    const { computeWaybillDeclaredCad } = await import("./orders.functions");
-    const { data: fi } = await admin
-      .from("forwarding_items")
-      .select("name, unit_price_cad, unit_price_cny")
-      .eq("forwarding_id", wb.forwarding_id);
-    const priceMap = new Map<string, { cad: number; cny: number }>();
-    for (const r of fi ?? [])
-      if ((r as any)?.name)
-        priceMap.set((r as any).name, {
-          cad: Number((r as any).unit_price_cad ?? 0),
-          cny: Number((r as any).unit_price_cny ?? 0),
-        });
-    const perWb = computeWaybillDeclaredCad(wb.items_summary, priceMap, fx);
-    if (perWb > 0) {
-      declared_cad = perWb;
-    } else {
-      const boxes = Math.max(Number(fo?.box_count ?? 1) || 1, 1);
-      declared_cad = +(Number(fo?.declared_value_cad ?? 0) / boxes).toFixed(2);
-    }
+
   }
   if (!route_id)
     return {
@@ -1345,7 +1326,8 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
   const ins_rate = await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
-  const insurance_cad = insuranceCad(declared_cad, ins_rate, insured);
+  const insured_value_cad = insured && ins_rate > 0 ? await allocatedWaybillValueCad(admin, wb.id) : 0;
+  const insurance_cad = insuranceCad(insured_value_cad, ins_rate, insured);
   return {
     freight_cad,
     duty_cad,

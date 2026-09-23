@@ -9,6 +9,7 @@ async function load(file) {
 }
 const { insuranceCad, uniqueWaybills, supportsInsurance } = await load('insurance');
 const { routeInsuranceRate } = await load('insurance-rate.server');
+const { allocatedWaybillValueCad } = await load('waybill-value.server');
 const { effectiveWaybillInsurance } = await load('insurance.server');
 test('uninsured 10.52 CAD shipment is zero; insured rounds to 0.32', () => {
   assert.equal(insuranceCad(10.52, 3, false), 0);
@@ -56,12 +57,13 @@ function extract(file, name) {
     computeAnyWaybillDutyBreakdown: async () => ({ duty_cad: 0 }),
     buildInvoiceLineMeta: async () => null,
   };
-  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate);
+  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', 'allocatedWaybillValueCad', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate, allocatedWaybillValueCad);
 }
-function pricingDb(insured, cargoType = 'general') {
+function pricingDb(insured, cargoType = 'general', allocated = [{ declared_value_cad: 10.52 }]) {
   return { from(table) {
     let columns;
     const values = {
+      waybill_items: allocated,
       shipping_routes: { cargo_type: cargoType },
       forwarding_orders: { route_id: 'r', declared_value_cad: 10.52, box_count: 1, insured },
       forwarding_items: [],
@@ -78,7 +80,7 @@ function pricingDb(insured, cargoType = 'general') {
 }
 test('real measuring fee calculator reads insured and respects both choices', async () => {
   const calculate = extract('scan.functions', 'computeWaybillFeesCad');
-  const wb = { forwarding_id: 'f', weight_kg: .32, length_cm: 30, width_cm: 18, height_cm: 6 };
+  const wb = { id: 'w', forwarding_id: 'f', weight_kg: .32, length_cm: 30, width_cm: 18, height_cm: 6 };
   assert.equal((await calculate(pricingDb(false), wb)).insurance_cad, 0);
   assert.equal((await calculate(pricingDb(true), wb)).insurance_cad, .32);
 });
@@ -115,4 +117,46 @@ test('invoice records stored premium, including zero, without consulting eligibi
   assert.equal((await invoice(invoiceDb(4.5), 'w', .2)).insurance_cny, 22.5);
   assert.equal((await invoice(invoiceDb(4.5, false), 'w', .2)).insurance_cny, 22.5);
   await assert.rejects(invoice(invoiceDb(4.5), 'w', 0));
+});
+
+
+test('insurance uses existing allocation, not conflicting summary or parent declaration', async () => {
+  const measure = extract('scan.functions', 'computeWaybillFeesCad');
+  const wb = { id: 'w', forwarding_id: 'f', weight_kg: 1, items_summary: [{ name: 'old', quantity: 100, unit_price_cad: 999 }] };
+  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 80 }, { declared_value_cad: 20 }]), wb)).insurance_cad, 3);
+  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 200 }]), wb)).insurance_cad, 6);
+  assert.equal((await measure(pricingDb(true, 'general', [{ declared_value_cad: 0 }]), wb)).insurance_cad, 0);
+  await assert.rejects(measure(pricingDb(true, 'general', []), wb), /尚未分配/);
+  assert.equal((await measure(pricingDb(false, 'general', []), wb)).insurance_cad, 0);
+  assert.equal((await measure(pricingDb(true, 'sensitive', []), wb)).insurance_cad, 0);
+});
+
+test('allocated value rejects incomplete values and failed reads', async () => {
+  await assert.rejects(allocatedWaybillValueCad(pricingDb(true, 'general', [{ declared_value_cad: null }]), 'w'));
+  await assert.rejects(allocatedWaybillValueCad(pricingDb(true, 'general', [{ declared_value_cad: -1 }]), 'w'));
+  const failing = { from() { return { select() { return { eq: async () => ({ error: { message: 'offline' } }) }; } }; } };
+  await assert.rejects(allocatedWaybillValueCad(failing, 'w'), /读取运单货值失败/);
+});
+
+
+test('recompute saves premium and allocated value together and surfaces write failure', async () => {
+  const calculate = extract('orders.functions', 'computeAndPersistWaybillFees');
+  function savingDb(insured, fail = false) {
+    const base = pricingDb(insured, 'general', [{ declared_value_cad: 100 }]);
+    const saved = [];
+    const admin = { from(table) {
+      if (table !== 'waybills') return base.from(table);
+      const q = { select() { return q; }, eq() { return q; }, maybeSingle: async () => ({ data: { id: 'w', forwarding_id: 'f', weight_kg: 1 } }), update(row) { saved.push(row); return { eq: async () => ({ error: fail ? { message: 'write failed' } : null }) }; } }; return q;
+    } };
+    return { admin, saved };
+  }
+  const yes = savingDb(true);
+  await calculate(yes.admin, 'w');
+  assert.equal(yes.saved[0].insurance_cad, 3);
+  assert.equal(yes.saved[0].weight_snapshot.declared_cad, 100);
+  assert.equal(yes.saved[0].weight_snapshot.insurance_cad, 3);
+  const no = savingDb(false);
+  await calculate(no.admin, 'w');
+  assert.equal(no.saved[0].insurance_cad, 0);
+  await assert.rejects(calculate(savingDb(true, true).admin, 'w'), /write failed/);
 });

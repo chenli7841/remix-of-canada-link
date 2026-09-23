@@ -1,3 +1,4 @@
+import { allocatedWaybillValueCad } from "./waybill-value.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
@@ -247,21 +248,6 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     wb.length_cm && wb.width_cm && wb.height_cm ? Number(wb.length_cm) * Number(wb.width_cm) * Number(wb.height_cm) : 0;
 
   const fx = await getFxCadPerCny(admin);
-  // Price fallback by item name from forwarding_items (both CAD and CNY, CAD is authoritative).
-  const { data: foItems } = await admin
-    .from("forwarding_items")
-    .select("name, unit_price_cad, unit_price_cny")
-    .eq("forwarding_id", wb.forwarding_id);
-  const priceMap = new Map<string, { cad: number; cny: number }>();
-  for (const r of foItems ?? [])
-    if (r?.name)
-      priceMap.set(r.name, {
-        cad: Number((r as any).unit_price_cad ?? 0),
-        cny: Number(r.unit_price_cny ?? 0),
-      });
-  const declared_cad = computeWaybillDeclaredCad(wb.items_summary, priceMap, fx);
-  const declared_cny = fx > 0 ? +(declared_cad / fx).toFixed(2) : 0;
-
   const [{ data: rule }, { data: customs }] = await Promise.all([
     admin
       .from("freight_rules")
@@ -292,6 +278,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
 
   // 关税 —— 走 HS 明细口径（duty.server）；customs_rules.rate_pct 已弃用
   let duty_cad = 0;
+  let declared_cad = 0;
   const customs_applies = !!customs?.enabled;
   {
     const { computeWaybillDutyBreakdown } = await import("./duty.server");
@@ -301,8 +288,11 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
       items_summary: wb.items_summary,
     });
     duty_cad = br.duty_cad;
+    declared_cad = br.declared_cad;
   }
   const ins_rate = await routeInsuranceRate(admin, fo.route_id, rule.insurance_rate_pct);
+  if (fo.insured === true && ins_rate > 0) declared_cad = await allocatedWaybillValueCad(admin, waybillId);
+  const declared_cny = fx > 0 ? +(declared_cad / fx).toFixed(2) : 0;
   const insurance_cad = insuranceCad(declared_cad, ins_rate, fo.insured === true);
 
   const snapshot = {
@@ -322,7 +312,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
     insurance_rate_pct: ins_rate,
     computed_at: new Date().toISOString(),
   };
-  await admin
+  const { error: saveError } = await admin
     .from("waybills")
     .update({
       freight_cad,
@@ -332,6 +322,7 @@ export async function computeAndPersistWaybillFees(admin: any, waybillId: string
       weight_snapshot: snapshot,
     })
     .eq("id", waybillId);
+  if (saveError) throw new Error(saveError.message);
   return snapshot;
 }
 
