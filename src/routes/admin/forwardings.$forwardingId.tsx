@@ -15,6 +15,7 @@ import { WorkflowStepper, WAYBILL_FLOW } from "@/components/admin/WorkflowSteppe
 import { TrackingTimeline } from "@/components/tracking-timeline";
 import { OrderAttachments } from "@/components/order-attachments";
 import { SurchargePanel } from "@/components/admin/SurchargePanel";
+import { ForwardingLoadingInfo } from "@/components/admin/ForwardingLoadingInfo";
 
 export const Route = createFileRoute("/admin/forwardings/$forwardingId")({ component: FwDetail });
 
@@ -93,7 +94,7 @@ function FwDetail() {
 
   if (detailQ.isLoading) return <div className="grid place-items-center p-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500"/></div>;
   if (detailQ.isError) return <div className="p-6 text-rose-400">{(detailQ.error as Error).message}</div>;
-  const { fo, items, waybills, logs, user, shippingAddress, events } = detailQ.data! as any;
+  const { fo, items, waybills, logs, user, shippingAddress, events, loading } = detailQ.data! as any;
   const snap: any = fo.freight_snapshot;
   const selectedRouteCode = (routesQ.data?.routes ?? []).find((r: any) => r.id === routeId)?.code;
   const isRouteChange = !!fo.route_id && !!routeId && routeId !== fo.route_id;
@@ -202,11 +203,6 @@ function FwDetail() {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-16 shrink-0 text-slate-400">批次号</span>
-                  <span className="font-mono text-slate-300">{fo.batch_no ?? "—"}</span>
-                  <span className="text-[10px] text-slate-500">（不可修改）</span>
-                </div>
                 <BasicField label="国内单号" value={basic.domestic_tracking_no ?? ""} onChange={(v) => setBasic(b => ({ ...b, domestic_tracking_no: v }))} mono />
                 <BasicField label="国际单号" value={basic.intl_tracking_no ?? ""} onChange={(v) => setBasic(b => ({ ...b, intl_tracking_no: v }))} mono />
                 <div className="flex justify-end">
@@ -224,35 +220,11 @@ function FwDetail() {
                 <div>方式：{METHOD_LABEL[fo.shipping_method] ?? fo.shipping_method}</div>
                 <div>线路：<span className="font-mono">{fo.route_code ?? "—"}</span>{fo.route_name ? <span className="ml-1 text-slate-400">· {fo.route_name}</span> : null}</div>
                 <div>目的地：{fo.destination_code ?? "—"}</div>
-                <div>批次号：<span className="font-mono">{fo.batch_no ?? "—"}</span></div>
                 <div>国内单号：<span className="font-mono">{fo.domestic_tracking_no ?? "—"}</span></div>
                 <div>国际单号：<span className="font-mono">{fo.intl_tracking_no ?? "—"}</span></div>
               </>
             )}
-            {(() => {
-              const seenC = new Map<string, string>();
-              const seenP = new Map<string, string>();
-              for (const w of (waybills ?? []) as any[]) {
-                if (w.carton_id && w.box_no && !seenC.has(w.carton_id)) seenC.set(w.carton_id, w.box_no);
-                if (w.pallet_id && w.pallet_no && !seenP.has(w.pallet_id)) seenP.set(w.pallet_id, w.pallet_no);
-              }
-              const cartons = Array.from(seenC.entries());
-              const pallets = Array.from(seenP.entries());
-              return (
-                <>
-                  <div>箱号：{cartons.length === 0 ? "—" : cartons.map(([cid, no], i) => (
-                    <span key={cid}>{i > 0 && <span className="text-slate-600">, </span>}
-                      <Link to="/admin/cartons/$cartonId" params={{ cartonId: cid }} className="font-mono text-brand hover:underline">{no}</Link>
-                    </span>
-                  ))}</div>
-                  <div>托盘号：{pallets.length === 0 ? "—" : pallets.map(([pid, no], i) => (
-                    <span key={pid}>{i > 0 && <span className="text-slate-600">, </span>}
-                      <Link to="/admin/pallets/$palletId" params={{ palletId: pid }} className="font-mono text-brand hover:underline">{no}</Link>
-                    </span>
-                  ))}</div>
-                </>
-              );
-            })()}
+            <ForwardingLoadingInfo loading={loading} />
             {fo.aliases?.length > 0 && (
               <div className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
                 <Repeat className="h-3 w-3"/>已变更过线路 / 目的地（见下方操作记录）

@@ -895,6 +895,9 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
     // Timeline: follow the FIRST waybill only (avoids duplicating events per waybill).
     const events: any[] = [];
     const wbList = (waybillsR.data ?? []) as any[];
+    if (waybillsR.error) throw new Error("运单装载信息读取失败，请重试");
+    const { getForwardingLoading } = await import("@/lib/forwarding-loading.server");
+    const loading = await getForwardingLoading(supabaseAdmin, wbList);
     const firstWaybillNo = wbList[0]?.waybill_no ?? null;
     if (firstWaybillNo) {
       const { data: ships } = await supabaseAdmin
@@ -948,6 +951,7 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
       fo,
       items: itemsR.data ?? [],
       waybills,
+      loading,
       logs: logsR.data ?? [],
       user,
       shippingAddress,

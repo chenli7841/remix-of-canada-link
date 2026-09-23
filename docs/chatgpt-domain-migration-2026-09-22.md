@@ -1,5 +1,13 @@
 # ChatGPT 域名与数据库迁移更新（2026-09-22）
 
+## 2026-09-23 门户更新进度
+
+- 用户明确授权取消旧审核、更新地址后重新提交。1.0.0 已从 Review 退回 Draft。
+- 门户已保存新 MCP 地址、客服/隐私/条款网址；DCR 注册、authorize、token、issuer、resource 以及 OIDC 地址已切换新项目。
+- 新域名的 OAuth 授权页可以打开，但当前网站会话是管理员邮箱，未批准该账号授权。后续需使用普通专用测试账号并由用户完成授权。
+- 新域名要求的新公开验证 token 已写入 public/.well-known/openai-apps-challenge；需要用户上传发布后再验证域名。
+- 工具重新扫描及再次提交尚未完成，当前不在审核队列中。
+
 ## 当前目标
 
 - 网站：https://shopper.epluscanada.com
