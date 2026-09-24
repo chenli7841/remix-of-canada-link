@@ -1,6 +1,41 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { loadAllHsCodes } from "@/lib/duty.server";
+import { z } from "zod";
+import { recordAdminLog } from "@/lib/admin-log";
+
+const partyText = z.string().trim().max(1000);
+const partyInput = z.object({
+  batchId: z.string().uuid(),
+  party: z.enum(["customs_shipper", "customs_consignee"]),
+  values: z.object({
+    name: partyText, contact_name: partyText, phone: partyText,
+    email: partyText.refine((s) => !s || z.string().email().safeParse(s).success, "邮箱格式不正确"),
+    address: partyText, country: partyText, tax_id: partyText,
+  }),
+});
+
+export const saveBatchCustomsParty = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { batchId: string; party: "customs_shipper" | "customs_consignee"; values: Record<string, string> }) => partyInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertManager(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: batch, error } = await supabaseAdmin.from("batches")
+      .select("customs_shipper,customs_consignee").eq("id", data.batchId).single();
+    if (error || !batch) throw new Error(error?.message ?? "批次不存在");
+    const before = batch[data.party];
+    const after = { ...(before && typeof before === "object" && !Array.isArray(before) ? before : {}), ...data.values };
+    const patch = data.party === "customs_shipper" ? { customs_shipper: after } : { customs_consignee: after };
+    const { error: saveError } = await supabaseAdmin.from("batches")
+      .update(patch).eq("id", data.batchId).select("id").single();
+    if (saveError) throw new Error(saveError.message);
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "batch", entity_id: data.batchId, action: "update_customs_party",
+      before: { [data.party]: before }, after: { [data.party]: after }, operator_id: context.userId,
+    });
+    return { success: true };
+  });
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -186,12 +221,20 @@ export const extractBatchHbl = createServerFn({ method: "POST" })
     );
     if (!result.body) throw new Error("提单识别失败");
     const extracted = parseJson(outputText(result.body));
+    const { data: existing, error: readError } = await supabaseAdmin.from("batches")
+      .select("customs_shipper,customs_consignee").eq("id", data.batchId).single();
+    if (readError || !existing) throw new Error(readError?.message ?? "批次不存在");
+    const mergeParty = (saved: any, recognized: any) => ({
+      ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}),
+      ...Object.fromEntries(["name", "address"].flatMap((key) =>
+        typeof recognized?.[key] === "string" && recognized[key].trim() ? [[key, recognized[key].trim()]] : [])),
+    });
     const patch = {
       hbl_file_path: data.filePath,
       hbl_file_name: data.fileName,
       hbl_extracted: extracted,
-      customs_shipper: extracted.shipper ?? {},
-      customs_consignee: extracted.consignee ?? {},
+      customs_shipper: mergeParty(existing.customs_shipper, extracted.shipper),
+      customs_consignee: mergeParty(existing.customs_consignee, extracted.consignee),
       actual_ship_date: extracted.ship_date || null,
       vessel_no: extracted.vessel_voyage || null,
       container_no: extracted.container_no || null,

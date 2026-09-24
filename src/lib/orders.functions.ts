@@ -120,8 +120,11 @@ export async function computeFreight(
   volume_cm3: number,
   declared_cad: number | null,
   insured = false,
+  loaded?: { rule: any; customs: any; fx: number; insuranceRate: number },
 ) {
-  const [{ data: rule }, { data: customs }] = await Promise.all([
+  const [{ data: rule }, { data: customs }] = loaded
+    ? [{ data: loaded.rule }, { data: loaded.customs }]
+    : await Promise.all([
     admin
       .from("freight_rules")
       .select("*")
@@ -138,7 +141,7 @@ export async function computeFreight(
   const divisor = Number(rule.volumetric_divisor) || 6000;
   const volW = v / divisor;
   const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
-  const fx = await getFxCadPerCny(admin);
+  const fx = loaded?.fx ?? await getFxCadPerCny(admin);
   const unit_cad = Number(rule.unit_price_cad ?? 0);
   // 运单级最低收费 / 清关费（批次级另行结算）
   const min_cad = 0;
@@ -168,7 +171,7 @@ export async function computeFreight(
   if (customs_applies && declared_cad && declared_cad >= Number(customs.threshold_cad ?? 0)) {
     duty_cad = +(declared_cad * (Number(customs.rate_pct ?? 0) / 100)).toFixed(2);
   }
-  const insurance_rate_pct = await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
+  const insurance_rate_pct = loaded?.insuranceRate ?? await routeInsuranceRate(admin, route_id, rule.insurance_rate_pct);
   const insurance_cad =
     insuranceCad(declared_cad, insurance_rate_pct, insured);
   return {
@@ -2135,11 +2138,23 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   }
 
   // === 9. Scheme A: recompute freight via route rate from aggregated weight/volume ===
+  const fx = await getFxCadPerCny(admin);
+  const mergedRouteIds = [...new Set([...buckets.values()]
+    .filter((b) => b.customer_code && schemeOf(b.customer_code) === "merged" && b.route_id).map((b) => b.route_id))];
+  const mergedRules = mergedRouteIds.length
+    ? await admin.from("freight_rules").select("*").in("route_id", mergedRouteIds)
+      .eq("is_active", true).order("created_at", { ascending: false })
+    : { data: [] };
+  if (mergedRules.error) throw new Error(mergedRules.error.message);
+  const mergedRuleMap = new Map<string, any>();
+  for (const rule of mergedRules.data ?? []) if (!mergedRuleMap.has(rule.route_id)) mergedRuleMap.set(rule.route_id, rule);
   for (const b of buckets.values()) {
     if (!b.customer_code) continue;
     if (schemeOf(b.customer_code) !== "merged") continue;
     if (!b.route_id) continue;
-    const snap = await computeFreight(admin, b.route_id, b.weight_kg, b.volume_m3 * 1_000_000, null);
+    // Only freight is consumed here; insurance and duty remain waybill-level values.
+    const snap = await computeFreight(admin, b.route_id, b.weight_kg, b.volume_m3 * 1_000_000, null, false,
+      { rule: mergedRuleMap.get(b.route_id), customs: null, fx, insuranceRate: 0 });
     b.freight = snap ? +Number((snap as any).freight_cad ?? 0).toFixed(2) : 0;
   }
 
@@ -2182,13 +2197,33 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   const fwdWbIds = allWbs.filter((w) => w.forwarding_id).map((w) => w.id);
   const wiByWb = new Map<string, any[]>();
   if (fwdWbIds.length) {
-    const { data: wiRows } = await admin.from("waybill_items").select("*").in("waybill_id", fwdWbIds);
+    const { data: wiRows, error } = await admin.from("waybill_items").select("*").in("waybill_id", fwdWbIds);
+    if (error) throw new Error(error.message);
     for (const r of (wiRows ?? []) as any[]) {
       const arr = wiByWb.get(r.waybill_id) ?? [];
       arr.push(r);
       wiByWb.set(r.waybill_id, arr);
     }
   }
+  const missingParents = [...new Set(allWbs.filter((w) => w.forwarding_id && !wiByWb.has(w.id)).map((w) => w.forwarding_id))];
+  const [fallbackParents, fallbackItems] = missingParents.length ? await Promise.all([
+    admin.from("forwarding_orders").select("id,box_count,route_id").in("id", missingParents),
+    admin.from("forwarding_items").select("id,forwarding_id,name,quantity,unit_price_cad,unit_price_cny,extras,hs_code").in("forwarding_id", missingParents),
+  ]) : [{ data: [] }, { data: [] }];
+  for (const result of [fallbackParents, fallbackItems]) if (result.error) throw new Error(result.error.message);
+  const fallbackParentMap = new Map<string, any>((fallbackParents.data ?? []).map((p: any) => [p.id, p]));
+  const fallbackItemMap = new Map<string, any[]>();
+  for (const item of fallbackItems.data ?? []) {
+    const rows = fallbackItemMap.get(item.forwarding_id) ?? [];
+    rows.push(item);
+    fallbackItemMap.set(item.forwarding_id, rows);
+  }
+  const fallbackRouteIds = [...new Set((fallbackParents.data ?? []).map((p: any) => p.route_id).filter(Boolean))];
+  const fallbackCustoms = fallbackRouteIds.length
+    ? await admin.from("customs_rules").select("route_id,enabled,threshold_cad").in("route_id", fallbackRouteIds)
+    : { data: [] };
+  if (fallbackCustoms.error) throw new Error(fallbackCustoms.error.message);
+  const fallbackCustomsMap = new Map<string, any>((fallbackCustoms.data ?? []).map((r: any) => [r.route_id, r]));
   for (const w of allWbs) {
     if (!w.forwarding_id) continue;
     const cc = wbCustomer(w);
@@ -2209,7 +2244,10 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
           declared_value_cad: Number(r.declared_value_cad ?? 0),
           duty_cad: Number(r.duty_cad ?? 0),
         }))
-      : (await computeWaybillDutyBreakdown(admin, w)).items;
+      : (await computeWaybillDutyBreakdown(admin, w, {
+          fo: fallbackParentMap.get(w.forwarding_id), fi: fallbackItemMap.get(w.forwarding_id) ?? [],
+          hs: allHs, customs: fallbackCustomsMap.get(fallbackParentMap.get(w.forwarding_id)?.route_id), fx,
+        })).items;
     for (const it of items) {
       if (!it.hs_code) markUnmatched(key, it.name);
       addItem(key, {
@@ -2230,7 +2268,6 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   }
 
   // ---- 电商侧：order_items × products.hs_code / 名称匹配 ----
-  const fx = await getFxCadPerCny(admin);
   if (orderIds.length) {
     const { data: items } = await admin
       .from("order_items")
@@ -3206,32 +3243,7 @@ export const getBatchFeeSummary = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // 冷启动自愈：批次内还没落 waybill_items 的集运运单，先补一次，之后每次打开都走快照直读
-    try {
-      const { data: fwdWbs } = await supabaseAdmin
-        .from("waybills")
-        .select("id, forwarding_id")
-        .eq("assigned_batch_id", data.batchId)
-        .not("forwarding_id", "is", null);
-      const wbIds = (fwdWbs ?? []).map((w: any) => w.id);
-      if (wbIds.length) {
-        const { data: haveItems } = await supabaseAdmin
-          .from("waybill_items")
-          .select("waybill_id")
-          .in("waybill_id", wbIds);
-        const have = new Set((haveItems ?? []).map((r: any) => r.waybill_id));
-        const missingFwd = Array.from(
-          new Set((fwdWbs ?? []).filter((w: any) => !have.has(w.id)).map((w: any) => w.forwarding_id)),
-        ) as string[];
-        if (missingFwd.length) {
-          const { persistWaybillItemsForParent } = await import("./duty.server");
-          for (const fid of missingFwd) await persistWaybillItemsForParent(supabaseAdmin, { forwarding_id: fid });
-        }
-      }
-    } catch (e) {
-      console.error("ensureBatchWaybillItems failed:", e);
-    }
-
+    // Read-only summary: calculate missing snapshots from bulk-loaded inputs.
     const summary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
 
     // ---- Enrich per_customer with user_id, balance_cad, is_paid ----

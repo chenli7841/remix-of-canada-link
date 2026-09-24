@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { BatchPartiesEditor } from "@/components/admin/BatchPartiesEditor";
 import {
   getBatchDetail,
   getBatchFeeSummary,
@@ -505,6 +506,8 @@ function BatchDetail() {
             <div>创建：{fmtDate(batch.created_at)}</div>
             <div>关闭：{batch.closed_at ? fmtDate(batch.closed_at) : "—"}</div>
           </div>
+          <BatchPartiesEditor batch={batch} canEdit={canEdit}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["admin-batch", batchId], exact: true })} />
         </Card>
         <Card title="发运计划">
           <div className="grid grid-cols-1 gap-2 text-xs">

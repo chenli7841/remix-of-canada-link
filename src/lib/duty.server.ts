@@ -148,7 +148,9 @@ export function matchHsForName(
 }
 
 // 主入口：计算一条运单的关税明细
-export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<DutyBreakdown> {
+export type DutyInputs = { fo: any; fi: any[]; hs: any[]; customs: any; fx: number };
+
+export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: DutyInputs): Promise<DutyBreakdown> {
   const empty: DutyBreakdown = {
     items: [],
     declared_cad: 0,
@@ -160,7 +162,9 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
   };
   if (!wb?.forwarding_id) return empty;
 
-  const [{ data: fo }, { data: fi }, hs] = await Promise.all([
+  const [{ data: fo }, { data: fi }, hs] = loaded
+    ? [{ data: loaded.fo }, { data: loaded.fi }, loaded.hs]
+    : await Promise.all([
     admin.from("forwarding_orders").select("id, box_count, route_id").eq("id", wb.forwarding_id).maybeSingle(),
     admin
       .from("forwarding_items")
@@ -175,7 +179,10 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
   // customs_rules —— 只读 enabled + threshold_cad；rate_pct 已废弃
   let customs_enabled = false,
     threshold_cad = 0;
-  if (route_id) {
+  if (loaded) {
+    customs_enabled = !!loaded.customs?.enabled;
+    threshold_cad = Number(loaded.customs?.threshold_cad ?? 0);
+  } else if (route_id) {
     const { data: cr } = await admin
       .from("customs_rules")
       .select("enabled, threshold_cad")
@@ -186,8 +193,8 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any): Promise<
   }
 
   // fx 兜底（unit_price_cad 缺失时用 unit_price_cny 折算）
-  let fx = 0.19;
-  try {
+  let fx = loaded?.fx ?? 0.19;
+  if (!loaded) try {
     const { data: s } = await admin.from("app_settings").select("value").eq("key", "fx_rate").maybeSingle();
     const cnyPerCad = Number((s?.value as any)?.cny_per_cad ?? 0);
     if (cnyPerCad > 0) fx = +(1 / cnyPerCad).toFixed(6);

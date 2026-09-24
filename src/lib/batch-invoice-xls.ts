@@ -7,7 +7,8 @@ const mergedCell = (v: unknown, across: number, style = "Cell") =>
   `<Cell ss:MergeAcross="${across}" ss:StyleID="${style}"><Data ss:Type="String">${esc(v)}</Data></Cell>`;
 const row = (cells: string[], height?: number) => `<Row${height ? ` ss:Height="${height}"` : ""}>${cells.join("")}</Row>`;
 const address = (party: any) =>
-  [party?.name, party?.address, party?.country, party?.phone && `TEL: ${party.phone}`, party?.email].filter(Boolean).join("\n");
+  [party?.name, party?.contact_name && `CONTACT: ${party.contact_name}`, party?.address, party?.country,
+    party?.phone && `TEL: ${party.phone}`, party?.email, party?.tax_id && `TAX ID: ${party.tax_id}`].filter(Boolean).join("\n");
 
 export function downloadBatchInvoiceWorkbook(data: any) {
   const b = data.batch ?? {};
@@ -38,10 +39,10 @@ export function downloadBatchInvoiceWorkbook(data: any) {
     row([mergedCell("Email", 1, "Label"), mergedCell(shipper.email ?? "", 2, "Value"), cell(""), mergedCell("Purchase Order No.:", 1, "Label"), mergedCell("", 3, "Value")]),
     row([mergedCell("Company Name", 1, "Label"), mergedCell(shipper.name ?? "", 2, "Value"), cell(""), mergedCell("Payment Terms:", 1, "Label"), mergedCell("", 3, "Value")]),
     row([mergedCell("Company address", 1, "Label"), mergedCell(shipper.address ?? "", 2, "Value"), cell(""), mergedCell("Shipping Term", 1, "Label"), mergedCell("", 3, "Value")], 34),
-    row([mergedCell("Country/Territory", 1, "Label"), mergedCell(shipper.country ?? "China", 2, "Value"), cell(""), mergedCell("Bill of Lading:", 1, "Label"), mergedCell(b.vessel_no ?? "", 3, "Value")]),
+    row([mergedCell("Country/Territory", 1, "Label"), mergedCell(shipper.country ?? "", 2, "Value"), cell(""), mergedCell("Bill of Lading:", 1, "Label"), mergedCell(b.vessel_no ?? "", 3, "Value")]),
     row([mergedCell("", 4, "Value"), cell(""), mergedCell("Purpose of Shipment", 1, "Label"), mergedCell("", 3, "Value")]),
     row([mergedCell("CONSIGNEE", 4, "Section"), cell(""), mergedCell("SOLD TO / IMPORTER (if different from Consignee):", 4, "Section")]),
-    row([mergedCell(address(consignee), 4, "Party"), cell(""), mergedCell(address(consignee), 4, "Party")], 64),
+    row([mergedCell(address(consignee), 4, "Party"), cell(""), mergedCell(address(consignee), 4, "Party")], Math.max(64, address(consignee).split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 55)), 0) * 14)),
     row(["QTY OF PACKAGE", "TOTAL QTY OF UNITS", "NET WEIGHT OF UNITS (KGS)", "CBM (VOLUME) OF UNITS", "UNIT OF MEASURE", "DESCRIPTION OF GOODS", "MATERIAL", "HS CODE", "COUNTRY OF ORIGIN", "UNIT VALUE", "CURRENCY OF VALUE", "TOTAL VALUE (QTY OF UNITS * UNIT VALUE)"].map((x) => cell(x, "String", "TableHeader")), 58),
     ...detailRows,
     row([cell(+totalPackages.toFixed(2), "Number", "Total"), cell(+totalQty.toFixed(0), "Number", "Total"), cell(+totalNet.toFixed(2), "Number", "Total"), cell(+totalCbm.toFixed(3), "Number", "Total"), cell(""), cell("TOTAL", "String", "Total"), cell(""), cell(""), cell(""), cell(""), cell("CAD", "String", "Total"), cell(+totalValue.toFixed(2), "Number", "TotalMoney")]),
