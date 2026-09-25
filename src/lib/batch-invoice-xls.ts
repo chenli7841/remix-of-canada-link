@@ -22,12 +22,14 @@ export function downloadBatchInvoiceWorkbook(data: any) {
   const totalCbm = items.reduce((s: number, i: any) => s + Number(i.cbm ?? 0), 0);
   const totalValue = items.reduce((s: number, i: any) => s + Number(i.total_value_cad ?? 0), 0);
   const transport = String(b.shipping_method ?? "").toLowerCase().includes("air") ? "Air" : "Sea";
+  const SOURCE_LABEL: Record<string, string> = { pallet: "托盘合并", waybill_or_carton: "运单/箱号合并", carton: "箱号(超限单独)", waybill: "运单(超限单独)" };
   const detailRows = items.map((i: any) => row([
     cell(i.packages, "Number", "Integer"), cell(i.quantity, "Number", "Integer"),
     cell(i.net_weight_kg, "Number", "Decimal"), cell(i.cbm, "Number", "Volume"), cell("piece"),
     cell(i.name_en), cell(i.material, "String", i.material === "REVIEW" ? "Review" : "Cell"),
     cell(i.hs_code), cell(i.origin || "China"), cell(i.unit_price_cad, "Number", "Money"),
     cell("CAD"), cell(i.total_value_cad, "Number", "Money"),
+    cell(SOURCE_LABEL[i.source] ?? i.source ?? ""), cell(i.ref ?? ""),
   ], 32));
 
   const rows = [
@@ -43,9 +45,9 @@ export function downloadBatchInvoiceWorkbook(data: any) {
     row([mergedCell("", 4, "Value"), cell(""), mergedCell("Purpose of Shipment", 1, "Label"), mergedCell("", 3, "Value")]),
     row([mergedCell("CONSIGNEE", 4, "Section"), cell(""), mergedCell("SOLD TO / IMPORTER (if different from Consignee):", 4, "Section")]),
     row([mergedCell(address(consignee), 4, "Party"), cell(""), mergedCell(address(consignee), 4, "Party")], Math.max(64, address(consignee).split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 55)), 0) * 14)),
-    row(["QTY OF PACKAGE", "TOTAL QTY OF UNITS", "NET WEIGHT OF UNITS (KGS)", "CBM (VOLUME) OF UNITS", "UNIT OF MEASURE", "DESCRIPTION OF GOODS", "MATERIAL", "HS CODE", "COUNTRY OF ORIGIN", "UNIT VALUE", "CURRENCY OF VALUE", "TOTAL VALUE (QTY OF UNITS * UNIT VALUE)"].map((x) => cell(x, "String", "TableHeader")), 58),
+    row(["QTY OF PACKAGE", "TOTAL QTY OF UNITS", "NET WEIGHT OF UNITS (KGS)", "CBM (VOLUME) OF UNITS", "UNIT OF MEASURE", "DESCRIPTION OF GOODS", "MATERIAL", "HS CODE", "COUNTRY OF ORIGIN", "UNIT VALUE", "CURRENCY OF VALUE", "TOTAL VALUE (QTY OF UNITS * UNIT VALUE)", "SOURCE", "REF (OVERSIZE ONLY)"].map((x) => cell(x, "String", "TableHeader")), 58),
     ...detailRows,
-    row([cell(+totalPackages.toFixed(2), "Number", "Total"), cell(+totalQty.toFixed(0), "Number", "Total"), cell(+totalNet.toFixed(2), "Number", "Total"), cell(+totalCbm.toFixed(3), "Number", "Total"), cell(""), cell("TOTAL", "String", "Total"), cell(""), cell(""), cell(""), cell(""), cell("CAD", "String", "Total"), cell(+totalValue.toFixed(2), "Number", "TotalMoney")]),
+    row([cell(+totalPackages.toFixed(2), "Number", "Total"), cell(+totalQty.toFixed(0), "Number", "Total"), cell(+totalNet.toFixed(2), "Number", "Total"), cell(+totalCbm.toFixed(3), "Number", "Total"), cell(""), cell("TOTAL", "String", "Total"), cell(""), cell(""), cell(""), cell(""), cell("CAD", "String", "Total"), cell(+totalValue.toFixed(2), "Number", "TotalMoney"), cell(""), cell("")]),
     row([mergedCell("TOTAL PACKAGE", 1, "FooterLabel"), mergedCell("TOTAL NET WEIGHT", 1, "FooterLabel"), mergedCell("TOTAL GROSS WEIGHT", 1, "FooterLabel"), mergedCell("TOTAL CBM", 1, "FooterLabel"), mergedCell("HBL / CONTAINER", 3, "FooterLabel")]),
     row([mergedCell(+totalPackages.toFixed(2), 1, "FooterValue"), mergedCell(`${totalNet.toFixed(2)} kgs`, 1, "FooterValue"), mergedCell(`${Number(adjustment.target_gross_kg ?? b.hbl_total_weight_kg ?? 0).toFixed(2)} kgs`, 1, "FooterValue"), mergedCell(`${Number(adjustment.target_cbm ?? b.hbl_total_volume_m3 ?? 0).toFixed(3)} m³`, 1, "FooterValue"), mergedCell(b.container_no ?? "", 3, "FooterValue")]),
   ];
@@ -58,7 +60,7 @@ export function downloadBatchInvoiceWorkbook(data: any) {
     <Style ss:ID="TableHeader" ss:Parent="Cell"><Font ss:Bold="1"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/></Style><Style ss:ID="Review" ss:Parent="Cell"><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/></Style>
     <Style ss:ID="Integer" ss:Parent="Cell"><NumberFormat ss:Format="0"/></Style><Style ss:ID="Decimal" ss:Parent="Cell"><NumberFormat ss:Format="0.00"/></Style><Style ss:ID="Volume" ss:Parent="Cell"><NumberFormat ss:Format="0.000"/></Style><Style ss:ID="Money" ss:Parent="Cell"><NumberFormat ss:Format="0.00"/></Style>
     <Style ss:ID="Total" ss:Parent="Cell"><Font ss:Bold="1"/><NumberFormat ss:Format="0.00"/></Style><Style ss:ID="TotalMoney" ss:Parent="Total"><NumberFormat ss:Format="0.00"/></Style><Style ss:ID="FooterLabel" ss:Parent="Cell"><Font ss:Bold="1"/><Alignment ss:Horizontal="Center" ss:WrapText="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/></Style><Style ss:ID="FooterValue" ss:Parent="Cell"><Font ss:Bold="1"/><Alignment ss:Horizontal="Center"/></Style>
-  </Styles><Worksheet ss:Name="CI"><Table><Column ss:Width="65"/><Column ss:Width="72"/><Column ss:Width="85"/><Column ss:Width="80"/><Column ss:Width="90"/><Column ss:Width="210"/><Column ss:Width="115"/><Column ss:Width="105"/><Column ss:Width="82"/><Column ss:Width="78"/><Column ss:Width="82"/><Column ss:Width="105"/>${rows.join("")}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><Selected/><FreezePanes/><FrozenNoSplit/><SplitHorizontal>13</SplitHorizontal><TopRowBottomPane>13</TopRowBottomPane><DoNotDisplayGridlines/></WorksheetOptions></Worksheet></Workbook>`;
+  </Styles><Worksheet ss:Name="CI"><Table><Column ss:Width="65"/><Column ss:Width="72"/><Column ss:Width="85"/><Column ss:Width="80"/><Column ss:Width="90"/><Column ss:Width="210"/><Column ss:Width="115"/><Column ss:Width="105"/><Column ss:Width="82"/><Column ss:Width="78"/><Column ss:Width="82"/><Column ss:Width="105"/><Column ss:Width="110"/><Column ss:Width="90"/>${rows.join("")}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><Selected/><FreezePanes/><FrozenNoSplit/><SplitHorizontal>13</SplitHorizontal><TopRowBottomPane>13</TopRowBottomPane><DoNotDisplayGridlines/></WorksheetOptions></Worksheet></Workbook>`;
   const blob = new Blob(["\ufeff", xml], { type: "application/vnd.ms-excel" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

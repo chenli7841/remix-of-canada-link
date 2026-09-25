@@ -214,8 +214,15 @@ function BatchDetail() {
   const onDownloadInvoice = async () => {
     setInvoiceBusy(true);
     try {
-      const exportData = await fetchInvoiceExport({ data: { batchId } });
+      const exportData: any = await fetchInvoiceExport({ data: { batchId } });
       downloadBatchInvoiceWorkbook(exportData);
+      if (exportData.unmatched?.length) {
+        toast.warning(
+          `${exportData.unmatched.length} 个包裹因缺少完整 HS Code（或包含尚不支持的电商订单）未计入本次 Invoice：${exportData.unmatched.slice(0, 10).join("、")}${exportData.unmatched.length > 10 ? " 等" : ""}`,
+          { duration: 15000 },
+        );
+      }
+      toast.success(`已生成 ${exportData.items?.length ?? 0} 行（合并简化 ${exportData.merged_line_count ?? 0} 行）`);
     } catch (e: any) {
       toast.error(e?.message ?? "Invoice 生成失败");
     } finally {

@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { loadAllHsCodes } from "@/lib/duty.server";
+import { loadAllHsCodes, computeWaybillDutyBreakdown, buildHsIndex } from "@/lib/duty.server";
 import { selectByIds } from "@/lib/orders.functions";
-import { isCompleteHsCode, normalizeHsCodeForStorage } from "@/lib/hs-code-format";
+import { isCompleteHsCode, normalizeHsCodeForStorage, hsCodeDigitsOnly } from "@/lib/hs-code-format";
 import { z } from "zod";
 import { recordAdminLog } from "@/lib/admin-log";
 
@@ -263,143 +263,281 @@ export const extractBatchHbl = createServerFn({ method: "POST" })
     return patch;
   });
 
+// ============================================================
+// Invoice / Packing List export — merged-by-HS-code consolidation.
+//
+// Rules (confirmed with the user across several rounds):
+//  - Group each physical unit's items by hs_code's first 6 digits; if more
+//    than one group, pick a dominant one: a group already-ahead by ≥2x on
+//    volume, weight, quantity or declared value wins outright on the first
+//    such metric found; otherwise rank by the fixed priority volume >
+//    weight > quantity > value.
+//  - Pallets: each pallet is its own candidate (its own contained waybills'
+//    items). Pallets whose dominant code matches merge into one line,
+//    packages = number of pallets. Weight/volume = the pallet's OWN measured
+//    self_weight_kg/self_*_cm (summed across merged pallets), not a rollup
+//    of its contents. Pallets never get the oversize override.
+//  - Independent waybills and cartons not inside a pallet are pooled
+//    together (same treatment for both) and merged by dominant code the
+//    same way, packages = count of matching units, weight/volume = sum of
+//    each unit's own recorded weight_kg / L×W×H.
+//  - Oversize override: a waybill/carton whose own longest side > 200cm, or
+//    weight_kg > 200, or volume > 1 CBM must stand on its own line (its
+//    dominant code, never merged with others even if they share it) and
+//    does not count against the merged-line total.
+//  - Quantity on a line = the ACTUAL total quantity of every item in the
+//    unit(s) that make up that line (not just the dominant group's).
+//  - Unit price = the dominant code's own value-weighted actual unit price
+//    × 20%, written into the unit-price column (total = quantity × that).
+//  - Item name = the HS library's canonical name for the dominant code.
+//
+// HS codes are read as-already-resolved (see getBatchCustomsReadiness) —
+// nothing here re-matches by name; a unit with no item carrying a complete
+// hs_code is skipped and reported back as `unmatched`.
+// ============================================================
+
+const OVERSIZE_MAX_SIDE_CM = 200;
+const OVERSIZE_MAX_WEIGHT_KG = 200;
+const OVERSIZE_MAX_VOLUME_M3 = 1;
+const INVOICE_UNIT_PRICE_RATIO = 0.2;
+
+function volumeM3(x: { length_cm?: number | null; width_cm?: number | null; height_cm?: number | null }): number {
+  return (Number(x.length_cm ?? 0) * Number(x.width_cm ?? 0) * Number(x.height_cm ?? 0)) / 1_000_000;
+}
+function isOversize(x: { length_cm?: number | null; width_cm?: number | null; height_cm?: number | null; weight_kg?: number | null }): boolean {
+  const maxSide = Math.max(Number(x.length_cm ?? 0), Number(x.width_cm ?? 0), Number(x.height_cm ?? 0));
+  return maxSide > OVERSIZE_MAX_SIDE_CM || Number(x.weight_kg ?? 0) > OVERSIZE_MAX_WEIGHT_KG || volumeM3(x) > OVERSIZE_MAX_VOLUME_M3;
+}
+function hs6(code: unknown): string {
+  return hsCodeDigitsOnly(code as string).slice(0, 6);
+}
+
+type DutyLineItem = { name: string; hs_code: string | null; declared_value_cad: number; quantity_per_waybill: number };
+
+function pickDominantHs6(items: DutyLineItem[], unitWeightKg: number, unitVolumeM3: number): string | null {
+  const groups = new Map<string, { value: number; qty: number }>();
+  for (const it of items) {
+    const code = hs6(it.hs_code);
+    if (!code) continue;
+    const g = groups.get(code) ?? { value: 0, qty: 0 };
+    g.value += Number(it.declared_value_cad ?? 0);
+    g.qty += Number(it.quantity_per_waybill ?? 0);
+    groups.set(code, g);
+  }
+  if (groups.size === 0) return null;
+  const totalValue = [...groups.values()].reduce((s, g) => s + g.value, 0) || 1;
+  const ranked = [...groups.entries()].map(([code, g]) => ({
+    code,
+    value: g.value,
+    qty: g.qty,
+    volume: unitVolumeM3 * (g.value / totalValue),
+    weight: unitWeightKg * (g.value / totalValue),
+  }));
+  const topByMetric = (metric: "volume" | "weight" | "qty" | "value") => [...ranked].sort((a, b) => b[metric] - a[metric]);
+  for (const metric of ["volume", "weight", "qty", "value"] as const) {
+    const sorted = topByMetric(metric);
+    if (sorted.length === 1) return sorted[0].code;
+    if (sorted[0][metric] >= sorted[1][metric] * 2) return sorted[0].code;
+  }
+  for (const metric of ["volume", "weight", "qty", "value"] as const) {
+    const sorted = topByMetric(metric);
+    if (sorted[0][metric] > (sorted[1]?.[metric] ?? -Infinity)) return sorted[0].code;
+  }
+  return ranked[0].code;
+}
+
+type InvoiceLineCandidate = {
+  code: string;
+  items: DutyLineItem[];
+  packages: number;
+  weightKg: number;
+  volM3: number;
+  standalone?: { kind: "pallet" | "carton" | "waybill"; ref: string };
+};
+
+function mergeCandidates(candidates: InvoiceLineCandidate[]): InvoiceLineCandidate[] {
+  const merged = new Map<string, InvoiceLineCandidate>();
+  for (const c of candidates) {
+    if (c.standalone) continue;
+    const line = merged.get(c.code) ?? { code: c.code, items: [], packages: 0, weightKg: 0, volM3: 0 };
+    line.items.push(...c.items);
+    line.packages += c.packages;
+    line.weightKg += c.weightKg;
+    line.volM3 += c.volM3;
+    merged.set(c.code, line);
+  }
+  return [...merged.values(), ...candidates.filter((c) => c.standalone)];
+}
+
 export const getBatchInvoiceExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { batchId: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: batch } = await supabaseAdmin.from("batches").select("*").eq("id", data.batchId).single();
-    const loaded = await loadCustomsItems(supabaseAdmin, data.batchId);
-    const hsMap = new Map(loaded.hsRows.map((h: any) => [normalizeHs(h.hs_code), h]));
-    const fwdMap = new Map(loaded.forwardingOrders.map((o: any) => [o.id, o]));
-    const orderMap = new Map(loaded.orders.map((o: any) => [o.id, o]));
-    const customerForWaybill = (w: any) =>
-      String((w.forwarding_id && (fwdMap.get(w.forwarding_id) as any)?.customer_code) ||
-        (w.order_id && (orderMap.get(w.order_id) as any)?.customer_code) || "");
+    const { data: batch, error: batchErr } = await supabaseAdmin.from("batches").select("*").eq("id", data.batchId).single();
+    if (batchErr || !batch) throw new Error(batchErr?.message ?? "批次不存在");
 
-    // Physical outer packages: pallets + standalone cartons + direct waybills.
     const { data: pallets } = await supabaseAdmin.from("pallets").select("*").eq("batch_id", data.batchId);
     const palletIds = (pallets ?? []).map((p: any) => p.id);
     const { data: batchCartons } = await supabaseAdmin.from("cartons").select("*").eq("batch_id", data.batchId);
-    const { data: nestedCartons } = palletIds.length
-      ? await supabaseAdmin.from("cartons").select("*").in("pallet_id", palletIds)
-      : { data: [] };
-    const cartons = [...(batchCartons ?? []), ...(nestedCartons ?? [])];
-    const directWaybills = loaded.waybills.filter((w: any) =>
-      w.assigned_batch_id === data.batchId && !w.carton_id && !w.pallet_id,
-    );
-    const packageRows: any[] = [
-      ...(pallets ?? []).map((p: any) => ({ ...p, kind: "pallet", no: p.pallet_no, customer_code: p.customer_code ?? "" })),
-      ...cartons.filter((c: any) => !c.pallet_id).map((c: any) => ({ ...c, kind: "carton", no: c.carton_no, customer_code: c.customer_code ?? "" })),
-      ...directWaybills.map((w: any) => ({ ...w, kind: "direct", no: w.waybill_no, customer_code: customerForWaybill(w) })),
+    const nestedCartons = await selectByIds(supabaseAdmin, "cartons", "*", "pallet_id", palletIds);
+    const allCartons = [...(batchCartons ?? []), ...nestedCartons];
+    const { data: directRows, error: directErr } = await supabaseAdmin.from("waybills").select("*").eq("assigned_batch_id", data.batchId);
+    if (directErr) throw new Error(directErr.message);
+    const [viaPallet, viaCarton] = await Promise.all([
+      selectByIds(supabaseAdmin, "waybills", "*", "pallet_id", palletIds),
+      selectByIds(supabaseAdmin, "waybills", "*", "carton_id", allCartons.map((c: any) => c.id)),
+    ]);
+    const allWbs = Array.from(new Map([...(directRows ?? []), ...viaPallet, ...viaCarton].map((w: any) => [w.id, w])).values()) as any[];
+
+    const fwdIds = Array.from(new Set(allWbs.map((w) => w.forwarding_id).filter(Boolean)));
+    const [fwdOrders, fwdItems] = await Promise.all([
+      selectByIds(supabaseAdmin, "forwarding_orders", "id,box_count,route_id", "id", fwdIds),
+      selectByIds(supabaseAdmin, "forwarding_items", "*", "forwarding_id", fwdIds),
+    ]);
+    const routeIds = Array.from(new Set(fwdOrders.map((o: any) => o.route_id).filter(Boolean)));
+    const customsRules = await selectByIds(supabaseAdmin, "customs_rules", "route_id,enabled,threshold_cad", "route_id", routeIds);
+    const hsRows = await loadAllHsCodes(supabaseAdmin, "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate, material, origin", { activeOnly: true });
+    const hsIndex = buildHsIndex(hsRows as any);
+    const hsByCode = new Map(hsRows.map((h: any) => [normalizeHs(h.hs_code), h]));
+    const { data: fxSetting } = await supabaseAdmin.from("app_settings").select("value").eq("key", "fx_rate").maybeSingle();
+    const cnyPerCad = Number((fxSetting?.value as any)?.cny_per_cad ?? 0);
+    const fx = cnyPerCad > 0 ? +(1 / cnyPerCad).toFixed(6) : 0.19;
+
+    const fwdOrderMap = new Map(fwdOrders.map((o: any) => [o.id, o]));
+    const fwdItemsByFwd = new Map<string, any[]>();
+    for (const it of fwdItems) fwdItemsByFwd.set(it.forwarding_id, [...(fwdItemsByFwd.get(it.forwarding_id) ?? []), it]);
+    const customsByRoute = new Map(customsRules.map((c: any) => [c.route_id, c]));
+
+    async function itemsFor(wb: any): Promise<DutyLineItem[]> {
+      if (!wb.forwarding_id) return [];
+      const fo = fwdOrderMap.get(wb.forwarding_id);
+      const fi = fwdItemsByFwd.get(wb.forwarding_id) ?? [];
+      const customs = fo ? customsByRoute.get((fo as any).route_id) ?? null : null;
+      const br = await computeWaybillDutyBreakdown(supabaseAdmin, wb, { fo, fi, hs: hsRows as any, hsIndex, customs, fx });
+      return br.items.map((it) => ({
+        name: it.name,
+        hs_code: it.hs_code,
+        declared_value_cad: it.declared_value_cad,
+        quantity_per_waybill: it.quantity_per_waybill,
+      }));
+    }
+
+    // Reconcile system-recorded weight/volume against the HBL's declared
+    // totals — same scaling this export always did — before summing them
+    // into consolidated lines, so line totals still add up to the HBL.
+    const allUnits = [
+      ...(pallets ?? []).map((p: any) => ({ weight_kg: p.self_weight_kg ?? p.weight_kg, length_cm: p.self_length_cm ?? p.length_cm, width_cm: p.self_width_cm ?? p.width_cm, height_cm: p.self_height_cm ?? p.height_cm })),
+      ...allCartons.filter((c: any) => !c.pallet_id),
+      ...allWbs.filter((w) => !w.carton_id && !w.pallet_id),
     ];
-    const volumeM3 = (x: any) =>
-      Number(x.length_cm ?? 0) * Number(x.width_cm ?? 0) * Number(x.height_cm ?? 0) / 1_000_000;
-    const systemGross = packageRows.reduce((s, p) => s + Number(p.weight_kg ?? 0), 0);
-    const systemVolume = packageRows.reduce((s, p) => s + volumeM3(p), 0);
+    const systemGross = allUnits.reduce((s, u) => s + Number(u.weight_kg ?? 0), 0);
+    const systemVolume = allUnits.reduce((s, u) => s + volumeM3(u), 0);
     const targetGross = Number((batch as any)?.hbl_total_weight_kg ?? 0) || systemGross;
     const targetVolume = Number((batch as any)?.hbl_total_volume_m3 ?? 0) || systemVolume;
     const weightFactor = systemGross > 0 ? targetGross / systemGross : 1;
     const volumeFactor = systemVolume > 0 ? targetVolume / systemVolume : 1;
-    let usedGross = 0, usedVolume = 0;
-    const packing_rows = packageRows.map((p, index) => {
-      const last = index === packageRows.length - 1;
-      const adjustedGross = last ? targetGross - usedGross : +(Number(p.weight_kg ?? 0) * weightFactor).toFixed(2);
-      const adjustedVolume = last ? targetVolume - usedVolume : +(volumeM3(p) * volumeFactor).toFixed(3);
-      usedGross += adjustedGross; usedVolume += adjustedVolume;
-      const tare = p.kind === "pallet" ? 15 : 1;
-      return {
-        kind: p.kind,
-        package_no: p.no ?? "",
-        customer_code: p.customer_code ?? "",
-        system_gross_kg: +Number(p.weight_kg ?? 0).toFixed(2),
-        adjusted_gross_kg: +adjustedGross.toFixed(2),
-        tare_kg: tare,
-        net_weight_kg: +Math.max(0, adjustedGross - tare).toFixed(2),
-        system_cbm: +volumeM3(p).toFixed(3),
-        adjusted_cbm: +adjustedVolume.toFixed(3),
-      };
-    });
-    const customerTotals = new Map<string, { packages: number; gross: number; net: number; cbm: number }>();
-    for (const p of packing_rows) {
-      const t = customerTotals.get(p.customer_code) ?? { packages: 0, gross: 0, net: 0, cbm: 0 };
-      t.packages++; t.gross += p.adjusted_gross_kg; t.net += p.net_weight_kg; t.cbm += p.adjusted_cbm;
-      customerTotals.set(p.customer_code, t);
+
+    const unmatchedRefs: string[] = [];
+    const candidates: InvoiceLineCandidate[] = [];
+
+    // ---- Pallets ----
+    const cartonsByPallet = new Map<string, any[]>();
+    for (const c of allCartons) if (c.pallet_id) cartonsByPallet.set(c.pallet_id, [...(cartonsByPallet.get(c.pallet_id) ?? []), c]);
+    const wbsByCarton = new Map<string, any[]>();
+    for (const w of allWbs) if (w.carton_id) wbsByCarton.set(w.carton_id, [...(wbsByCarton.get(w.carton_id) ?? []), w]);
+    const wbsByPalletDirect = new Map<string, any[]>();
+    for (const w of allWbs) if (w.pallet_id && !w.carton_id) wbsByPalletDirect.set(w.pallet_id, [...(wbsByPalletDirect.get(w.pallet_id) ?? []), w]);
+
+    for (const p of pallets ?? []) {
+      const cartons = cartonsByPallet.get(p.id) ?? [];
+      const wbs = [...cartons.flatMap((c: any) => wbsByCarton.get(c.id) ?? []), ...(wbsByPalletDirect.get(p.id) ?? [])];
+      const items = (await Promise.all(wbs.map((w) => itemsFor(w)))).flat();
+      if (!items.length) {
+        // A pallet with waybills that produced no priced items (e.g. a shop
+        // order — not yet covered by this consolidation) must be visible as
+        // skipped, not silently absent from the invoice.
+        if (wbs.length) unmatchedRefs.push(`托盘 ${p.pallet_no ?? p.id}`);
+        continue;
+      }
+      const weightKg = Number(p.self_weight_kg ?? p.weight_kg ?? 0) * weightFactor;
+      const volM3 = volumeM3({ length_cm: p.self_length_cm ?? p.length_cm, width_cm: p.self_width_cm ?? p.width_cm, height_cm: p.self_height_cm ?? p.height_cm }) * volumeFactor;
+      const code = pickDominantHs6(items, weightKg, volM3);
+      if (!code) { unmatchedRefs.push(`托盘 ${p.pallet_no ?? p.id}`); continue; }
+      candidates.push({ code, items, packages: 1, weightKg, volM3 });
     }
-    const forwardingGoods = loaded.forwardingItems.map((i: any) => {
-      const parent: any = fwdMap.get(i.forwarding_id) ?? {};
-      const boxCount = Math.max(1, Number(parent.box_count ?? attrs(i).box_count ?? 1));
-      const perBox = Number(attrs(i).items_per_carton ?? attrs(i).inner_qty ?? 0);
-      const qty = perBox > 0 ? boxCount * perBox : Number(i.quantity ?? 0);
-      const hs: any = hsMap.get(normalizeHs(i.hs_code));
+    const palletLines = mergeCandidates(candidates);
+
+    // ---- Independent cartons + waybills (pooled together) ----
+    const standaloneCartons = allCartons.filter((c: any) => !c.pallet_id);
+    const directWbs = allWbs.filter((w) => !w.carton_id && !w.pallet_id);
+    const poolable: InvoiceLineCandidate[] = [];
+    for (const c of standaloneCartons) {
+      const wbs = wbsByCarton.get(c.id) ?? [];
+      const items = (await Promise.all(wbs.map((w: any) => itemsFor(w)))).flat();
+      if (!items.length) {
+        if (wbs.length) unmatchedRefs.push(`箱号 ${c.carton_no ?? c.id}`);
+        continue;
+      }
+      const weightKg = Number(c.weight_kg ?? 0) * weightFactor;
+      const volM3 = volumeM3(c) * volumeFactor;
+      const code = pickDominantHs6(items, weightKg, volM3);
+      if (!code) { unmatchedRefs.push(`箱号 ${c.carton_no ?? c.id}`); continue; }
+      const entry: InvoiceLineCandidate = { code, items, packages: 1, weightKg, volM3 };
+      poolable.push(isOversize(c) ? { ...entry, standalone: { kind: "carton", ref: c.carton_no ?? c.id } } : entry);
+    }
+    for (const w of directWbs) {
+      const items = await itemsFor(w);
+      if (!items.length) {
+        if (w.order_id || w.forwarding_id) unmatchedRefs.push(`运单 ${w.waybill_no ?? w.id}`);
+        continue;
+      }
+      const weightKg = Number(w.weight_kg ?? 0) * weightFactor;
+      const volM3 = volumeM3(w) * volumeFactor;
+      const code = pickDominantHs6(items, weightKg, volM3);
+      if (!code) { unmatchedRefs.push(`运单 ${w.waybill_no ?? w.id}`); continue; }
+      const entry: InvoiceLineCandidate = { code, items, packages: 1, weightKg, volM3 };
+      poolable.push(isOversize(w) ? { ...entry, standalone: { kind: "waybill", ref: w.waybill_no ?? w.id } } : entry);
+    }
+    const wbCartonLines = mergeCandidates(poolable);
+
+    function toRow(line: InvoiceLineCandidate, defaultSource: "pallet" | "waybill_or_carton") {
+      const matching = line.items.filter((it) => hs6(it.hs_code) === line.code);
+      const value = matching.reduce((s, it) => s + Number(it.declared_value_cad ?? 0), 0);
+      const qty = matching.reduce((s, it) => s + Number(it.quantity_per_waybill ?? 0), 0);
+      const unitPriceActual = qty > 0 ? value / qty : 0;
+      const unitPriceCad = +(unitPriceActual * INVOICE_UNIT_PRICE_RATIO).toFixed(2);
+      // Representative full hs_code: the highest-value item actually carrying this 6-digit prefix.
+      const rep = [...matching].sort((a, b) => Number(b.declared_value_cad) - Number(a.declared_value_cad))[0];
+      const hsRow: any = hsByCode.get(normalizeHs(rep?.hs_code)) ?? hsByCode.get(line.code);
+      const totalQty = line.items.reduce((s, it) => s + Number(it.quantity_per_waybill ?? 0), 0);
       return {
-        customer_code: parent.customer_code ?? "",
-        packages: boxCount,
-        quantity: qty,
-        unit_price_cad: Number(i.unit_price_cad ?? 0),
-        total_value_cad: +(qty * Number(i.unit_price_cad ?? 0)).toFixed(2),
-        name: i.name ?? "",
-        name_en: hs?.name_en ?? i.name ?? "",
-        material: attrs(i).material || hs?.material || "REVIEW",
-        hs_code: hs?.hs_code ?? normalizeHs(i.hs_code),
-        origin: attrs(i).origin || hs?.origin || "China",
+        source: line.standalone ? line.standalone.kind : defaultSource,
+        ref: line.standalone?.ref ?? null,
+        hs_code: hsRow?.hs_code ?? rep?.hs_code ?? line.code,
+        name_en: hsRow?.name_en ?? hsRow?.name_zh ?? rep?.name ?? line.code,
+        material: hsRow?.material ?? "REVIEW",
+        origin: hsRow?.origin ?? "China",
+        packages: line.packages,
+        quantity: +totalQty.toFixed(2),
+        net_weight_kg: +line.weightKg.toFixed(2),
+        cbm: +line.volM3.toFixed(3),
+        unit_price_cad: unitPriceCad,
+        total_value_cad: +(unitPriceCad * totalQty).toFixed(2),
         unit: "PCS",
       };
-    });
-    const shopGoods = loaded.orderItems.map((i: any) => {
-      const parent: any = orderMap.get(i.order_id) ?? {};
-      const boxCount = Math.max(1, Number(parent.box_count ?? attrs(i).box_count ?? 1));
-      const perBox = Number(attrs(i).items_per_carton ?? attrs(i).inner_qty ?? 0);
-      const qty = perBox > 0 ? boxCount * perBox : Number(i.quantity ?? 0);
-      const hs: any = hsMap.get(normalizeHs(attrs(i).hs_code));
-      const fxRate = Number(parent.fx_rate ?? 1) || 1;
-      const unitPriceCad = Number(attrs(i).unit_price_cad ?? 0) || Number(i.unit_price_cny ?? 0) / fxRate;
-      return {
-        customer_code: parent.customer_code ?? "",
-        packages: boxCount,
-        quantity: qty,
-        unit_price_cad: +unitPriceCad.toFixed(2),
-        total_value_cad: +(qty * unitPriceCad).toFixed(2),
-        name: i.name_zh ?? i.name_en ?? "",
-        name_en: hs?.name_en ?? i.name_en ?? i.name_zh ?? "",
-        material: attrs(i).material || hs?.material || "REVIEW",
-        hs_code: hs?.hs_code ?? normalizeHs(attrs(i).hs_code),
-        origin: attrs(i).origin || hs?.origin || "China",
-        unit: "PCS",
-      };
-    });
-    const baseItems = [...forwardingGoods, ...shopGoods];
-    // Allocate each customer's adjusted package totals across its goods by declared value.
-    // The final goods row absorbs rounding so invoice totals exactly reconcile to the HBL.
-    const groupedItems = new Map<string, any[]>();
-    for (const item of baseItems) groupedItems.set(item.customer_code, [...(groupedItems.get(item.customer_code) ?? []), item]);
-    const items: any[] = [];
-    for (const [customerCode, siblings] of groupedItems) {
-      const valueTotal = siblings.reduce((s: number, x: any) => s + Number(x.total_value_cad ?? 0), 0);
-      const totals = customerTotals.get(customerCode) ?? { packages: 0, gross: 0, net: 0, cbm: 0 };
-      let usedPackages = 0, usedGross = 0, usedNet = 0, usedCbm = 0;
-      siblings.forEach((item: any, index: number) => {
-        const last = index === siblings.length - 1;
-        const share = valueTotal > 0 ? Number(item.total_value_cad ?? 0) / valueTotal : 1 / Math.max(1, siblings.length);
-        const packages = last ? totals.packages - usedPackages : Math.floor(totals.packages * share);
-        const gross = last ? totals.gross - usedGross : +(totals.gross * share).toFixed(2);
-        const net = last ? totals.net - usedNet : +(totals.net * share).toFixed(2);
-        const cbm = last ? totals.cbm - usedCbm : +(totals.cbm * share).toFixed(3);
-        usedPackages += packages; usedGross += gross; usedNet += net; usedCbm += cbm;
-        items.push({
-          ...item,
-          packages,
-          gross_weight_kg: +gross.toFixed(2),
-          net_weight_kg: +net.toFixed(2),
-          cbm: +cbm.toFixed(3),
-        });
-      });
     }
+    const items = [
+      ...palletLines.map((l) => toRow(l, "pallet")),
+      ...wbCartonLines.map((l) => toRow(l, "waybill_or_carton")),
+    ];
+
     return {
       batch,
       items,
-      packing_rows,
+      merged_line_count: items.filter((i) => !i.ref).length,
+      unmatched: unmatchedRefs,
       adjustment: {
         system_gross_kg: +systemGross.toFixed(2), target_gross_kg: +targetGross.toFixed(2), weight_factor: +weightFactor.toFixed(6),
         system_cbm: +systemVolume.toFixed(3), target_cbm: +targetVolume.toFixed(3), volume_factor: +volumeFactor.toFixed(6),

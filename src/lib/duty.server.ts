@@ -148,7 +148,9 @@ export function matchHsForName(
 }
 
 // 主入口：计算一条运单的关税明细
-export type DutyInputs = { fo: any; fi: any[]; hs: any[]; customs: any; fx: number };
+// hsIndex 可选：调用方对同一批 waybill 循环调用时，传入一次性建好的索引，
+// 避免这里对着几千条 hs_codes 每张运单都重建一次 buildHsIndex（原来是这里最大的耗时）。
+export type DutyInputs = { fo: any; fi: any[]; hs: any[]; hsIndex?: ReturnType<typeof buildHsIndex>; customs: any; fx: number };
 
 export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: DutyInputs): Promise<DutyBreakdown> {
   const empty: DutyBreakdown = {
@@ -174,7 +176,7 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: 
   ]);
   const route_id = fo?.route_id ?? null;
   const boxCount = Math.max(Number(fo?.box_count ?? 1) || 1, 1);
-  const index = buildHsIndex((hs ?? []) as HsRow[]);
+  const index = loaded?.hsIndex ?? buildHsIndex((hs ?? []) as HsRow[]);
 
   // customs_rules —— 只读 enabled + threshold_cad；rate_pct 已废弃
   let customs_enabled = false,
