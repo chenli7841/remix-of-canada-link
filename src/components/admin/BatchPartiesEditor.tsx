@@ -29,7 +29,14 @@ function PartyEditor({ batchId, party, saved, canEdit, onSaved }: {
   const value = draft ?? current;
   const title = party === "customs_shipper" ? "发货方资料" : "收货方资料";
   const dirty = fields.some(([key]) => value[key] !== current[key]);
-  return <form onSubmit={async (e) => {
+  return <details className="group rounded-lg border border-white/10 p-3">
+    <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+      {title}
+      <span className="ml-2 text-xs font-normal text-slate-400 group-open:hidden">展开</span>
+      <span className="ml-2 hidden text-xs font-normal text-slate-400 group-open:inline">收起</span>
+      {dirty && <span className="ml-2 text-xs font-normal text-amber-400">未保存</span>}
+    </summary>
+    <form className="mt-3" onSubmit={async (e) => {
     e.preventDefault();
     if (!canEdit || busy || !dirty) return;
     setBusy(true);
@@ -41,7 +48,6 @@ function PartyEditor({ batchId, party, saved, canEdit, onSaved }: {
     } catch (error: any) { toast.error(error?.message ?? "保存失败，请重试"); }
     finally { setBusy(false); }
   }}>
-    <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {fields.map(([key, label]) => <label key={key} className={`text-xs text-slate-400 ${key === "address" ? "sm:col-span-2" : ""}`}>
         {label}
@@ -60,5 +66,6 @@ function PartyEditor({ batchId, party, saved, canEdit, onSaved }: {
       </button>
       {dirty && <button type="button" disabled={busy} onClick={() => setDraft(null)} className="text-xs text-slate-400">取消修改</button>}
     </div>}
-  </form>;
+    </form>
+  </details>;
 }

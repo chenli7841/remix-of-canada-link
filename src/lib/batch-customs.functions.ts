@@ -212,10 +212,10 @@ export const extractBatchHbl = createServerFn({ method: "POST" })
     const result = await callOpenAiRaw(
       {
         input: [{ role: "user", content: [
-          { type: "input_text", text: "读取这份海运/空运提单。只输出JSON，字段：shipper{name,address},consignee{name,address},ship_date(YYYY-MM-DD或null),vessel_voyage,container_no,total_weight_kg,total_volume_m3,goods_description。不要猜测看不清的内容。" },
+          { type: "input_text", text: "读取这份海运/空运提单。只输出JSON，字段：shipper{name,contact_name,phone,email,address,country,tax_id},consignee{name,contact_name,phone,email,address,country,tax_id},ship_date(YYYY-MM-DD或null),vessel_voyage,container_no,total_weight_kg,total_volume_m3,goods_description。shipper为发货方，consignee为收货方，不要用通知方Notify Party替代收货方。双方资料中name为公司名称，contact_name为联系人，phone为电话，email为邮箱，address为完整地址，country为国家/地区，tax_id为税号。只提取提单明确写出的资料，不要猜测或推断；缺失或看不清的字段返回null，各文本字段不超过1000字符。" },
           { type: "input_file", filename: data.fileName, file_data: `data:application/pdf;base64,${base64}` },
         ] }],
-        max_output_tokens: 300,
+        max_output_tokens: 2000,
       },
       { timeoutMs: 30000 },
     );
@@ -226,8 +226,8 @@ export const extractBatchHbl = createServerFn({ method: "POST" })
     if (readError || !existing) throw new Error(readError?.message ?? "批次不存在");
     const mergeParty = (saved: any, recognized: any) => ({
       ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}),
-      ...Object.fromEntries(["name", "address"].flatMap((key) =>
-        typeof recognized?.[key] === "string" && recognized[key].trim() ? [[key, recognized[key].trim()]] : [])),
+      ...Object.fromEntries(["name", "contact_name", "phone", "email", "address", "country", "tax_id"].flatMap((key) =>
+        typeof recognized?.[key] === "string" && recognized[key].trim() ? [[key, recognized[key].trim().slice(0, 1000)]] : [])),
     });
     const patch = {
       hbl_file_path: data.filePath,

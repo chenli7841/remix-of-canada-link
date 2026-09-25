@@ -546,7 +546,7 @@ function BatchDetail() {
                     <FileText className="h-3.5 w-3.5" /> 上传提单并抓取信息
                   </div>
                   <div className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                    自动提取收发货人、发运日期、船名/航次、集装箱、总体积、总重量和提单品名；解析后仍可人工修改。
+                    自动提取收发货方的公司、联系人、电话、邮箱、地址、国家／地区、税号，以及发运日期、船名/航次、集装箱、总体积、总重量和提单品名。未识别的收发货方字段保留原值；请展开“批次信息”中的资料核对，可人工修改。
                   </div>
                   {batch.hbl_file_name && <div className="mt-1 text-[10px] text-emerald-300">已上传：{batch.hbl_file_name}</div>}
                 </div>

@@ -1479,6 +1479,31 @@ export const deleteTrackingPreset = createServerFn({ method: "POST" })
 //   BATCHES
 // ============================================================
 
+// A large batch's waybill/carton/pallet id lists can run into the thousands.
+// A single .in() over all of them serializes into a query string long enough
+// that Supabase's edge in front of PostgREST rejects it outright with a bare
+// "Bad Request" — no JSON body, so postgrest-js can't even surface a normal
+// error. Page every id-scoped lookup in computeBatchFeeSummary through this.
+export async function selectByIds(
+  admin: any,
+  table: string,
+  select: string,
+  col: string,
+  ids: string[],
+  extra?: (q: any) => any,
+): Promise<any[]> {
+  if (!ids.length) return [];
+  const out: any[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    let q = admin.from(table).select(select).in(col, ids.slice(i, i + 200));
+    if (extra) q = extra(q);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+  }
+  return out;
+}
+
 // ---- Fee summary computation (shared between detail view and persist-on-lock) ----
 // Returns: { totals: {freight,customs,insurance,clearance,storage,delivery,inspection,surcharge,grand_total},
 //            per_customer: [{...}], unassigned: {...}, independent_clearance: {...} }
@@ -1499,25 +1524,13 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   const palletIds = pallets.map((p) => p.id);
 
   // Waybills nested inside cartons/pallets
-  const [cartonWbsR, palletWbsR, palletCartonsR] = await Promise.all([
-    cartonIds.length
-      ? admin.from("waybills").select("*").in("carton_id", cartonIds)
-      : Promise.resolve({ data: [] as any[] }),
-    palletIds.length
-      ? admin.from("waybills").select("*").in("pallet_id", palletIds).is("carton_id", null)
-      : Promise.resolve({ data: [] as any[] }),
-    palletIds.length
-      ? admin.from("cartons").select("*").in("pallet_id", palletIds)
-      : Promise.resolve({ data: [] as any[] }),
+  const [cartonWbs, palletDirectWbs, palletCartons] = await Promise.all([
+    selectByIds(admin, "waybills", "*", "carton_id", cartonIds),
+    selectByIds(admin, "waybills", "*", "pallet_id", palletIds, (q) => q.is("carton_id", null)),
+    selectByIds(admin, "cartons", "*", "pallet_id", palletIds),
   ]);
-  const cartonWbs: any[] = cartonWbsR.data ?? [];
-  const palletDirectWbs: any[] = palletWbsR.data ?? [];
-  const palletCartons: any[] = palletCartonsR.data ?? [];
   const palletCartonIds = palletCartons.map((c) => c.id);
-  const palletCartonWbsR = palletCartonIds.length
-    ? await admin.from("waybills").select("*").in("carton_id", palletCartonIds)
-    : { data: [] as any[] };
-  const palletCartonWbs: any[] = (palletCartonWbsR as any).data ?? [];
+  const palletCartonWbs = await selectByIds(admin, "waybills", "*", "carton_id", palletCartonIds);
 
   const allWbs = await effectiveWaybillInsurance(admin, [...directWbs, ...cartonWbs, ...palletDirectWbs, ...palletCartonWbs]);
   const allCartons = [...cartons, ...palletCartons];
@@ -1525,26 +1538,24 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   // === 2. Resolve parents (orders/forwardings/profiles) ===
   const orderIds = Array.from(new Set(allWbs.map((w) => w.order_id).filter(Boolean)));
   const fwdIds = Array.from(new Set(allWbs.map((w) => w.forwarding_id).filter(Boolean)));
-  const [ordersR, fwdR] = await Promise.all([
-    orderIds.length
-      ? admin
-          .from("orders")
-          .select(
-            "id, order_no, customer_code, user_id, route_code, route_id, shipping_cny, customs_cny, insurance_cny, address_snapshot",
-          )
-          .in("id", orderIds)
-      : Promise.resolve({ data: [] as any[] }),
-    fwdIds.length
-      ? admin
-          .from("forwarding_orders")
-          .select(
-            "id, request_no, customer_code, user_id, route_code, route_id, fee_cny, address_id, address:address_id(postal_code)",
-          )
-          .in("id", fwdIds)
-      : Promise.resolve({ data: [] as any[] }),
+  const [orderRows, fwdRows] = await Promise.all([
+    selectByIds(
+      admin,
+      "orders",
+      "id, order_no, customer_code, user_id, route_code, route_id, shipping_cny, customs_cny, insurance_cny, address_snapshot",
+      "id",
+      orderIds,
+    ),
+    selectByIds(
+      admin,
+      "forwarding_orders",
+      "id, request_no, customer_code, user_id, route_code, route_id, fee_cny, address_id, address:address_id(postal_code)",
+      "id",
+      fwdIds,
+    ),
   ]);
-  const oMap = new Map(((ordersR as any).data ?? []).map((o: any) => [o.id, o]));
-  const fMap = new Map(((fwdR as any).data ?? []).map((f: any) => [f.id, f]));
+  const oMap = new Map(orderRows.map((o: any) => [o.id, o]));
+  const fMap = new Map(fwdRows.map((f: any) => [f.id, f]));
 
   const userIds = Array.from(
     new Set(
@@ -1556,10 +1567,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     ),
   );
   const userMap = new Map<string, any>();
-  if (userIds.length) {
-    const { data: profs } = await admin.from("profiles").select("id, customer_code, full_name").in("id", userIds);
-    for (const p of (profs ?? []) as any[]) userMap.set(p.id, p);
-  }
+  for (const p of await selectByIds(admin, "profiles", "id, customer_code, full_name", "id", userIds)) userMap.set(p.id, p);
 
   function wbCustomer(w: any): string | null {
     const p: any = (w.order_id && oMap.get(w.order_id)) || (w.forwarding_id && fMap.get(w.forwarding_id));
@@ -1616,29 +1624,23 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   const inspectionByCustomer = new Map<string, number>();
   const deliveryByCustomer = new Map<string, number>();
   const discountByCustomer = new Map<string, number>();
-  const [scWb, scCt, scPl, scBt, settleR] = await Promise.all([
-    allWbIds.length
-      ? admin.from("surcharges").select("waybill_id, amount_cny").eq("scope", "waybill").in("waybill_id", allWbIds)
-      : Promise.resolve({ data: [] as any[] }),
-    allCartonIdsAll.length
-      ? admin.from("surcharges").select("carton_id, amount_cny").eq("scope", "carton").in("carton_id", allCartonIdsAll)
-      : Promise.resolve({ data: [] as any[] }),
-    palletIds.length
-      ? admin.from("surcharges").select("pallet_id, amount_cny").eq("scope", "pallet").in("pallet_id", palletIds)
-      : Promise.resolve({ data: [] as any[] }),
+  const [scWb, scCt, scPl, scBtR, settleR] = await Promise.all([
+    selectByIds(admin, "surcharges", "waybill_id, amount_cny", "waybill_id", allWbIds, (q) => q.eq("scope", "waybill")),
+    selectByIds(admin, "surcharges", "carton_id, amount_cny", "carton_id", allCartonIdsAll, (q) => q.eq("scope", "carton")),
+    selectByIds(admin, "surcharges", "pallet_id, amount_cny", "pallet_id", palletIds, (q) => q.eq("scope", "pallet")),
     admin.from("surcharges").select("customer_code, amount_cny, note").eq("scope", "batch").eq("batch_id", batchId),
     admin.from("batch_settlements").select("customer_code, confirmed, confirmed_at").eq("batch_id", batchId),
   ]);
   const confirmedByCustomer = new Map<string, { confirmed: boolean; confirmed_at: string | null }>();
   for (const s of ((settleR as any).data ?? []) as any[])
     confirmedByCustomer.set(s.customer_code, { confirmed: !!s.confirmed, confirmed_at: s.confirmed_at ?? null });
-  for (const s of (scWb as any).data ?? [])
+  for (const s of scWb)
     surchargeMap.waybill.set(s.waybill_id, (surchargeMap.waybill.get(s.waybill_id) ?? 0) + Number(s.amount_cny ?? 0));
-  for (const s of (scCt as any).data ?? [])
+  for (const s of scCt)
     surchargeMap.carton.set(s.carton_id, (surchargeMap.carton.get(s.carton_id) ?? 0) + Number(s.amount_cny ?? 0));
-  for (const s of (scPl as any).data ?? [])
+  for (const s of scPl)
     surchargeMap.pallet.set(s.pallet_id, (surchargeMap.pallet.get(s.pallet_id) ?? 0) + Number(s.amount_cny ?? 0));
-  for (const s of (scBt as any).data ?? []) {
+  for (const s of ((scBtR as any).data ?? []) as any[]) {
     const amt = Number(s.amount_cny ?? 0);
     const note: string = s.note ?? "";
     const code: string | null = s.customer_code ?? null;
@@ -1735,14 +1737,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         ...(pallets.map((p) => p.customer_code).filter(Boolean) as string[]),
       ]),
     );
-    if (codes.length) {
-      const { data: profs } = await admin
-        .from("profiles")
-        .select("customer_code, fee_scheme_preference")
-        .in("customer_code", codes);
-      for (const p of (profs ?? []) as any[]) {
-        schemeByCustomer.set(p.customer_code, ((p as any).fee_scheme_preference ?? "split") as "merged" | "split");
-      }
+    for (const p of await selectByIds(admin, "profiles", "customer_code, fee_scheme_preference", "customer_code", codes)) {
+      schemeByCustomer.set(p.customer_code, ((p as any).fee_scheme_preference ?? "split") as "merged" | "split");
     }
   }
   const schemeOf = (code: string | null) => (code ? (schemeByCustomer.get(code) ?? "split") : "split");
@@ -2196,34 +2192,36 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   // ---- 集运侧：优先读 waybill_items 快照，无则回退现算 ----
   const fwdWbIds = allWbs.filter((w) => w.forwarding_id).map((w) => w.id);
   const wiByWb = new Map<string, any[]>();
-  if (fwdWbIds.length) {
-    const { data: wiRows, error } = await admin.from("waybill_items").select("*").in("waybill_id", fwdWbIds);
-    if (error) throw new Error(error.message);
-    for (const r of (wiRows ?? []) as any[]) {
-      const arr = wiByWb.get(r.waybill_id) ?? [];
-      arr.push(r);
-      wiByWb.set(r.waybill_id, arr);
-    }
+  for (const r of await selectByIds(admin, "waybill_items", "*", "waybill_id", fwdWbIds)) {
+    const arr = wiByWb.get(r.waybill_id) ?? [];
+    arr.push(r);
+    wiByWb.set(r.waybill_id, arr);
   }
   const missingParents = [...new Set(allWbs.filter((w) => w.forwarding_id && !wiByWb.has(w.id)).map((w) => w.forwarding_id))];
-  const [fallbackParents, fallbackItems] = missingParents.length ? await Promise.all([
-    admin.from("forwarding_orders").select("id,box_count,route_id").in("id", missingParents),
-    admin.from("forwarding_items").select("id,forwarding_id,name,quantity,unit_price_cad,unit_price_cny,extras,hs_code").in("forwarding_id", missingParents),
-  ]) : [{ data: [] }, { data: [] }];
-  for (const result of [fallbackParents, fallbackItems]) if (result.error) throw new Error(result.error.message);
-  const fallbackParentMap = new Map<string, any>((fallbackParents.data ?? []).map((p: any) => [p.id, p]));
+  const [fallbackParentRows, fallbackItemRows] = await Promise.all([
+    selectByIds(admin, "forwarding_orders", "id,box_count,route_id", "id", missingParents),
+    selectByIds(
+      admin,
+      "forwarding_items",
+      "id,forwarding_id,name,quantity,unit_price_cad,unit_price_cny,extras,hs_code",
+      "forwarding_id",
+      missingParents,
+    ),
+  ]);
+  const fallbackParentMap = new Map<string, any>(fallbackParentRows.map((p: any) => [p.id, p]));
   const fallbackItemMap = new Map<string, any[]>();
-  for (const item of fallbackItems.data ?? []) {
+  for (const item of fallbackItemRows) {
     const rows = fallbackItemMap.get(item.forwarding_id) ?? [];
     rows.push(item);
     fallbackItemMap.set(item.forwarding_id, rows);
   }
-  const fallbackRouteIds = [...new Set((fallbackParents.data ?? []).map((p: any) => p.route_id).filter(Boolean))];
-  const fallbackCustoms = fallbackRouteIds.length
-    ? await admin.from("customs_rules").select("route_id,enabled,threshold_cad").in("route_id", fallbackRouteIds)
-    : { data: [] };
-  if (fallbackCustoms.error) throw new Error(fallbackCustoms.error.message);
-  const fallbackCustomsMap = new Map<string, any>((fallbackCustoms.data ?? []).map((r: any) => [r.route_id, r]));
+  const fallbackRouteIds = [...new Set(fallbackParentRows.map((p: any) => p.route_id).filter(Boolean))];
+  const fallbackCustomsMap = new Map<string, any>(
+    (await selectByIds(admin, "customs_rules", "route_id,enabled,threshold_cad", "route_id", fallbackRouteIds)).map((r: any) => [
+      r.route_id,
+      r,
+    ]),
+  );
   for (const w of allWbs) {
     if (!w.forwarding_id) continue;
     const cc = wbCustomer(w);
@@ -2268,21 +2266,18 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   }
 
   // ---- 电商侧：order_items × products.hs_code / 名称匹配 ----
-  if (orderIds.length) {
-    const { data: items } = await admin
-      .from("order_items")
-      .select("id, order_id, name_zh, unit_price_cny, quantity, product_id")
-      .in("order_id", orderIds);
-    const productIds = Array.from(new Set(((items ?? []) as any[]).map((i) => i.product_id).filter(Boolean)));
+  {
+    const items = await selectByIds(
+      admin,
+      "order_items",
+      "id, order_id, name_zh, unit_price_cny, quantity, product_id",
+      "order_id",
+      orderIds,
+    );
+    const productIds = Array.from(new Set(items.map((i) => i.product_id).filter(Boolean)));
     const prodMap = new Map<string, any>();
-    if (productIds.length) {
-      const { data: prods } = await admin
-        .from("products")
-        .select("id, hs_code, pack_qty, name_zh")
-        .in("id", productIds);
-      for (const p of (prods ?? []) as any[]) prodMap.set(p.id, p);
-    }
-    for (const it of (items ?? []) as any[]) {
+    for (const p of await selectByIds(admin, "products", "id, hs_code, pack_qty, name_zh", "id", productIds)) prodMap.set(p.id, p);
+    for (const it of items) {
       const order = oMap.get(it.order_id) as any;
       const cc = order?.customer_code as string | undefined;
       if (!cc) continue;
