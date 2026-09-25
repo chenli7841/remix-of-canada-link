@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { listHsCodes, upsertHsCode, deleteHsCode } from "@/lib/hs-codes.functions";
+import { HsCodeInput } from "@/components/HsCodeInput";
 import { BookText, Loader2, Plus, Save, Trash2, Search, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
 const PAGE_SIZE = 50;
@@ -199,7 +200,7 @@ function HsCodesPage() {
           </div>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="HS 编码 *"><Input value={current.hs_code} onChange={v => update("hs_code", v)} placeholder="0101.21.00.00"/></Field>
+              <Field label="HS 编码 *"><HsCodeInput value={current.hs_code} onChange={v => update("hs_code", v)} /></Field>
               <Field label="章节"><Input value={current.chapter ?? ""} onChange={v => update("chapter", v)} placeholder="01"/></Field>
             </div>
             <Field label="品名（中文）*"><Input value={current.name_zh} onChange={v => update("name_zh", v)}/></Field>

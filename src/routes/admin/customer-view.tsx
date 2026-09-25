@@ -61,6 +61,7 @@ import {
   X,
 } from "lucide-react";
 import { CustomerForwardingForm } from "@/components/admin/CustomerForwardingForm";
+import { HsCodeInput } from "@/components/HsCodeInput";
 
 export const Route = createFileRoute("/admin/customer-view")({
   head: () => ({
@@ -1483,11 +1484,7 @@ function ItemsTab({ userId }: { userId: string }) {
               />
             </AField>
             <AField label="HS 编码 *">
-              <input
-                className={inputCls}
-                value={editing.hs_code ?? ""}
-                onChange={(e) => setEditing({ ...editing, hs_code: e.target.value })}
-              />
+              <HsCodeInput value={editing.hs_code} onChange={(digits) => setEditing({ ...editing, hs_code: digits })} />
             </AField>
             <AField label="单价 CAD">
               <input

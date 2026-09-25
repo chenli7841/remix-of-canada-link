@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getFxCadPerCny, computeMyBatchesForUser } from "@/lib/orders.functions";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 
 // Backs the admin "客户视图" page: owner/warehouse/support/sales (see
 // NAV_GROUPS in admin/route.tsx, where this link overrides its group's
@@ -462,9 +463,9 @@ export const saveCustomerItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCustomerViewAccess(context.supabase, context.userId, data.userId);
     if (!data.name.trim()) throw new Error("请填写物品名称");
-    if (!data.hs_code.trim()) throw new Error("请填写 HS 编码");
+    const hsCode = normalizeHsCodeForStorage(data.hs_code);
+    if (!hsCode) throw new Error("请填写 HS 编码");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const hsCode = data.hs_code.trim().replace(/\s+/g, "");
 
     const { data: resolved, error: resolveError } = await supabaseAdmin.rpc("resolve_hs_code_rates", {
       p_hs_code: hsCode,
@@ -705,6 +706,13 @@ export const createCustomerForwarding = createServerFn({ method: "POST" })
       const norm = (v: any) => String(v ?? "").trim().toLowerCase();
       payload.items = items.map((it: any) => {
         const ex = { ...(it.extras ?? {}) };
+        if (ex.hscode) {
+          try {
+            ex.hscode = normalizeHsCodeForStorage(ex.hscode);
+          } catch (e: any) {
+            throw new Error(`物品「${it.name}」的 HS 编码格式不正确：${e.message}`);
+          }
+        }
         if (!ex.hscode || !ex.material || !ex.origin) {
           const hit = rows.find((r) => norm(r.name) === norm(it.name) || (ex.sku && norm(r.sku) === norm(ex.sku)));
           if (hit) {

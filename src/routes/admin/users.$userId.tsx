@@ -13,6 +13,8 @@ import {
   walletTxReceipt,
   type AppRole,
 } from "@/lib/admin.functions";
+import { HsCodeInput } from "@/components/HsCodeInput";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 import { ROLE_LABEL, ROLE_COLOR, ASSIGNABLE_ROLES } from "@/lib/admin-roles";
 import { VIP_LEVELS, VIP_LABEL, VIP_COLOR, type VipLevel } from "@/lib/vip-levels";
 import {
@@ -1432,6 +1434,13 @@ function HsEditDialog({
       setErr("品名不能为空");
       return;
     }
+    let hsCode: string | null;
+    try {
+      hsCode = normalizeHsCodeForStorage(hs);
+    } catch (e: any) {
+      setErr(e.message);
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -1441,7 +1450,7 @@ function HsEditDialog({
         unit_price_cad: unitPrice ? Number(unitPrice) : null,
         items_per_carton: ipc ? Number(ipc) : null,
         ctns: ctns ? Number(ctns) : null,
-        hs_code: hs.trim() || null,
+        hs_code: hsCode,
         note: note.trim() || null,
       });
     } catch (e: any) {
@@ -1465,7 +1474,7 @@ function HsEditDialog({
           </label>
           <label className="col-span-1">
             <div className="mb-1 text-[10px] uppercase text-slate-400">HS 编码</div>
-            <input value={hs} onChange={(e) => setHs(e.target.value)} className="w-full rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono" />
+            <HsCodeInput value={hs} onChange={setHs} />
           </label>
           <label className="col-span-2">
             <div className="mb-1 text-[10px] uppercase text-slate-400">品名 *</div>

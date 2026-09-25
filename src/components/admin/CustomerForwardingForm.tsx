@@ -8,6 +8,7 @@ import {
   listCustomerItems,
   createCustomerForwarding,
 } from "@/lib/admin-customer-view.functions";
+import { HsCodeInput } from "@/components/HsCodeInput";
 import { Loader2, Plus, Trash2, Send, Package } from "lucide-react";
 
 // 代客发起集运（完整表单）：与客户端 /forwarding 页面同样的字段与
@@ -349,11 +350,9 @@ export function CustomerForwardingForm({ userId }: { userId: string }) {
                 <label className="block text-[11px] text-slate-500">
                   HS 编码
                   {star("hscode")}
-                  <input
-                    value={it.hscode}
-                    onChange={(e) => patchItem(pi, ii, { hscode: e.target.value })}
-                    className={`mt-1 ${inputCls}`}
-                  />
+                  <div className="mt-1">
+                    <HsCodeInput value={it.hscode} onChange={(digits) => patchItem(pi, ii, { hscode: digits })} />
+                  </div>
                 </label>
                 <label className="block text-[11px] text-slate-500">
                   数量

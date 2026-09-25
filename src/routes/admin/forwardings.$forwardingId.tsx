@@ -1,4 +1,7 @@
 import { SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
+import { HsCodeInput } from "@/components/HsCodeInput";
+import { toast } from "sonner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -709,6 +712,8 @@ function ItemsCustomerCard({
       const raw = draft[k];
       if (["quantity", "unit_price_cad", "unit_price_cny", "box_count", "inner_qty"].includes(k)) {
         p[k] = raw === "" || raw == null ? (["box_count", "inner_qty"].includes(k) ? null : 0) : Number(raw);
+      } else if (k === "hs_code") {
+        p[k] = normalizeHsCodeForStorage(raw) ?? "";
       } else {
         p[k] = (raw ?? "").toString();
       }
@@ -716,12 +721,21 @@ function ItemsCustomerCard({
     return p;
   };
   const save = async () => {
+    let patch: any;
+    try {
+      patch = buildPatch();
+    } catch (e: any) {
+      toast.error(e.message ?? "保存失败");
+      return;
+    }
     setBusy(true);
     try {
-      if (adding) await addFn({ data: { forwardingId, patch: buildPatch() } });
-      else if (editId) await updFn({ data: { itemId: editId, patch: buildPatch() } });
+      if (adding) await addFn({ data: { forwardingId, patch } });
+      else if (editId) await updFn({ data: { itemId: editId, patch } });
       cancel();
       onChanged();
+    } catch (e: any) {
+      toast.error(e.message ?? "保存失败");
     } finally {
       setBusy(false);
     }
@@ -753,6 +767,9 @@ function ItemsCustomerCard({
       const unit = Number(draft.unit_price_cad || 0);
       const qty = Number(draft.quantity || 0);
       return <span className="text-emerald-300">{unit > 0 && qty > 0 ? `C$${(unit * qty).toFixed(2)}` : "—"}</span>;
+    }
+    if (k === "hs_code") {
+      return <HsCodeInput value={draft.hs_code} onChange={(digits) => setDraft((d) => ({ ...d, hs_code: digits }))} />;
     }
     const isNum = ["quantity", "unit_price_cad", "unit_price_cny", "box_count", "inner_qty"].includes(k);
     return (

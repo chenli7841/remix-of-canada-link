@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { recordAdminLog } from "@/lib/admin-log";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 
 async function assertStaffOrSelf(supabase: any, userId: string, targetUserId: string) {
   if (userId === targetUserId) return;
@@ -68,7 +69,7 @@ export const upsertCustomerHsItem = createServerFn({ method: "POST" })
       unit_price_cad: data.unit_price_cad ?? null,
       items_per_carton: data.items_per_carton ?? null,
       ctns: data.ctns ?? null,
-      hs_code: (data.hs_code ?? "").trim() || null,
+      hs_code: normalizeHsCodeForStorage(data.hs_code),
       note: data.note ?? null,
     };
     if (!payload.description) throw new Error("品名不能为空");
@@ -146,15 +147,23 @@ export const bulkImportCustomerHsItems = createServerFn({ method: "POST" })
     await assertStaffOrSelf(context.supabase, context.userId, data.user_id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const rows = (data.rows ?? [])
-      .map((r) => ({
-        user_id: data.user_id,
-        sku: r.sku ?? null,
-        description: (r.description ?? "").trim(),
-        unit_price_cad: r.unit_price_cad ?? null,
-        items_per_carton: r.items_per_carton ?? null,
-        ctns: r.ctns ?? null,
-        hs_code: (r.hs_code ?? "").trim() || null,
-      }))
+      .map((r, i) => {
+        let hs_code: string | null;
+        try {
+          hs_code = normalizeHsCodeForStorage(r.hs_code);
+        } catch {
+          throw new Error(`第 ${i + 1} 行 HS 编码格式不正确（必须是 10 位数字）：${r.hs_code}`);
+        }
+        return {
+          user_id: data.user_id,
+          sku: r.sku ?? null,
+          description: (r.description ?? "").trim(),
+          unit_price_cad: r.unit_price_cad ?? null,
+          items_per_carton: r.items_per_carton ?? null,
+          ctns: r.ctns ?? null,
+          hs_code,
+        };
+      })
       .filter((r) => r.description);
     if (data.replace) {
       const { error: delErr } = await supabaseAdmin.from("customer_hs_items").delete().eq("user_id", data.user_id);

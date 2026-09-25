@@ -1,6 +1,7 @@
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
+import { normalizeHsCodeForStorage } from "./hs-code-format";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -519,7 +520,7 @@ function buildFwdItemPatch(p: FwdItemPatch) {
   if (p.box_count !== undefined) patch.box_count = p.box_count == null || p.box_count === ("" as any) ? null : Number(p.box_count);
   if (p.inner_qty !== undefined) patch.inner_qty = p.inner_qty == null || p.inner_qty === ("" as any) ? null : Number(p.inner_qty);
   if (p.hs_code !== undefined) {
-    const code = (p.hs_code ?? "").replace(/\s+/g, "").trim() || null;
+    const code = normalizeHsCodeForStorage(p.hs_code);
     patch.hs_code = code;
     patch.hs_confirmed = !!code;
     patch.hs_matched = code ? "manual" : "none";

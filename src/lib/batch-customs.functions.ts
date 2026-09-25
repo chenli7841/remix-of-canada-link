@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { loadAllHsCodes } from "@/lib/duty.server";
+import { selectByIds } from "@/lib/orders.functions";
+import { isCompleteHsCode, normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 import { z } from "zod";
 import { recordAdminLog } from "@/lib/admin-log";
 
@@ -64,50 +66,57 @@ function parseJson(raw: string): any {
   return JSON.parse(match[0]);
 }
 
+// A large batch's pallet/carton/waybill/order id lists can run into the
+// hundreds. Every lookup here used a single unchunked .in() over all of
+// them, serializing into a query string long enough that Supabase's edge in
+// front of PostgREST rejects it with a bare "Bad Request" — no JSON body, so
+// it fails silently as far as the caller's `.data` is concerned on some
+// paths, which is how a large batch could show "HS Code 已齐全" while most
+// of its items had never actually been looked at. selectByIds() (shared with
+// orders.functions.ts's computeBatchFeeSummary) pages every one of these.
 async function batchWaybills(admin: any, batchId: string) {
   const [{ data: pallets }, { data: directCartons }] = await Promise.all([
     admin.from("pallets").select("id").eq("batch_id", batchId),
     admin.from("cartons").select("id").eq("batch_id", batchId),
   ]);
   const palletIds = (pallets ?? []).map((p: any) => p.id);
-  const { data: nestedCartons } = palletIds.length
-    ? await admin.from("cartons").select("id").in("pallet_id", palletIds)
-    : { data: [] };
-  const cartonIds = Array.from(new Set([...(directCartons ?? []), ...(nestedCartons ?? [])].map((c: any) => c.id)));
-  const queries: any[] = [admin.from("waybills").select("*").eq("assigned_batch_id", batchId)];
-  if (palletIds.length) queries.push(admin.from("waybills").select("*").in("pallet_id", palletIds));
-  if (cartonIds.length) queries.push(admin.from("waybills").select("*").in("carton_id", cartonIds));
-  const results = await Promise.all(queries);
-  for (const r of results) if (r.error) throw new Error(r.error.message);
-  return Array.from(new Map(results.flatMap((r) => r.data ?? []).map((w: any) => [w.id, w])).values()) as any[];
+  const nestedCartons = await selectByIds(admin, "cartons", "id", "pallet_id", palletIds);
+  const cartonIds = Array.from(new Set([...(directCartons ?? []), ...nestedCartons].map((c: any) => c.id)));
+  const { data: direct, error } = await admin.from("waybills").select("*").eq("assigned_batch_id", batchId);
+  if (error) throw new Error(error.message);
+  const [viaPallet, viaCarton] = await Promise.all([
+    selectByIds(admin, "waybills", "*", "pallet_id", palletIds),
+    selectByIds(admin, "waybills", "*", "carton_id", cartonIds),
+  ]);
+  return Array.from(new Map([...(direct ?? []), ...viaPallet, ...viaCarton].map((w: any) => [w.id, w])).values()) as any[];
 }
 
-async function loadCustomsItems(admin: any, batchId: string) {
+// Item rows only — no hs_codes library lookup. Used by the readiness check,
+// which per the HS-code architecture only reads each item's own stored
+// hs_code and never re-matches against the library at batch time.
+async function loadCustomsItemRows(admin: any, batchId: string) {
   const waybills = await batchWaybills(admin, batchId);
   const forwardingIds = Array.from(new Set(waybills.map((w) => w.forwarding_id).filter(Boolean)));
   const orderIds = Array.from(new Set(waybills.map((w) => w.order_id).filter(Boolean)));
-  const [{ data: forwardingOrders }, { data: forwardingItems }, { data: orders }, { data: orderItems }, hsRows] =
-    await Promise.all([
-      forwardingIds.length
-        ? admin.from("forwarding_orders").select("id,customer_code,box_count").in("id", forwardingIds)
-        : Promise.resolve({ data: [] }),
-      forwardingIds.length
-        ? admin.from("forwarding_items").select("*").in("forwarding_id", forwardingIds)
-        : Promise.resolve({ data: [] }),
-      orderIds.length
-        ? admin.from("orders").select("id,customer_code,box_count,fx_rate").in("id", orderIds)
-        : Promise.resolve({ data: [] }),
-      orderIds.length ? admin.from("order_items").select("*").in("order_id", orderIds) : Promise.resolve({ data: [] }),
-      loadAllHsCodes(admin, "hs_code,name_zh,name_en,aliases,material,origin,unit,is_active", { activeOnly: true }),
-    ]);
-  return {
-    waybills,
-    forwardingOrders: forwardingOrders ?? [],
-    forwardingItems: forwardingItems ?? [],
-    orders: orders ?? [],
-    orderItems: orderItems ?? [],
-    hsRows: hsRows ?? [],
-  };
+  const [forwardingItems, orderItems] = await Promise.all([
+    selectByIds(admin, "forwarding_items", "*", "forwarding_id", forwardingIds),
+    selectByIds(admin, "order_items", "*", "order_id", orderIds),
+  ]);
+  return { waybills, forwardingIds, orderIds, forwardingItems, orderItems };
+}
+
+// Adds forwarding_orders/orders (for customer_code/box_count) and the full
+// HS library — needed by autoMatchBatchHsCodes (the one place matching
+// still happens) and getBatchInvoiceExport (display name/material/origin
+// lookup by an already-resolved code, not matching).
+async function loadCustomsItems(admin: any, batchId: string) {
+  const { waybills, forwardingIds, orderIds, forwardingItems, orderItems } = await loadCustomsItemRows(admin, batchId);
+  const [forwardingOrders, orders, hsRows] = await Promise.all([
+    selectByIds(admin, "forwarding_orders", "id,customer_code,box_count", "id", forwardingIds),
+    selectByIds(admin, "orders", "id,customer_code,box_count,fx_rate", "id", orderIds),
+    loadAllHsCodes(admin, "hs_code,name_zh,name_en,aliases,material,origin,unit,is_active", { activeOnly: true }),
+  ]);
+  return { waybills, forwardingOrders, forwardingItems, orders, orderItems, hsRows };
 }
 
 function normalizeHs(v: unknown) {
@@ -138,18 +147,21 @@ function localMatch(name: string, hsRows: any[]) {
   return fuzzy ? { row: fuzzy, source: "local_fuzzy" } : null;
 }
 
+// Reads each item's own stored hs_code only — no hs_codes library query.
+// Per the HS-code architecture: matching happens once, at autoMatchBatchHsCodes
+// (or customer/staff entry), and is persisted there; every batch-level
+// consumer after that just trusts what's on the row.
 export const getBatchCustomsReadiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { batchId: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const loaded = await loadCustomsItems(supabaseAdmin, data.batchId);
-    const codeSet = new Set(loaded.hsRows.map((h: any) => normalizeHs(h.hs_code)));
-    const fwdMissing = loaded.forwardingItems.filter((i: any) => !codeSet.has(normalizeHs(i.hs_code)));
-    const orderMissing = loaded.orderItems.filter((i: any) => !codeSet.has(normalizeHs(attrs(i).hs_code)));
+    const { forwardingItems, orderItems } = await loadCustomsItemRows(supabaseAdmin, data.batchId);
+    const fwdMissing = forwardingItems.filter((i: any) => !isCompleteHsCode(i.hs_code));
+    const orderMissing = orderItems.filter((i: any) => !isCompleteHsCode(attrs(i).hs_code));
     return {
-      item_count: loaded.forwardingItems.length + loaded.orderItems.length,
+      item_count: forwardingItems.length + orderItems.length,
       missing_count: fwdMissing.length + orderMissing.length,
       missing_names: [...fwdMissing, ...orderMissing].map((i: any) => i.name ?? i.name_zh ?? "未命名").slice(0, 20),
     };
@@ -163,14 +175,15 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const loaded = await loadCustomsItems(supabaseAdmin, data.batchId);
     const codeMap = new Map(loaded.hsRows.map((h: any) => [normalizeHs(h.hs_code), h]));
-    const pending = loaded.forwardingItems.filter((i: any) => !codeMap.has(normalizeHs(i.hs_code)));
+    // Already has a complete code on the row — trust it, don't re-match.
+    const pending = loaded.forwardingItems.filter((i: any) => !isCompleteHsCode(i.hs_code));
     let local = 0;
     let ai = 0;
     const unresolved: any[] = [];
     for (const item of pending) {
       const hit = localMatch(String(item.name ?? ""), loaded.hsRows);
       if (hit?.source === "local_exact") {
-        await supabaseAdmin.from("forwarding_items").update({ hs_code: hit.row.hs_code }).eq("id", item.id);
+        await supabaseAdmin.from("forwarding_items").update({ hs_code: normalizeHsCodeForStorage(hit.row.hs_code) }).eq("id", item.id);
         local++;
       } else unresolved.push(item);
     }
@@ -185,16 +198,19 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
         for (const choice of parsed?.items ?? []) {
           const code = normalizeHs(choice?.hs_code);
           const source = unresolved.find((i: any) => i.id === choice?.id);
-          if (!source || Number(choice?.confidence ?? 0) < 0.75 || !codeMap.has(code)) continue;
-          await supabaseAdmin.from("forwarding_items").update({ hs_code: code }).eq("id", source.id);
+          const matchedRow = codeMap.get(code);
+          if (!source || Number(choice?.confidence ?? 0) < 0.75 || !matchedRow) continue;
+          // Store the library's own canonical (dotted) hs_code, not the AI's
+          // raw digit string — keeps every row in the one 0000.00.00.00 shape.
+          await supabaseAdmin.from("forwarding_items").update({ hs_code: normalizeHsCodeForStorage(matchedRow.hs_code) }).eq("id", source.id);
           ai++;
         }
       } catch {
         // Local matches remain valid; unresolved rows stay untouched for manual review.
       }
     }
-    const readiness = await loadCustomsItems(supabaseAdmin, data.batchId);
-    const missing = readiness.forwardingItems.filter((i: any) => !codeMap.has(normalizeHs(i.hs_code))).length;
+    const { forwardingItems: refreshed } = await loadCustomsItemRows(supabaseAdmin, data.batchId);
+    const missing = refreshed.filter((i: any) => !isCompleteHsCode(i.hs_code)).length;
     return { local_matched: local, ai_matched: ai, missing_count: missing };
   });
 

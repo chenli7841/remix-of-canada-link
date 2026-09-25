@@ -16,6 +16,8 @@ import { startWechatBind, unbindWechat } from "@/lib/wechat.functions";
 import { generateWechatAiBindCode } from "@/lib/wechat-ai-bind.functions";
 import { toast } from "sonner";
 import { TrackingTimeline } from "@/components/tracking-timeline";
+import { HsCodeInput } from "@/components/HsCodeInput";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 import {
   User,
   MapPin,
@@ -2272,7 +2274,13 @@ function MyItemsTab() {
   const save = async () => {
     if (!editing) return;
     if (!editing.name?.trim()) return toast.error(tr("请填写物品名称", "Enter an item name"));
-    if (!editing.hs_code?.trim()) return toast.error(tr("请填写 HS 编码", "Enter an HS code"));
+    let hsCode: string | null;
+    try {
+      hsCode = normalizeHsCodeForStorage(editing.hs_code);
+    } catch (e: any) {
+      return toast.error(e.message ?? tr("HS 编码格式不正确", "Invalid HS code format"));
+    }
+    if (!hsCode) return toast.error(tr("请填写完整的 HS 编码", "Enter a complete HS code"));
     setBusy(true);
     const {
       data: { user },
@@ -2281,7 +2289,6 @@ function MyItemsTab() {
       setBusy(false);
       return;
     }
-    const hsCode = editing.hs_code.trim().replace(/\s+/g, "");
 
     // Postgres cancels statements after 8s; a cold/busy DB can trip this on the
     // very first write. Retry transparently instead of showing a scary error.
@@ -2390,11 +2397,7 @@ function MyItemsTab() {
               />
             </Field>
             <Field label="HS Code">
-              <input
-                className={inputCls}
-                value={editing.hs_code ?? ""}
-                onChange={(e) => setEditing({ ...editing, hs_code: e.target.value })}
-              />
+              <HsCodeInput value={editing.hs_code} onChange={(digits) => setEditing({ ...editing, hs_code: digits })} />
             </Field>
             <Field label="SKU">
               <input

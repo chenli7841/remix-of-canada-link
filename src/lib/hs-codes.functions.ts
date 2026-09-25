@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { recordAdminLog } from "@/lib/admin-log";
+import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -102,7 +103,7 @@ export const upsertHsCode = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const code = data.hs_code.replace(/\s+/g, "").trim();
+    const code = normalizeHsCodeForStorage(data.hs_code);
     if (!code) throw new Error("HS 编码不能为空");
     const payload: any = {
       hs_code: code,
@@ -212,6 +213,7 @@ export const setForwardingItemHs = createServerFn({ method: "POST" })
   .inputValidator((d: { item_id: string; hs_code: string | null }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
+    const code = normalizeHsCodeForStorage(data.hs_code);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin
       .from("forwarding_items")
@@ -220,7 +222,7 @@ export const setForwardingItemHs = createServerFn({ method: "POST" })
       .maybeSingle();
     const { error } = await supabaseAdmin
       .from("forwarding_items")
-      .update({ hs_code: data.hs_code || null, hs_confirmed: !!data.hs_code, hs_matched: data.hs_code ? "manual" : "none" })
+      .update({ hs_code: code, hs_confirmed: !!code, hs_matched: code ? "manual" : "none" })
       .eq("id", data.item_id);
     if (error) throw new Error(error.message);
     await recordAdminLog(supabaseAdmin, {
