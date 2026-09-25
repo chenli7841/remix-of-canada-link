@@ -27,7 +27,7 @@ export const getWecomNotifyStatus = createServerFn({ method: "GET" })
     return {
       configured: wecomNotifyConfigured(config),
       enabled: wecomNotifyEnabled(),
-      usingGateway: config.apiBaseUrl !== "https://qyapi.weixin.qq.com/cgi-bin",
+      usingGateway: Boolean(config.gatewayUrl),
     };
   });
 
@@ -65,11 +65,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
     await assertOwner(context.supabase, context.userId);
     if (!wecomNotifyConfigured())
       throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法同步");
-    if (!wecomNotifyEnabled()) {
-      throw new Error(
-        "WECOM_ENABLED=false（测试环境默认关闭），未完成企业微信授权与可信出口 IP 联调前不能同步真实群数据",
-      );
-    }
+    // 群同步是只读操作，允许在发送总开关关闭时执行。WECOM_ENABLED 只控制发送。
     const { listExternalGroups } = await import("@/lib/wecom-notify/client.server");
     const groups = await listExternalGroups();
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {

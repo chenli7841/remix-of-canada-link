@@ -60,7 +60,7 @@ function WecomNotifyPage() {
             <div>
               WECOM_ENABLED = {status?.enabled ? "true" : "false"}
               {!status?.enabled && "（默认关闭）"}
-              ——关闭状态下「同步群列表」和「真实发送」均不可用，只能做绑定管理、发送预览和管理员主动连接测试，不会产生真实推送。
+              ——关闭状态下禁止真实发送；连接测试、只读同步群列表、绑定管理和发送预览仍可使用，不会产生真实推送。
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@ function WecomNotifyPage() {
       </div>
 
       {tab === "bindings" && <BindingsTab enabled={!!status?.enabled} />}
-      {tab === "groups" && <GroupsTab enabled={!!status?.enabled} />}
+      {tab === "groups" && <GroupsTab enabled={!!status?.configured} />}
       {tab === "compose" && <ComposeTab />}
       {tab === "history" && <HistoryTab enabled={!!status?.enabled} />}
     </Page>
@@ -139,7 +139,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
         <button
           onClick={doSync}
           disabled={!enabled || syncing}
-          title={enabled ? undefined : "WECOM_ENABLED=false，未开启真实接口调用"}
+          title={enabled ? undefined : "网关或企业微信凭证尚未配置"}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
         >
           {syncing ? (
@@ -173,7 +173,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             {groupsQ.isSuccess && rows.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
-                  尚未同步任何群{!enabled && "（当前 WECOM_ENABLED=false，无法同步）"}
+                  尚未同步任何群{!enabled && "（网关或企业微信凭证尚未配置）"}
                 </td>
               </tr>
             )}

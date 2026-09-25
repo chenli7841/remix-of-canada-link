@@ -11,6 +11,8 @@ export type WecomNotifyConfig = {
   callbackToken: string;
   callbackAesKey: string;
   apiBaseUrl: string;
+  gatewayUrl: string;
+  gatewaySharedSecret: string;
 };
 
 export function wecomNotifyConfig(): WecomNotifyConfig {
@@ -23,6 +25,8 @@ export function wecomNotifyConfig(): WecomNotifyConfig {
     apiBaseUrl: (
       process.env["WECOM_API_BASE_URL"] ?? "https://qyapi.weixin.qq.com/cgi-bin"
     ).replace(/\/$/, ""),
+    gatewayUrl: (process.env["WECOM_GATEWAY_URL"] ?? "").replace(/\/$/, ""),
+    gatewaySharedSecret: process.env["WECOM_GATEWAY_SHARED_SECRET"] ?? "",
   };
 }
 
@@ -31,7 +35,10 @@ export function wecomNotifyCallbackConfigured(c: WecomNotifyConfig = wecomNotify
 }
 
 export function wecomNotifyConfigured(c: WecomNotifyConfig = wecomNotifyConfig()): boolean {
-  return Boolean(c.corpId && c.agentId && c.secret);
+  return Boolean(
+    (c.gatewayUrl && c.gatewaySharedSecret) ||
+    (c.corpId && c.agentId && c.secret),
+  );
 }
 
 /**

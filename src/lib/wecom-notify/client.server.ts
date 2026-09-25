@@ -14,11 +14,37 @@
  * 文档重新确认一遍。
  */
 import { wecomNotifyConfig } from "./config.server";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 
 const REQUEST_TIMEOUT_MS = 12_000;
 const TOKEN_ROW_ID = "notify";
 
 let memToken: { token: string; expiresAt: number } | null = null;
+
+async function gatewayCall<T>(path: string, payload: unknown): Promise<T | null> {
+  const { gatewayUrl, gatewaySharedSecret } = wecomNotifyConfig();
+  if (!gatewayUrl) return null;
+  if (!gatewaySharedSecret) throw new Error("wecom_gateway_secret_not_configured");
+  const body = JSON.stringify(payload);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = randomBytes(18).toString("base64url");
+  const bodyHash = createHash("sha256").update(body, "utf8").digest("hex");
+  const canonical = ["POST", path, timestamp, nonce, bodyHash].join("\n");
+  const signature = createHmac("sha256", gatewaySharedSecret).update(canonical).digest("hex");
+  const response = await fetchWithTimeout(`${gatewayUrl}${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-eplus-timestamp": timestamp,
+      "x-eplus-nonce": nonce,
+      "x-eplus-signature": signature,
+    },
+    body,
+  });
+  const result: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.error ?? `wecom_gateway_http_${response.status}`);
+  return result as T;
+}
 
 async function admin(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -102,6 +128,8 @@ async function callApi(path: string, body: unknown, retry = true): Promise<any> 
 }
 
 export async function testWecomConnection(): Promise<{ ok: true }> {
+  const gateway = await gatewayCall<{ ok: boolean }>("/v1/wecom/test", {});
+  if (gateway) return { ok: true };
   await getAccessToken(true);
   return { ok: true };
 }
@@ -116,6 +144,17 @@ export type WecomExternalGroup = {
 // 会发网络请求：调用方必须先确认 wecomNotifyEnabled()。
 // 客户群列表 + 详情：externalcontact/groupchat/list + externalcontact/groupchat/get。
 export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
+  const gateway = await gatewayCall<{
+    groups: Array<{ chatId: string; name: string; ownerUserId: string | null; memberCount: number }>;
+  }>("/v1/wecom/groups/sync", {});
+  if (gateway) {
+    return gateway.groups.map((group) => ({
+      chat_id: group.chatId,
+      name: group.name,
+      owner_userid: group.ownerUserId,
+      member_count: group.memberCount,
+    }));
+  }
   const groups: WecomExternalGroup[] = [];
   let cursor = "";
   for (let page = 0; page < 50; page++) {
@@ -158,6 +197,13 @@ export async function sendGroupMsgTemplate(params: {
   chatIds: string[];
   content: string;
 }): Promise<{ ok: boolean; msgid?: string; raw: any }> {
+  const gateway = await gatewayCall<{ ok: boolean; msgid: string }>("/v1/wecom/messages", {
+    request_id: randomUUID(),
+    sender_user_id: params.senderUserId,
+    chat_ids: params.chatIds,
+    content: params.content,
+  });
+  if (gateway) return { ok: true, msgid: gateway.msgid, raw: gateway };
   const json = await callApi("/externalcontact/add_msg_template", {
     chat_type: "group",
     sender: params.senderUserId,
@@ -177,6 +223,11 @@ export async function getGroupMsgSendResult(params: {
   msgid: string;
   senderUserId: string;
 }): Promise<WecomGroupSendResult> {
+  const gateway = await gatewayCall<WecomGroupSendResult>("/v1/wecom/messages/status", {
+    msgid: params.msgid,
+    sender_user_id: params.senderUserId,
+  });
+  if (gateway) return gateway;
   const json = await callApi("/externalcontact/get_groupmsg_send_result", {
     msgid: params.msgid,
     userid: params.senderUserId,
