@@ -193,7 +193,12 @@ export async function createShipOrder(admin: any, partnerKey: string, body: any)
   if (!body || typeof body !== "object") fail("INVALID_REQUEST", "请求体不是合法 JSON 对象");
 
   const errors: FieldError[] = [];
-  const domesticNumber = requireStr(body, "domesticNumber", errors);
+  // 国内单号按原值精确存储和匹配（契约 §2：不自动去空格或改变字符）——首尾带空白
+  // 直接拒绝，而不是悄悄 trim 后存成另一个号码，导致之后按原值查询 404。
+  const rawDomesticNumber = body?.domesticNumber;
+  const domesticNumber = typeof rawDomesticNumber === "string" ? rawDomesticNumber : "";
+  if (!domesticNumber.trim()) errors.push({ path: "domesticNumber", message: "必填" });
+  else if (domesticNumber !== domesticNumber.trim()) errors.push({ path: "domesticNumber", message: "首尾不能包含空白字符" });
   const externalCustomerId = requireStr(body, "externalCustomerId", errors);
   const routeCode = requireStr(body, "routeCode", errors);
   const schemaVersion = requireStr(body, "schemaVersion", errors);

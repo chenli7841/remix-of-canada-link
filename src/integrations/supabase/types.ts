@@ -5432,7 +5432,12 @@ export type Database = {
         Returns: Json
       }
       ship_delete_forwarding_order: {
-        Args: { _domestic_number: string; _partner_key: string }
+        Args: {
+          _domestic_number: string
+          _expected_fo_updated_at: string
+          _expected_waybills: Json
+          _partner_key: string
+        }
         Returns: Json
       }
       ship_update_forwarding_order: {
@@ -5440,6 +5445,8 @@ export type Database = {
           _box_known: boolean
           _destination: string
           _domestic_number: string
+          _expected_fo_updated_at: string
+          _expected_waybills: Json
           _items: Json
           _note: string
           _packages: Json

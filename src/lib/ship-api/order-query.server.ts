@@ -53,6 +53,36 @@ export async function computeOrderLockState(admin: any, order: PartnerOrderRow):
     : { editable: true, deletable: true, lockReason: null };
 }
 
+// editToken 所依据的原始快照。PUT/DELETE 把它原样传给 RPC，由 SQL 在锁住主单和
+// 全部箱子后逐项比对——令牌核验和写入必须在同一事务里，只在这里比对哈希挡不住
+// 两个带同一令牌的并发请求。
+export type OrderTokenSnapshot = {
+  editToken: string;
+  foUpdatedAt: string;
+  waybills: { id: string; updated_at: string }[];
+};
+
+export async function loadOrderTokenSnapshot(admin: any, order: PartnerOrderRow): Promise<OrderTokenSnapshot> {
+  const { data: fo, error: foErr } = await admin
+    .from("forwarding_orders")
+    .select("updated_at")
+    .eq("id", order.forwarding_id)
+    .maybeSingle();
+  if (foErr) throw foErr;
+  if (!fo) throw new ShipApiError("ORDER_NOT_FOUND", "运单不存在");
+  const { data: wbs, error: wbErr } = await admin
+    .from("waybills")
+    .select("id, updated_at")
+    .eq("forwarding_id", order.forwarding_id);
+  if (wbErr) throw wbErr;
+  const waybills = ((wbs ?? []) as any[]).map((w) => ({ id: w.id as string, updated_at: w.updated_at as string }));
+  return {
+    editToken: computeOrderEditToken({ updated_at: fo.updated_at }, waybills),
+    foUpdatedAt: fo.updated_at,
+    waybills,
+  };
+}
+
 // 稳定对外状态映射：只用契约里声明的这几个值，不向 Shipper 暴露内部枚举含义。
 function mapStatus(foStatus: string, lock: OrderLockState, boxKnown: boolean, hasWaybills: boolean): { status: string; statusText: string } {
   if (!lock.editable) {

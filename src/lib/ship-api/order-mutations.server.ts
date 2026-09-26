@@ -5,7 +5,7 @@
 // 真正的安全边界，两者不是同一件事，不能只做前者。见
 // docs/ship-api/shipper-api-v3.md 第 7、8 节。
 import { ShipApiError } from "./auth.server";
-import { assembleOrderResponse, resolvePartnerOrder } from "./order-query.server";
+import { assembleOrderResponse, computeOrderLockState, loadOrderTokenSnapshot, resolvePartnerOrder } from "./order-query.server";
 import { resolveShipRoute, validateItemsPayload } from "./orders.server";
 
 function str(v: unknown): string {
@@ -48,12 +48,13 @@ export async function updateShipOrder(
   }
 
   const order = await resolvePartnerOrder(admin, partnerKey, domesticNumber);
-  const current = await assembleOrderResponse(admin, order, { includeFees: false });
-  if (current.editToken !== ifMatch) {
+  const snapshot = await loadOrderTokenSnapshot(admin, order);
+  if (snapshot.editToken !== ifMatch) {
     throw new ShipApiError("VERSION_CONFLICT", "editToken 已过期，请重新查询后再提交");
   }
-  if (!current.editable) {
-    throw new ShipApiError("ORDER_LOCKED", current.lockReason ?? "订单已锁定，无法修改");
+  const lock = await computeOrderLockState(admin, order);
+  if (!lock.editable) {
+    throw new ShipApiError("ORDER_LOCKED", lock.lockReason ?? "订单已锁定，无法修改");
   }
 
   const errors: { path: string; message: string }[] = [];
@@ -89,10 +90,13 @@ export async function updateShipOrder(
       items: p.items.map((it) => ({ name: it.name, quantity: it.quantity, unit_price_cad: it.unit_price_cad })),
     })),
     _items: normalizedItems.map((it) => ({ name: it.name, quantity: it.quantity, unit_price_cad: it.unit_price_cad, extras: it.extras })),
+    _expected_fo_updated_at: snapshot.foUpdatedAt,
+    _expected_waybills: snapshot.waybills,
   });
   if (rpcErr) {
     const code = (rpcErr as any).code as string | undefined;
     if (code === "PT404") throw new ShipApiError("ORDER_NOT_FOUND", "运单不存在");
+    if (code === "PT412") throw new ShipApiError("VERSION_CONFLICT", "editToken 已过期，请重新查询后再提交");
     if (code === "PT409") throw new ShipApiError("ORDER_LOCKED", "订单已锁定，无法修改");
     if (code === "PT422") throw new ShipApiError("VALIDATION_FAILED", rpcErr.message ?? "请求校验失败");
     throw rpcErr;
@@ -116,21 +120,25 @@ export async function deleteShipOrder(
   ifMatch: string,
 ): Promise<{ status: number; data: any }> {
   const order = await resolvePartnerOrder(admin, partnerKey, domesticNumber);
-  const current = await assembleOrderResponse(admin, order, { includeFees: false });
-  if (current.editToken !== ifMatch) {
+  const snapshot = await loadOrderTokenSnapshot(admin, order);
+  if (snapshot.editToken !== ifMatch) {
     throw new ShipApiError("VERSION_CONFLICT", "editToken 已过期，请重新查询后再提交");
   }
-  if (!current.deletable) {
-    throw new ShipApiError("ORDER_LOCKED", current.lockReason ?? "订单已锁定，无法删除");
+  const lock = await computeOrderLockState(admin, order);
+  if (!lock.deletable) {
+    throw new ShipApiError("ORDER_LOCKED", lock.lockReason ?? "订单已锁定，无法删除");
   }
 
   const { data: rpcResult, error: rpcErr } = await admin.rpc("ship_delete_forwarding_order", {
     _partner_key: partnerKey,
     _domestic_number: domesticNumber,
+    _expected_fo_updated_at: snapshot.foUpdatedAt,
+    _expected_waybills: snapshot.waybills,
   });
   if (rpcErr) {
     const code = (rpcErr as any).code as string | undefined;
     if (code === "PT404") throw new ShipApiError("ORDER_NOT_FOUND", "运单不存在");
+    if (code === "PT412") throw new ShipApiError("VERSION_CONFLICT", "editToken 已过期，请重新查询后再提交");
     if (code === "PT409") throw new ShipApiError("ORDER_LOCKED", "订单已锁定，无法删除");
     throw rpcErr;
   }

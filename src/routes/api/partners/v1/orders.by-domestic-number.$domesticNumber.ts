@@ -27,7 +27,7 @@ export const Route = createFileRoute("/api/partners/v1/orders/by-domestic-number
       GET: async ({ request, params }) =>
         withShipApiHandler(async () => {
           const auth = await authenticateShipApi(request, ["orders:read"]);
-          const domesticNumber = decodeURIComponent(params.domesticNumber ?? "").trim();
+          const domesticNumber = decodeURIComponent(params.domesticNumber ?? ""); // 精确匹配，不去空格（契约 §2）
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const admin = supabaseAdmin as any;
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/api/partners/v1/orders/by-domestic-number
       PUT: async ({ request, params }) =>
         withShipApiHandler(async () => {
           const auth = await authenticateShipApi(request, ["orders:write"]);
-          const domesticNumber = decodeURIComponent(params.domesticNumber ?? "").trim();
+          const domesticNumber = decodeURIComponent(params.domesticNumber ?? ""); // 精确匹配，不去空格（契约 §2）
           const idempotencyKey = requireIdempotencyKey(request);
           const ifMatch = requireIfMatch(request);
 
@@ -72,7 +72,7 @@ export const Route = createFileRoute("/api/partners/v1/orders/by-domestic-number
       DELETE: async ({ request, params }) =>
         withShipApiHandler(async () => {
           const auth = await authenticateShipApi(request, ["orders:write"]);
-          const domesticNumber = decodeURIComponent(params.domesticNumber ?? "").trim();
+          const domesticNumber = decodeURIComponent(params.domesticNumber ?? ""); // 精确匹配，不去空格（契约 §2）
           const idempotencyKey = requireIdempotencyKey(request);
           const ifMatch = requireIfMatch(request);
 

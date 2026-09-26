@@ -137,3 +137,59 @@ export async function sendEmtNotifyEmail(supabaseAdmin: any, input: EmtEmailInpu
     attachments,
   });
 }
+
+// 后台「现在充值」入账成功后回复客户：沿用提交申请时那封邮件的主题（加 Re:），
+// Gmail 按主题把它归到同一会话里，客户看到的就是对原申请邮件的回复。
+export async function sendEmtCreditedEmail(
+  supabaseAdmin: any,
+  input: { toEmail: string; customerName: string; customerCode: string | null; amountCad: number; reference: string },
+) {
+  const { data: rows } = await supabaseAdmin
+    .from("app_settings")
+    .select("key, value")
+    .in("key", ["contact_email_notify", "emt_email_notify"]);
+  const map = new Map<string, any>((rows ?? []).map((r: any) => [r.key, r.value ?? {}]));
+  const mail = (map.get("contact_email_notify") ?? {}) as { from_email?: string };
+  const tpl = (map.get("emt_email_notify") ?? {}) as { subject_template?: string };
+
+  const from = mail.from_email;
+  const appPassword = process.env.GMAIL_APP_PASSWORD;
+  if (!from || !appPassword) throw new Error("邮件未配置（发件邮箱或 GMAIL_APP_PASSWORD 缺失）");
+
+  const vars: Record<string, string> = {
+    name: input.customerName,
+    amount: input.amountCad.toFixed(2),
+    customer_code: input.customerCode || "—",
+    reference: input.reference,
+  };
+  const render = (t: string) => t.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, k: string) => vars[k] ?? "");
+  const subject = `Re: ${render(tpl.subject_template?.trim() || EMT_DEFAULT_SUBJECT)}`;
+  const text = [
+    `${input.customerName} 您好，`,
+    "",
+    "这个充值订单已充值，请查收。",
+    "",
+    `充值金额：CA$${vars.amount}`,
+    `客户号：${vars.customer_code}`,
+    `参考编号：${vars.reference}`,
+    "",
+    "— — — — — — — — — —",
+    "",
+    `Dear ${input.customerName},`,
+    "",
+    "This top-up has been credited to your wallet. Please check your balance.",
+    "",
+    `Amount: CA$${vars.amount}`,
+    `Customer No.: ${vars.customer_code}`,
+    `Reference: ${vars.reference}`,
+    "",
+    "EPLUS International Services Inc.",
+  ].join("\n");
+
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
+    service: "gmail",
+    auth: { user: from, pass: appPassword },
+  });
+  await transporter.sendMail({ from, to: input.toEmail, subject, text });
+}

@@ -6,6 +6,7 @@ import { listWalletLedger, type LedgerKind } from "@/lib/wallet-ledger.functions
 import {
   listRechargeApplications,
   confirmEmtTopup,
+  rechargeEmtNow,
   voidTopup,
   queryOttTopup,
   getRechargeProofUrl,
@@ -45,7 +46,7 @@ function WalletLedgerPage() {
           <Wallet className="h-5 w-5 text-blue-400" />
           钱包流水
         </h1>
-        <p className="mt-1 text-sm text-slate-400">充值 / 扣款流水明细，以及充值申请记录（EMT / OTT 待处理确认）</p>
+        <p className="mt-1 text-sm text-slate-400">充值 / 扣款流水明细，以及待处理充值（EMT / OTT 待处理确认）</p>
       </div>
       <div className="mb-4 flex gap-2">
         <button
@@ -60,7 +61,7 @@ function WalletLedgerPage() {
           className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold ${view === "apps" ? "bg-blue-600 text-white" : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
         >
           <ClipboardList className="h-4 w-4" />
-          充值申请记录
+          待处理充值
         </button>
       </div>
       {view === "apps" ? <RechargeApplications /> : <LedgerView />}
@@ -308,7 +309,7 @@ function LedgerView() {
   );
 }
 
-// ============================ 充值申请记录 ============================
+// ============================ 待处理充值 ============================
 const APP_STATUS_LABEL: Record<string, string> = {
   pending: "正在充值",
   completed: "已充值",
@@ -332,6 +333,7 @@ function RechargeApplications() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listRechargeApplications);
   const doConfirmEmt = useServerFn(confirmEmtTopup);
+  const doRechargeNow = useServerFn(rechargeEmtNow);
   const doVoid = useServerFn(voidTopup);
   const doQueryOtt = useServerFn(queryOttTopup);
   const getProof = useServerFn(getRechargeProofUrl);
@@ -340,7 +342,8 @@ function RechargeApplications() {
   const [refNo, setRefNo] = useState("");
   const [paymentId, setPaymentId] = useState("");
   const [channel, setChannel] = useState("all");
-  const [status, setStatus] = useState("all");
+  // 默认只看「正在充值」——这是员工需要处理的；其他状态从筛选里切换
+  const [status, setStatus] = useState("pending");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -386,6 +389,32 @@ function RechargeApplications() {
       await refresh();
     } catch (e: any) {
       setMsg({ kind: "err", text: e?.message ?? "确认失败" });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onRechargeNow = async (r: any) => {
+    if (
+      !window.confirm(
+        `现在给客户 ${r.customer_code ?? r.customer_name ?? ""} 充值 CA${r.amount_cad.toFixed(2)}？
+备注「emt充值」，入账后回复客户邮件「这个充值订单已充值，请查收」。
+入账不可自动撤销。`,
+      )
+    )
+      return;
+    setBusyId(r.id);
+    setMsg(null);
+    try {
+      const res: any = await doRechargeNow({ data: { txId: r.id } });
+      setMsg(
+        res.emailSent
+          ? { kind: "ok", text: `已充值 CA${r.amount_cad.toFixed(2)}，并已邮件通知客户` }
+          : { kind: "warn", text: `已充值 CA${r.amount_cad.toFixed(2)}，但邮件未发出（${res.emailError}），请手动联系客户` },
+      );
+      await refresh();
+    } catch (e: any) {
+      setMsg({ kind: "err", text: e?.message ?? "充值失败" });
     } finally {
       setBusyId(null);
     }
@@ -615,13 +644,23 @@ function RechargeApplications() {
                   <td className="px-3 py-2.5">
                     <div className="flex flex-col gap-1">
                       {pending && r.channel === "emt" && (
-                        <button
-                          disabled={busy}
-                          onClick={() => onConfirmEmt(r)}
-                          className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-                        >
-                          {busy ? "处理中…" : "确认到账"}
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            disabled={busy}
+                            onClick={() => onConfirmEmt(r)}
+                            className="flex-1 rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                          >
+                            {busy ? "处理中…" : "确认到账"}
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => onRechargeNow(r)}
+                            title="入账（备注 emt充值）并回复客户邮件"
+                            className="flex-1 whitespace-nowrap rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+                          >
+                            {busy ? "处理中…" : "现在充值"}
+                          </button>
+                        </div>
                       )}
                       {pending && r.is_ott && (
                         <button

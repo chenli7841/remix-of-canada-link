@@ -136,6 +136,51 @@ export const confirmEmtTopup = createServerFn({ method: "POST" })
     return res as { ok: true; status: string; rows_changed: number };
   });
 
+// EMT「现在充值」：跟确认到账走同一个原子操作（pending → completed，只加一次余额），
+// 备注固定为「emt充值」；本次确实入账后再回复客户邮件。邮件失败不回滚入账，只把
+// 失败原因带回前端提示员工手动联系客户。
+export const rechargeEmtNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { txId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertManager(context.supabase, context.userId);
+    const { data: res, error } = await (context.supabase as any).rpc("wallet_recharge_action", {
+      _payload: { op: "emt_confirm", tx_id: data.txId, reason: "emt充值" },
+    });
+    if (error) throw new Error(error.message);
+    if (!res?.ok || res?.rows_changed !== 1) {
+      throw new Error(`该记录已不是待处理状态（当前：${res?.status ?? "未知"}），未重复入账`);
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: tx } = await supabaseAdmin
+      .from("wallet_transactions")
+      .select("user_id, amount_cad, ref_no")
+      .eq("id", data.txId)
+      .maybeSingle();
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("email, full_name, customer_code")
+      .eq("id", (tx as any)?.user_id)
+      .maybeSingle();
+    const toEmail = (profile as any)?.email as string | undefined;
+    if (!toEmail) return { ok: true as const, emailSent: false, emailError: "客户没有邮箱" };
+    try {
+      const { sendEmtCreditedEmail } = await import("@/lib/wallet.server");
+      await sendEmtCreditedEmail(supabaseAdmin, {
+        toEmail,
+        customerName: ((profile as any)?.full_name as string) || toEmail,
+        customerCode: ((profile as any)?.customer_code as string) ?? null,
+        amountCad: Number((tx as any)?.amount_cad ?? 0),
+        reference: ((tx as any)?.ref_no as string) || "—",
+      });
+      return { ok: true as const, emailSent: true, emailError: null as string | null };
+    } catch (e: any) {
+      console.error("[wallet/emt] failed to send credited email:", e?.message ?? e);
+      return { ok: true as const, emailSent: false, emailError: (e?.message as string) ?? "邮件发送失败" };
+    }
+  });
+
 // 「标记无效」：pending/failed → failed 或 cancelled，不动钱包余额
 export const voidTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
