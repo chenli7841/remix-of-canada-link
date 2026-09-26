@@ -179,12 +179,23 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
     const pending = loaded.forwardingItems.filter((i: any) => !isCompleteHsCode(i.hs_code));
     let local = 0;
     let ai = 0;
+    let library_errors = 0;
     const unresolved: any[] = [];
     for (const item of pending) {
       const hit = localMatch(String(item.name ?? ""), loaded.hsRows);
       if (hit?.source === "local_exact") {
-        await supabaseAdmin.from("forwarding_items").update({ hs_code: normalizeHsCodeForStorage(hit.row.hs_code) }).eq("id", item.id);
-        local++;
+        // hit.row comes straight from the hs_codes library — normally already
+        // valid, but one malformed reference row (hand-edited before this
+        // format was enforced) must not take down every other item's match
+        // in the same run.
+        try {
+          const code = normalizeHsCodeForStorage(hit.row.hs_code);
+          await supabaseAdmin.from("forwarding_items").update({ hs_code: code }).eq("id", item.id);
+          local++;
+        } catch {
+          library_errors++;
+          unresolved.push(item);
+        }
       } else unresolved.push(item);
     }
     if (unresolved.length) {
@@ -202,8 +213,14 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
           if (!source || Number(choice?.confidence ?? 0) < 0.75 || !matchedRow) continue;
           // Store the library's own canonical (dotted) hs_code, not the AI's
           // raw digit string — keeps every row in the one 0000.00.00.00 shape.
-          await supabaseAdmin.from("forwarding_items").update({ hs_code: normalizeHsCodeForStorage(matchedRow.hs_code) }).eq("id", source.id);
-          ai++;
+          // Per-item try/catch: one malformed library row must not abort the
+          // rest of this AI batch's otherwise-good matches.
+          try {
+            await supabaseAdmin.from("forwarding_items").update({ hs_code: normalizeHsCodeForStorage(matchedRow.hs_code) }).eq("id", source.id);
+            ai++;
+          } catch {
+            library_errors++;
+          }
         }
       } catch {
         // Local matches remain valid; unresolved rows stay untouched for manual review.
@@ -211,7 +228,7 @@ export const autoMatchBatchHsCodes = createServerFn({ method: "POST" })
     }
     const { forwardingItems: refreshed } = await loadCustomsItemRows(supabaseAdmin, data.batchId);
     const missing = refreshed.filter((i: any) => !isCompleteHsCode(i.hs_code)).length;
-    return { local_matched: local, ai_matched: ai, missing_count: missing };
+    return { local_matched: local, ai_matched: ai, missing_count: missing, library_errors };
   });
 
 export const extractBatchHbl = createServerFn({ method: "POST" })

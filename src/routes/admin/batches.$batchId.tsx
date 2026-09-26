@@ -201,8 +201,11 @@ function BatchDetail() {
   const onAutoMatchHs = async () => {
     setHsBusy(true);
     try {
-      const result = await matchHsCodes({ data: { batchId } });
+      const result: any = await matchHsCodes({ data: { batchId } });
       toast.success(`本地匹配 ${result.local_matched} 条，AI匹配 ${result.ai_matched} 条，剩余 ${result.missing_count} 条`);
+      if (result.library_errors) {
+        toast.warning(`${result.library_errors} 条命中了 HS 编码库里格式不正确的记录，已跳过，请到 HS 编码库检查并修正后重新匹配`, { duration: 12000 });
+      }
       await qc.invalidateQueries({ queryKey: ["batch-customs-readiness", batchId] });
     } catch (e: any) {
       toast.error(e?.message ?? "HS Code 自动匹配失败");
