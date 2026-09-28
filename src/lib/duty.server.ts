@@ -10,6 +10,7 @@ export type HsMatchSource = "manual" | "name" | "alias" | "fuzzy" | "none";
 
 export type DutyItemRow = {
   forwarding_item_id: string | null;
+  order_item_id?: string | null;
   name: string;
   hs_code: string | null;
   hs_matched: HsMatchSource;
@@ -329,14 +330,17 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
   {
     const { data } = await admin
       .from("order_items")
-      .select("id, name_zh, name_en, subtotal_cny, quantity, product_id")
+      .select("id, name_zh, name_en, subtotal_cny, quantity, product_id, hs_code")
       .eq("waybill_id", wb.id);
     items = data ?? [];
   }
   if (items.length === 0) {
+    const {count,error}=await admin.from("waybills").select("id",{count:"exact",head:true}).eq("order_id",wb.order_id);
+    if(error)throw new Error(error.message);
+    if((count??0)>1)throw new Error(`订单有多个运单，但 ${wb.waybill_no||wb.id} 未关联物品，不能把整单商品重复计税`);
     const { data } = await admin
       .from("order_items")
-      .select("id, name_zh, name_en, subtotal_cny, quantity, product_id")
+      .select("id, name_zh, name_en, subtotal_cny, quantity, product_id, hs_code")
       .eq("order_id", wb.order_id);
     items = data ?? [];
   }
@@ -346,11 +350,15 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
   if (productIds.length) {
     const { data } = await admin
       .from("products")
-      .select("id, customs_mfn_rate, customs_gst_rate, customs_antidumping_rate")
+      .select("id, hs_code, customs_mfn_rate, customs_gst_rate, customs_antidumping_rate")
       .in("id", productIds);
     products = data ?? [];
   }
   const productMap = new Map(products.map((p: any) => [p.id, p]));
+  const hsCodes=[...new Set(items.map(it=>it.hs_code||productMap.get(it.product_id)?.hs_code).filter(Boolean))];
+  const {data: hsRows,error: hsError}=hsCodes.length ? await admin.from("hs_codes").select("hs_code,mfn_rate,gst_rate,anti_dumping_rate").in("hs_code",hsCodes) : {data:[],error:null};
+  if(hsError)throw new Error(hsError.message);
+  const hsMap=new Map<string,any>((hsRows??[]).map((h:any)=>[h.hs_code,h]));
 
   let fx = 0.19;
   try {
@@ -380,14 +388,19 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
     const valueCad = +(Number(it.subtotal_cny ?? 0) * fx).toFixed(2);
     declared_total += valueCad;
     const prod = it.product_id ? productMap.get(it.product_id) : null;
-    const mfn = Number(prod?.customs_mfn_rate ?? 0);
-    const gst = Number(prod?.customs_gst_rate ?? 0);
-    const ad = Number(prod?.customs_antidumping_rate ?? 0);
+    const code=it.hs_code||prod?.hs_code||null;
+    const hs=code?hsMap.get(code):null;
+    if(code&&!hs)throw new Error(`HS编码 ${code} 不在编码库中`);
+    const mfn = Number(hs?.mfn_rate ?? prod?.customs_mfn_rate ?? 0);
+    const gst = Number(hs?.gst_rate ?? prod?.customs_gst_rate ?? 0);
+    const ad = Number(hs?.anti_dumping_rate ?? prod?.customs_antidumping_rate ?? 0);
+    if(![mfn,gst,ad].every(v=>Number.isFinite(v)&&v>=0))throw new Error(`商品 ${it.name_zh} 的HS税率无效`);
     rows.push({
       forwarding_item_id: null,
+      order_item_id: it.id,
       name: it.name_zh || it.name_en || "—",
-      hs_code: null,
-      hs_matched: "none",
+      hs_code: code,
+      hs_matched: code ? "manual" : "none",
       box_count: 1,
       quantity_total: qty,
       quantity_per_waybill: qty,
@@ -437,6 +450,7 @@ export async function computeOrderWaybillDutyBreakdown(admin: any, wb: any): Pro
 export async function persistWaybillItems(
   admin: any,
   wbOrId: any,
+  prepared?: DutyBreakdown,
 ): Promise<{ items: number; duty_cad: number }> {
   let row = wbOrId;
   if (typeof wbOrId === "string" || !wbOrId?.id) {
@@ -451,7 +465,7 @@ export async function persistWaybillItems(
     row = data;
   }
 
-  const br = await computeAnyWaybillDutyBreakdown(admin, row);
+  const br = prepared ?? await computeAnyWaybillDutyBreakdown(admin, row);
   if (br.customs_enabled && br.items.some(it => it.tax_rate_valid === false)) {
     throw new Error("HS税率存在无效值，须核对后才能保存关税；原费用未覆盖");
   }
@@ -459,7 +473,7 @@ export async function persistWaybillItems(
   const rows = br.items.map((it) => ({
     waybill_id: row.id,
     forwarding_item_id: it.forwarding_item_id ?? null,
-    order_item_id: null as string | null, // 电商侧 order_item 关联在 Phase 2 补
+    order_item_id: it.order_item_id ?? null,
     name: it.name ?? "",
     hs_code: it.hs_code ?? null,
     hs_matched: it.hs_matched ?? "none",
@@ -475,19 +489,25 @@ export async function persistWaybillItems(
     duty_applied: !!it.duty_applied,
   }));
 
-  await admin.from("waybill_items").delete().eq("waybill_id", row.id);
+  const {error:deleteError}=await admin.from("waybill_items").delete().eq("waybill_id", row.id);
+  if(deleteError)throw new Error(deleteError.message);
   if (rows.length) {
     const { error } = await admin.from("waybill_items").insert(rows);
     if (error) throw new Error(error.message);
   }
 
   const dutyTotal = +Number(br.duty_cad ?? 0).toFixed(2);
-  await admin.from("waybills").update({ duty_cad: dutyTotal }).eq("id", row.id);
+  const {error:saveError}=await admin.from("waybills").update({ duty_cad: dutyTotal }).eq("id", row.id);
+  if(saveError)throw new Error(saveError.message);
 
   // 回写父 forwarding_items（HS 匹配是逐品名的，与运单拆分无关）
   for (const it of br.items) {
+    if(it.order_item_id){
+      const {error}=await admin.from("order_items").update({hs_code:it.hs_code,hs_confirmed:it.hs_matched==='manual',mfn_rate:it.mfn_rate,gst_rate:it.gst_rate,anti_dumping_rate:it.anti_dumping_rate,declared_value_cad:it.declared_value_cad,duty_cad:it.duty_cad}).eq("id",it.order_item_id);
+      if(error)throw new Error(error.message);
+    }
     if (!it.forwarding_item_id) continue;
-    await admin
+    const {error:parentError}=await admin
       .from("forwarding_items")
       .update({
         hs_code: it.hs_code ?? null,
@@ -498,6 +518,7 @@ export async function persistWaybillItems(
         anti_dumping_rate: it.anti_dumping_rate ?? null,
       })
       .eq("id", it.forwarding_item_id);
+    if(parentError)throw new Error(parentError.message);
   }
 
   return { items: rows.length, duty_cad: dutyTotal };
@@ -514,15 +535,29 @@ export async function persistWaybillItemsForParent(
   if (parent.forwarding_id) q = q.eq("forwarding_id", parent.forwarding_id);
   else if (parent.order_id) q = q.eq("order_id", parent.order_id);
   else return 0;
-  const { data: wbs } = await q;
+  const { data: wbs, error } = await q;
+  if(error)throw new Error(error.message);
+  let loaded: DutyInputs | undefined;
+  if(parent.forwarding_id) {
+    const [{data:fo,error:foError},{data:fi,error:fiError},hs,{data:settings,error:fxError}]=await Promise.all([
+      admin.from("forwarding_orders").select("id,box_count,route_id").eq("id",parent.forwarding_id).single(),
+      admin.from("forwarding_items").select("*").eq("forwarding_id",parent.forwarding_id),
+      loadAllHsCodes(admin,"hs_code,name_zh,name_en,aliases,mfn_rate,gst_rate,anti_dumping_rate"),
+      admin.from("app_settings").select("value").eq("key","fx_rate").maybeSingle(),
+    ]);
+    if(foError||fiError||fxError)throw new Error((foError||fiError||fxError).message);
+    const {data:customs,error:crError}=fo.route_id?await admin.from("customs_rules").select("enabled,threshold_cad").eq("route_id",fo.route_id).maybeSingle():{data:null,error:null};
+    if(crError)throw new Error(crError.message);
+    const cny=Number(settings?.value?.cny_per_cad);
+    loaded={fo,fi,hs,hsIndex:buildHsIndex(hs),customs,fx:cny>0?1/cny:0.19};
+  }
+  // Validate the entire parent's calculations before overwriting any snapshots.
+  const prepared: DutyBreakdown[]=[];
+  for(const wb of wbs??[])prepared.push(loaded?await computeWaybillDutyBreakdown(admin,wb,loaded):await computeAnyWaybillDutyBreakdown(admin,wb));
   let n = 0;
-  for (const wb of (wbs ?? []) as any[]) {
-    try {
-      await persistWaybillItems(admin, wb);
-      n++;
-    } catch (e) {
-      console.error("persistWaybillItems failed for waybill", wb.id, e);
-    }
+  for (const [i,wb] of ((wbs ?? []) as any[]).entries()) {
+    await persistWaybillItems(admin, wb, prepared[i]);
+    n++;
   }
   return n;
 }

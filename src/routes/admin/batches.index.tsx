@@ -108,6 +108,7 @@ function BatchesPage() {
   // （海运 + tor → 只显示去 tor 的海运）。客户号需要查库，单独一个查询取交集。
   const [methodFilter, setMethodFilter] = useState<Set<BatchMethod>>(new Set());
   const [destFilter, setDestFilter] = useState<Set<string>>(new Set());
+  const [showClosed, setShowClosed] = useState(false);
   const [customerCodeInput, setCustomerCodeInput] = useState("");
   const [debouncedCode, setDebouncedCode] = useState("");
   useEffect(() => {
@@ -133,6 +134,7 @@ function BatchesPage() {
 
   const filteredBatches = useMemo(() => {
     return allBatches.filter((b) => {
+      if (!showClosed && b.status === "closed") return false;
       if (methodFilter.size > 0 && !methodFilter.has(b.shipping_method)) return false;
       if (destFilter.size > 0 && !destFilter.has(b.destination_code)) return false;
       // 客户号搜索还没查回来之前，宁可先不显示（避免一瞬间闪出一批不该显示的批次），
@@ -143,11 +145,15 @@ function BatchesPage() {
       }
       return true;
     });
-  }, [allBatches, methodFilter, destFilter, debouncedCode, customerBatchIds, codeQ.isLoading]);
+  }, [allBatches, showClosed, methodFilter, destFilter, debouncedCode, customerBatchIds, codeQ.isLoading]);
 
   useEffect(() => {
     setPage(1);
-  }, [methodFilter, destFilter, debouncedCode]);
+  }, [showClosed, methodFilter, destFilter, debouncedCode]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredBatches.length / pageSize))));
+  }, [filteredBatches.length]);
 
   const toggleMethod = (m: BatchMethod) => {
     setMethodFilter((prev) => {
@@ -222,6 +228,15 @@ function BatchesPage() {
             ))}
           </div>
         )}
+        <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={showClosed}
+            onChange={(e) => setShowClosed(e.target.checked)}
+            className="h-4 w-4 accent-brand"
+          />
+          显示已关闭批次
+        </label>
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
           <input

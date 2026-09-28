@@ -1,3 +1,4 @@
+import { loadBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
@@ -2159,8 +2160,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   // 集运运单：computeWaybillDutyBreakdown（与 waybills.duty_cad 落库完全一致）
   // 电商订单：order_items × products.hs_code / hs_codes 名称匹配
   const { computeWaybillDutyBreakdown, buildHsIndex, matchHsForName, loadAllHsCodes } = await import("./duty.server");
-  const allHs = await loadAllHsCodes(admin, "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate");
-  const hsIndex = buildHsIndex((allHs ?? []) as any[]);
+  let allHs: any[] = [];
 
   const itemsByKey = new Map<string, Map<string, any>>(); // key → "name|hs" → merged row
   const unmatchedByKey = new Map<string, Set<string>>();
@@ -2191,7 +2191,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   }
 
   // ---- 集运侧：优先读 waybill_items 快照，无则回退现算 ----
-  const fwdWbIds = allWbs.filter((w) => w.forwarding_id).map((w) => w.id);
+  const fwdWbIds = allWbs.map((w) => w.id);
   const wiByWb = new Map<string, any[]>();
   for (const r of await selectByIds(admin, "waybill_items", "*", "waybill_id", fwdWbIds)) {
     const arr = wiByWb.get(r.waybill_id) ?? [];
@@ -2199,6 +2199,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     wiByWb.set(r.waybill_id, arr);
   }
   const missingParents = [...new Set(allWbs.filter((w) => w.forwarding_id && !wiByWb.has(w.id)).map((w) => w.forwarding_id))];
+  if(missingParents.length)allHs=await loadAllHsCodes(admin, "hs_code, name_zh, name_en, aliases, mfn_rate, gst_rate, anti_dumping_rate");
+  const hsIndex=buildHsIndex(allHs);
   const [fallbackParentRows, fallbackItemRows] = await Promise.all([
     selectByIds(admin, "forwarding_orders", "id,box_count,route_id", "id", missingParents),
     selectByIds(
@@ -2245,7 +2247,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         }))
       : (await computeWaybillDutyBreakdown(admin, w, {
           fo: fallbackParentMap.get(w.forwarding_id), fi: fallbackItemMap.get(w.forwarding_id) ?? [],
-          hs: allHs, customs: fallbackCustomsMap.get(fallbackParentMap.get(w.forwarding_id)?.route_id), fx,
+          hs: allHs, hsIndex, customs: fallbackCustomsMap.get(fallbackParentMap.get(w.forwarding_id)?.route_id), fx,
         })).items;
     for (const it of items) {
       if (!it.hs_code) markUnmatched(key, it.name);
@@ -2266,53 +2268,27 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     }
   }
 
-  // ---- 电商侧：order_items × products.hs_code / 名称匹配 ----
+  // ---- 电商侧同样优先读已保存运单明细；仅旧数据缺快照时回退计算 ----
   {
-    const items = await selectByIds(
-      admin,
-      "order_items",
-      "id, order_id, name_zh, unit_price_cny, quantity, product_id",
-      "order_id",
-      orderIds,
-    );
-    const productIds = Array.from(new Set(items.map((i) => i.product_id).filter(Boolean)));
-    const prodMap = new Map<string, any>();
-    for (const p of await selectByIds(admin, "products", "id, hs_code, pack_qty, name_zh", "id", productIds)) prodMap.set(p.id, p);
-    for (const it of items) {
-      const order = oMap.get(it.order_id) as any;
+    const {computeOrderWaybillDutyBreakdown}=await import('./duty.server');
+    for (const w of allWbs.filter(w=>w.order_id&&!w.forwarding_id)) {
+      const order = oMap.get(w.order_id) as any;
       const cc = order?.customer_code as string | undefined;
       if (!cc) continue;
       const rc: string | null = order?.route_code ?? null;
       const key = bKey(cc, rc);
-      const prod = it.product_id ? prodMap.get(it.product_id) : null;
-      const explicitHs = prod?.hs_code as string | undefined;
-      const { hs, matched } = matchHsForName(it.name_zh ?? "", hsIndex, explicitHs);
-      const mfn = Number(hs?.mfn_rate ?? 0),
-        gst = Number(hs?.gst_rate ?? 0),
-        ad = Number(hs?.anti_dumping_rate ?? 0);
-      const rate = mfn + gst + ad;
-      const packQty = Number(prod?.pack_qty ?? 1) || 1;
-      const qty = Number(it.quantity ?? 0);
-      const cartonsQty = Math.ceil(qty / packQty);
-      const unitCad = +(Number(it.unit_price_cny ?? 0) * fx).toFixed(4);
-      const declared = +(unitCad * qty).toFixed(2);
-      const duty = +(declared * rate).toFixed(2);
-      if (!hs) markUnmatched(key, it.name_zh ?? "");
+      const stored=wiByWb.get(w.id);
+      const lines=stored?.length?stored:(await computeOrderWaybillDutyBreakdown(admin,w)).items;
+      for(const it of lines){
+      if (!it.hs_code) markUnmatched(key, it.name ?? "");
       addItem(key, {
-        name: it.name_zh,
-        hs_code: hs?.hs_code ?? null,
-        mfn_rate: mfn,
-        gst_rate: gst,
-        anti_dumping_rate: ad,
-        tax_rate: rate,
-        unit_price_cad: unitCad,
-        quantity: qty,
-        cartons_qty: cartonsQty,
-        items_per_carton: packQty,
-        declared_value_cad: declared,
-        duty_cad: duty,
-        _hs_match: matched,
+        name: it.name,
+        hs_code: it.hs_code,
+        mfn_rate: Number(it.mfn_rate??0), gst_rate:Number(it.gst_rate??0), anti_dumping_rate:Number(it.anti_dumping_rate??0), tax_rate:Number(it.tax_rate??0),
+        unit_price_cad:Number(it.unit_price_cad??0), quantity:Number(it.quantity??it.quantity_per_waybill??0), cartons_qty:1,
+        items_per_carton:Number(it.quantity??it.quantity_per_waybill??0),declared_value_cad:Number(it.declared_value_cad??0),duty_cad:Number(it.duty_cad??0),
       });
+      }
     }
   }
 
@@ -3407,22 +3383,15 @@ export const deductWalletForBatchBulk = createServerFn({ method: "POST" })
     const operator_name = await getOperatorName(supabaseAdmin, context.userId);
 
     // 1) 本批全部运单 → 归到客户号（经 orders / forwarding_orders），谁还有未付运单
-    const { data: wbs } = await supabaseAdmin
-      .from("waybills")
-      .select("id, order_id, forwarding_id, payment_status")
-      .eq("assigned_batch_id", data.batchId);
+    const wbs = await loadBatchWaybills(supabaseAdmin, data.batchId);
     const oIds = Array.from(new Set(((wbs ?? []) as any[]).map((w) => w.order_id).filter(Boolean)));
     const fIds = Array.from(new Set(((wbs ?? []) as any[]).map((w) => w.forwarding_id).filter(Boolean)));
-    const [oR, fR] = await Promise.all([
-      oIds.length
-        ? supabaseAdmin.from("orders").select("id, customer_code").in("id", oIds)
-        : Promise.resolve({ data: [] as any[] }),
-      fIds.length
-        ? supabaseAdmin.from("forwarding_orders").select("id, customer_code").in("id", fIds)
-        : Promise.resolve({ data: [] as any[] }),
+    const [orders, forwardings] = await Promise.all([
+      readBatchRowsByIds(supabaseAdmin, "orders", "id, customer_code", "id", oIds),
+      readBatchRowsByIds(supabaseAdmin, "forwarding_orders", "id, customer_code", "id", fIds),
     ]);
-    const oM = new Map(((oR as any).data ?? []).map((o: any) => [o.id, o.customer_code]));
-    const fM = new Map(((fR as any).data ?? []).map((f: any) => [f.id, f.customer_code]));
+    const oM = new Map(orders.map(o => [o.id, o.customer_code]));
+    const fM = new Map(forwardings.map(f => [f.id, f.customer_code]));
     const unpaidByCust = new Set<string>();
     for (const w of (wbs ?? []) as any[]) {
       const cc = (w.order_id && oM.get(w.order_id)) || (w.forwarding_id && fM.get(w.forwarding_id));
@@ -3889,26 +3858,15 @@ async function ensureUnpaidBatchInvoice(
   // 该客户在此批次内未付款的运单。查不到运单不能直接放弃——批次级派送费/检查费
   // 等费用跟运单无关，柜子里哪怕一票运单都没匹配上，这些费用也该照样出账单，
   // 所以这里只收集运单，是否"没什么可收"留到最后按 subCny 统一判断。
-  const [oR, fR] = await Promise.all([
-    admin.from("orders").select("id").eq("customer_code", params.customerCode),
-    admin.from("forwarding_orders").select("id").eq("customer_code", params.customerCode),
+  const [orders, forwardings, batchWaybills] = await Promise.all([
+    readBatchRows(admin, "orders", "id", q => q.eq("customer_code", params.customerCode)),
+    readBatchRows(admin, "forwarding_orders", "id", q => q.eq("customer_code", params.customerCode)),
+    loadBatchWaybills(admin, params.batchId),
   ]);
-  const oIds = ((oR.data ?? []) as any[]).map((o) => o.id);
-  const fIds = ((fR.data ?? []) as any[]).map((f) => f.id);
-  const filters: string[] = [];
-  if (oIds.length) filters.push(`order_id.in.(${oIds.join(",")})`);
-  if (fIds.length) filters.push(`forwarding_id.in.(${fIds.join(",")})`);
-  let wbsAll: any[] = [];
-  if (filters.length) {
-    const { data: wbs } = await admin
-      .from("waybills")
-      .select(
-        "id, waybill_no, order_id, forwarding_id, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, payment_status",
-      )
-      .eq("assigned_batch_id", params.batchId)
-      .or(filters.join(","));
-    wbsAll = (wbs ?? []) as any[];
-  }
+  const oIds = new Set(orders.map(o => o.id));
+  const fIds = new Set(forwardings.map(f => f.id));
+  const hasParents = oIds.size > 0 || fIds.size > 0;
+  const wbsAll = batchWaybills.filter(w => oIds.has(w.order_id) || fIds.has(w.forwarding_id));
   const wbList = wbsAll.filter((w) => w.payment_status !== "paid");
 
   const { buildInvoiceLineMeta } = await import("./duty.server");
@@ -4011,7 +3969,7 @@ async function ensureUnpaidBatchInvoice(
     // - already_paid：柜里的运单都已结清，且没有未收的批次级费用
     // - nothing_to_bill：查到了运单，但费用合计仍是 0（正常情况，比如全免费试运）
     let reason = "nothing_to_bill";
-    if (!filters.length) reason = "no_orders_for_customer";
+    if (!hasParents) reason = "no_orders_for_customer";
     else if (!wbsAll.length) reason = "no_matching_waybills_in_batch";
     else if (!wbList.length) reason = "already_paid";
     return { ok: false, reason };

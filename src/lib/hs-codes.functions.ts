@@ -238,7 +238,7 @@ export const setForwardingItemHs = createServerFn({ method: "POST" })
         const { persistWaybillItemsForParent } = await import("./duty.server");
         await persistWaybillItemsForParent(supabaseAdmin, { forwarding_id: (before as any).forwarding_id });
       } catch (e) {
-        console.error("persistWaybillItemsForParent failed (setForwardingItemHs)", e);
+        throw new Error(`HS编码已保存，但关税重算失败：${e instanceof Error ? e.message : String(e)}`);
       }
     }
     return { ok: true };

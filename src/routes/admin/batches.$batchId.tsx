@@ -301,7 +301,14 @@ function BatchDetail() {
       if (r.skipped_insufficient.length) parts.push(`余额不足跳过 ${r.skipped_insufficient.length}`);
       if (r.skipped_already_paid.length) parts.push(`已结清 ${r.skipped_already_paid.length}`);
       if (r.failed.length) parts.push(`失败 ${r.failed.length}`);
-      toast.success(`批量扣款：${parts.join(" · ")}`);
+      if (r.failed.length) {
+        toast.error(`批量扣款：${parts.join(" · ")}`);
+        toast.error(r.failed.map((f: any) => `${f.customer_code}：${f.reason ?? "未知错误"}`).join("；"), { duration: 15000 });
+      } else if (!r.total) {
+        toast.info("没有符合扣款条件的客户，请检查价格确认和运单付款状态");
+      } else {
+        toast.success(`批量扣款：${parts.join(" · ")}`);
+      }
       if (r.skipped_insufficient.length) {
         toast.info(
           `余额不足跳过：${r.skipped_insufficient

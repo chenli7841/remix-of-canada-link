@@ -11,6 +11,7 @@ import {
   refreshBatchCustomerSnapshot,
 } from "@/lib/orders.functions";
 import { invoiceReasonText } from "@/lib/invoice-reason-text";
+import { setBatchItemHs } from "@/lib/batch-item-hs.functions";
 import { X, Truck, Package, Layers, ChevronDown, ChevronRight, Wallet, Save, AlertTriangle } from "lucide-react";
 
 type Props = {
@@ -30,6 +31,17 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
   const deduct = useServerFn(deductWalletForBatch);
   const deductOffline = useServerFn(deductBatchOffline);
   const refreshSnapshotFn = useServerFn(refreshBatchCustomerSnapshot);
+  const saveHs = useServerFn(setBatchItemHs);
+  const [hsEditing,setHsEditing]=useState<number|null>(null);
+  const [hsCode,setHsCode]=useState("");
+  const [hsBusy,setHsBusy]=useState(false);
+  const [hsMessage,setHsMessage]=useState("");
+  const onSaveHs=async(name:string)=>{
+    setHsBusy(true);setHsMessage("");
+    try {const result=await saveHs({data:{batchId,customerCode,name,hsCode}});setHsEditing(null);setHsMessage(`已保存编码，更新 ${result.waybills} 票运单及相关费用快照`);await qc.invalidateQueries({queryKey:["admin-batch",batchId]});await qc.invalidateQueries({queryKey:["admin-batches"]});}
+    catch(e:any){setHsMessage(e.message);}
+    finally{setHsBusy(false);}
+  };
   const [refreshingSnap, setRefreshingSnap] = useState(false);
 
   const c = customerData ?? {};
@@ -315,6 +327,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                   <div className="mt-1 font-mono text-[11px]">{(c.unmatched_hs_names ?? []).join("、")}</div>
                 </div>
               )}
+              {hsMessage && <div role="status" className="mb-2 text-xs text-amber-200">{hsMessage}</div>}
               {items.length === 0 ? (
                 <div className="py-4 text-center text-xs text-slate-500">该客户在本批次无关税物品</div>
               ) : (
@@ -346,6 +359,13 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                                 <AlertTriangle className="h-3 w-3" />缺
                               </span>
                             )}
+                            {canEdit && <button disabled={hsBusy} className="ml-2 text-brand disabled:opacity-50" onClick={()=>{setHsEditing(i);setHsCode(it.hs_code??"");setHsMessage("");}}>修改</button>}
+                            {hsEditing===i && <div className="mt-2 space-y-1">
+                              <input aria-label={`修改${it.name}的HS编码`} value={hsCode} disabled={hsBusy} onChange={e=>setHsCode(e.target.value)} placeholder="完整HS编码" className="w-36 rounded border border-white/20 bg-slate-900 p-1"/>
+                              <div className="max-w-48 whitespace-normal text-[10px] text-slate-400">更新本客户该品名对应订单的商品编码，并重算运单与批次快照。</div>
+                              <button disabled={hsBusy||!hsCode.trim()} onClick={()=>onSaveHs(it.name)} className="mr-2 text-brand disabled:opacity-50">{hsBusy?"更新中…":"保存并重算"}</button>
+                              <button disabled={hsBusy} onClick={()=>setHsEditing(null)}>取消</button>
+                            </div>}
                           </td>
                           <td className="text-right font-mono text-slate-400">
                             {(Number(it.mfn_rate) * 100).toFixed(2)}%

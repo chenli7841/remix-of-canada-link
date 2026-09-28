@@ -21,7 +21,7 @@ export async function loadPickingSource(admin:any,batchId:string) {
   if(!batch.length)throw new Error('批次不存在');
   const nested=await byIds('cartons','id,carton_no,pallet_id,self_length_cm,self_width_cm,self_height_cm','pallet_id',pallets.map(p=>p.id));
   const cartons=[...new Map([...directCartons,...nested].map(c=>[c.id,c])).values()];
-  const cols='id,waybill_no,forwarding_id,pallet_id,carton_id,items_summary,weight_kg,length_cm,width_cm,height_cm';
+  const cols='id,waybill_no,forwarding_id,order_id,pallet_id,carton_id,items_summary,weight_kg,length_cm,width_cm,height_cm';
   const sets=await Promise.all([
     all('waybills',cols,q=>q.eq('assigned_batch_id',batchId).is('pallet_id',null).is('carton_id',null)),
     byIds('waybills',cols,'pallet_id',pallets.map(p=>p.id)),
