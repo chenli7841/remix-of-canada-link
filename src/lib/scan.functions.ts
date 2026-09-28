@@ -1574,7 +1574,7 @@ export const measureLookup = createServerFn({ method: "POST" })
     const { data: waybills } = await supabaseAdmin
       .from("waybills")
       .select(
-        "id, waybill_no, box_no, mark_no, length_cm, width_cm, height_cm, weight_kg, pallet_id, pallet_no, status, user_id",
+        "id, waybill_no, box_no, mark_no, items_summary, length_cm, width_cm, height_cm, weight_kg, pallet_id, pallet_no, carton_id, status, user_id",
       )
       .eq(parentKind === "order" ? "order_id" : "forwarding_id", parentId)
       .order("created_at", { ascending: true });
@@ -1910,11 +1910,18 @@ async function insertPallet(supabaseAdmin: any, userId: string, p: PalletDraft, 
     (wbInfo ?? []).forEach((w: any) => {
       if (w.forwarding_id) affectedForwardings.add(w.forwarding_id);
     });
-    const { error: e2 } = await supabaseAdmin
+    const { data: assigned, error: e2 } = await supabaseAdmin
       .from("waybills")
       .update({ pallet_id: pal.id, pallet_no: pal.pallet_no })
-      .in("id", p.waybillIds);
+      .in("id", p.waybillIds)
+      .is("pallet_id", null).is("carton_id", null)
+      .select("id");
     if (e2) throw new Error(e2.message);
+    if (assigned?.length !== p.waybillIds.length) {
+      await supabaseAdmin.from("waybills").update({pallet_id:null,pallet_no:null}).eq("pallet_id",pal.id);
+      await supabaseAdmin.from("pallets").delete().eq("id",pal.id);
+      throw new Error("运单装载状态已变化，本托盘未保存，请刷新后重试");
+    }
   }
   // Snapshot pallet self-freight from route rule
   let selfFreight: any = null;
@@ -2019,6 +2026,13 @@ export const measureCreatePalletsBatch = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (!data.pallets?.length) throw new Error("至少创建 1 个托盘");
+    const requestedIds = data.pallets.flatMap(p => p.waybillIds ?? []);
+    if (data.pallets.some(p => !p.waybillIds?.length)) throw new Error("每个托盘必须分配运单");
+    if (data.pallets.some(p => [p.self_length_cm,p.self_width_cm,p.self_height_cm,p.self_weight_kg].some(v => v != null && (!Number.isFinite(v) || Number(v)<=0)))) throw new Error("托盘尺寸和重量可以留空；已填写的数值须大于0");
+    if (new Set(requestedIds).size !== requestedIds.length) throw new Error("同一个运单不能分配到多个托盘");
+    const {data: candidates,error: candidateError} = await supabaseAdmin.from("waybills").select("id,pallet_id,carton_id").in("id",requestedIds);
+    if (candidateError) throw new Error(candidateError.message);
+    if (candidates?.length !== requestedIds.length || candidates.some(w => w.pallet_id || w.carton_id)) throw new Error("部分运单不存在或已装托/装箱，请刷新后重新选择");
     const operatorName = await getOperatorName(supabaseAdmin, context.userId);
     const parity: PalletParity = {
       customer_user_id: data.customer_user_id ?? null,

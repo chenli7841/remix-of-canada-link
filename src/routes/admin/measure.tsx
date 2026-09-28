@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState, useEffect } from "react";
 import { measureLookup, measureSaveDims, measureCreatePalletsBatch, getWaybillsLabelData } from "@/lib/scan.functions";
 import { renderLabel } from "@/lib/label-render";
+import { planPallets } from "@/lib/pallet-allocation";
 import { LabelSizeToggle } from "@/components/admin/LabelSizeToggle";
 import { Page } from "@/lib/admin-shared";
 import { Ruler, Search, Loader2, Copy, Save, Layers, X, CheckSquare, Square, Plus, Trash2, StickyNote } from "lucide-react";
@@ -13,6 +14,8 @@ type Row = {
   id: string; waybill_no: string; box_no: string | null;
   length_cm: number | null; width_cm: number | null; height_cm: number | null; weight_kg: number | null;
   pallet_id: string | null; pallet_no: string | null;
+  carton_id: string | null; mark_no: string | null;
+  items_summary?: {name?: string | null}[] | null;
 };
 
 type PalletForm = {
@@ -24,7 +27,7 @@ type PalletForm = {
 };
 
 const emptyPallet = (): PalletForm => ({
-  boxCount: "1",
+  boxCount: "",
   length_cm: "", width_cm: "", height_cm: "", weight_kg: "",
   self_length_cm: "", self_width_cm: "", self_height_cm: "",
   self_weight_kg: "", self_volume_m3: "",
@@ -155,19 +158,16 @@ function MeasurePage() {
   };
 
   const num = (s: string) => s === "" ? null : Number(s);
+  const allocation = planPallets(rows, selected, palletForms.map(f => f.boxCount));
 
   const submitPallets = async () => {
-    // distribute waybills across pallets: from selected (or unassigned), in order
-    const pool = selected.size
-      ? rows.filter(r => selected.has(r.id)).map(r => r.id)
-      : rows.filter(r => !r.pallet_id).map(r => r.id);
+    if (!allocation.valid) { setMsg({ok:false,text:"请填写每个托盘的正整数运单数，总数不得超过可分配数量"}); return; }
+    if (palletForms.some(f => [f.self_length_cm,f.self_width_cm,f.self_height_cm,f.self_weight_kg].some(v => v !== "" && (!Number.isFinite(Number(v)) || Number(v)<=0)))) { setMsg({ok:false,text:"托盘尺寸和重量可以留空；已填写的数值须大于0"}); return; }
+    const remaining = allocation.available - allocation.total;
+    if (remaining > 0 && !window.confirm(`本次装入 ${allocation.total} 票，仍有 ${remaining} 票未装托。确认本次只装入这些运单？`)) return;
     const drafts: any[] = [];
-    let idx = 0;
-    for (const f of palletForms) {
-      const n = Math.max(0, Math.min(pool.length - idx, parseInt(f.boxCount || "0", 10) || 0));
-      const ids = pool.slice(idx, idx + n);
-      idx += n;
-      if (!ids.length) continue;
+    for (const [i, f] of palletForms.entries()) {
+      const ids = allocation.cards[i].items.map(w => w.id);
       drafts.push({
         waybillIds: ids,
         notes: f.notes || null,
@@ -189,10 +189,12 @@ function MeasurePage() {
         pickup_warehouse: parent?.pickup_warehouse ?? parent?.warehouse ?? null,
         destination_code: parent?.destination_code ?? null,
       }});
-      setMsg({ ok: true, text: `✓ 已创建 ${r.pallets.length} 个托盘` });
+      const refreshed: any = await lookup({data:{code:code.trim()}});
+      setRows(refreshed.waybills);
+      setSelected(new Set());
+      setMsg({ ok: true, text: `✓ 已创建 ${r.pallets.length} 个托盘，装入 ${allocation.total} 票，剩余 ${remaining} 票未装托` });
       setShowPallet(false);
       setPalletForms([emptyPallet()]);
-      await onSearch();
     } catch (err: any) {
       setMsg({ ok: false, text: err.message });
     } finally { setBusy(false); }
@@ -327,7 +329,7 @@ function MeasurePage() {
                 <span className="ml-3">线路: <span className="text-slate-200">{parent?.route_code ?? "—"}</span></span>
                 <span className="ml-3">目的地: <span className="text-slate-200">{parent?.destination_code ?? "—"}</span></span>
                 <span className="ml-3">来源仓: <span className="text-slate-200">{parent?.pickup_warehouse ?? parent?.warehouse ?? "—"}</span></span>
-                <span className="ml-3">可分配: <span className="text-slate-200">{(selected.size || rows.filter(r => !r.pallet_id).length)} 单</span></span>
+                <div className="mt-2">订单共 {rows.length} 票 · 已装托/装箱 {rows.length-allocation.available} 票 · 待分配 {allocation.available} 票 · 本次可选 {allocation.pool.length} 票</div>
               </div>
 
               <div className="space-y-3">
@@ -343,8 +345,8 @@ function MeasurePage() {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-                      <label className="text-[11px] text-slate-400">箱数
-                        <input type="number" min={0} value={f.boxCount}
+                      <label className="text-[11px] text-slate-400">加入运单数（箱数，必填）
+                        <input type="number" min={1} step={1} placeholder="请输入箱数" value={f.boxCount}
                           onChange={(e) => setPalletForms(fs => fs.map((x, idx) => idx === i ? { ...x, boxCount: e.target.value } : x))}
                           className="mt-1 w-full rounded-md border border-brand/40 bg-white/5 px-2 py-1.5 text-sm text-slate-100"/>
                       </label>
@@ -355,13 +357,13 @@ function MeasurePage() {
                       </label>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/80">托盘自身 (决定运费快照 self_freight_cny = 线路规则 × 自身重/体积)</div>
+                      <div className="text-xs text-amber-300">托盘实际尺寸及称重（选填，可稍后补录）</div>
                       <div className="text-[10px] text-slate-500">体积 m³ = 长×宽×高 / 1,000,000 (自动)</div>
                     </div>
                     <div className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-5">
                       {([
-                        ["self_length_cm","自身长 cm"],["self_width_cm","自身宽 cm"],["self_height_cm","自身高 cm"],
-                        ["self_weight_kg","自身重 kg"],
+                        ["self_length_cm","长 cm"],["self_width_cm","宽 cm"],["self_height_cm","高 cm"],
+                        ["self_weight_kg","实际重量 kg"],
                       ] as const).map(([k,label]) => (
                         <label key={k} className="text-[11px] text-slate-400">{label}
                           <input type="number" step="0.001" value={(f as any)[k]}
@@ -382,6 +384,12 @@ function MeasurePage() {
                         <input type="number" step="0.000001" readOnly value={f.self_volume_m3}
                           className="mt-1 w-full rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-sm text-slate-300"/>
                       </label>
+                    </div>
+                    <div className="mt-3 rounded bg-blue-500/10 p-3 text-xs text-blue-200">
+                      订单共 {rows.length} 票；本托盘分配 {allocation.cards[i].items.length} 票。运单重量合计参考：{allocation.cards[i].weight.toFixed(3)} kg
+                      {allocation.cards[i].missingWeight > 0 && <strong className="ml-2 text-amber-300">其中 {allocation.cards[i].missingWeight} 票缺少重量，合计不完整</strong>}
+                      <div className="mt-1">优先同品名，再集中相同重量和长宽高，组内按箱序；超出本托箱数的顺延到下一托。重量或尺寸缺失时不合并该组。</div>
+                      <div className="mt-1">分配明细：{allocation.cards[i].items.map(w => `${w.mark_no || w.waybill_no}（${w.items_summary?.map(it=>it.name).filter(Boolean).join("、") || "品名未填写"}）`).join("；") || "请填写运单数量"}</div>
                     </div>
                     <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                       外尺寸 / 总重 (可选参考 — 含内容物的整体外围值，仅用于登记堆场空间/装柜规划，不参与运费计算)
@@ -405,7 +413,9 @@ function MeasurePage() {
                 </button>
               </div>
 
-              <button onClick={submitPallets} disabled={busy}
+              <div className="mt-4 text-sm text-amber-200">本次装入 {allocation.total} 票 · 剩余 {Math.max(0,allocation.available-allocation.total)} 票未装托{allocation.remaining<0 && " · 数量超出，请修改"}</div>
+              {msg && !msg.ok && <div role="alert" className="mt-2 text-sm text-rose-300">{msg.text}</div>}
+              <button onClick={submitPallets} disabled={busy || !allocation.valid}
                 className="mt-4 w-full rounded-md bg-brand py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                 {busy ? "创建中…" : `创建 ${palletForms.length} 个托盘并加入运单`}
               </button>
