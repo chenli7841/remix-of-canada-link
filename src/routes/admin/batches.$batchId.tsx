@@ -876,6 +876,7 @@ function BatchDetail() {
                   <th className="text-right">运单数</th>
                   <th className="text-right">箱号</th>
                   <th className="text-right">托盘</th>
+                  <th className="text-right">总计费重量 kg</th>
                   <th className="text-right">小计 CA$</th>
                   <th className="text-center">付款</th>
                   <th className="text-right">余额 CA$</th>
@@ -886,7 +887,7 @@ function BatchDetail() {
               <tbody className="divide-y divide-white/5">
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-6 text-center text-xs text-slate-500">
+                    <td colSpan={11} className="py-6 text-center text-xs text-slate-500">
                       没有匹配的客户号
                     </td>
                   </tr>
@@ -913,6 +914,7 @@ function BatchDetail() {
                     <td className="text-right text-xs font-mono">{c.waybill_count}</td>
                     <td className="text-right text-xs font-mono">{c.carton_count}</td>
                     <td className="text-right text-xs font-mono">{c.pallet_count}</td>
+                    <td className="text-right text-xs font-mono">{c.chargeable_weight_kg == null ? "待更新" : Number(c.chargeable_weight_kg).toFixed(3)}</td>
                     <td className="text-right text-xs font-mono font-semibold text-emerald-300">
                       {c.subtotal_cny.toFixed(2)}
                     </td>
@@ -938,7 +940,7 @@ function BatchDetail() {
                               user_id: c.user_id,
                               customer_code: c.customer_code,
                               balance: Number(c.balance_cad ?? 0),
-                              subtotal: Number(c.gross_subtotal_cny ?? c.subtotal_cny ?? 0),
+                              subtotal: Number(c.confirmed_invoice_total_cad ?? c.subtotal_cad ?? 0),
                             });
                             setDeductDiscount(String(Number(c.fee_discount_cad ?? 0)));
                           }}
@@ -1409,7 +1411,7 @@ function BatchDetail() {
             {(() => {
               const sub = Number(deductState.subtotal ?? 0);
               const disc = Math.max(0, Math.min(sub, Number(deductDiscount || 0)));
-              const finalAmt = +(sub - disc).toFixed(2);
+              const finalAmt = sub;
               return (
                 <>
                   <div className="space-y-2 text-xs text-slate-300">
@@ -1428,13 +1430,14 @@ function BatchDetail() {
                       />
                     </label>
                     <label className="block text-slate-400">
-                      折扣 (CAD)
+                      已含折扣 (CAD)
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         max={sub}
                         value={deductDiscount}
+                        disabled
                         onChange={(e) => setDeductDiscount(e.target.value)}
                         className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
                       />
@@ -1470,8 +1473,8 @@ function BatchDetail() {
                     </div>
                     <div className="text-[10px] text-slate-500">
                       {deductMethod === "wallet"
-                        ? "确认后：生成账单并结清 · 记录钱包流水 · 调整钱包余额 · 该客户批次未付运单标记为已付款 · 写入操作记录与物流轨迹 · 折扣计入批次账单明细。"
-                        : "确认后：生成账单并结清 · 记录一条流水（不影响钱包余额）· 该客户批次未付运单标记为已付款 · 写入操作记录与物流轨迹 · 折扣计入批次账单明细。"}
+                        ? "确认后：按已生成账单结清 · 记录钱包流水 · 调整钱包余额 · 该客户批次未付运单标记为已付款 · 写入操作记录与物流轨迹 · 折扣已包含在账单金额内。"
+                        : "确认后：按已生成账单结清 · 记录一条流水（不影响钱包余额）· 该客户批次未付运单标记为已付款 · 写入操作记录与物流轨迹 · 折扣已包含在账单金额内。"}
                     </div>
                   </div>
                   <div className="mt-4 flex justify-end gap-2">
@@ -1494,8 +1497,8 @@ function BatchDetail() {
                                   data: {
                                     batchId,
                                     userId: deductState.user_id,
-                                    amountCad: sub,
-                                    discountCad: disc,
+                                    amountCad: finalAmt,
+                                    discountCad: 0,
                                     note: `批次 ${batch.batch_no} 扣款`,
                                   },
                                 })
@@ -1504,7 +1507,8 @@ function BatchDetail() {
                                     batchId,
                                     userId: deductState.user_id,
                                     method: deductMethod,
-                                    discountCad: disc,
+                                    amountCad: finalAmt,
+                                    discountCad: 0,
                                     refNo: deductRefNo || undefined,
                                     note: `批次 ${batch.batch_no} ${deductMethod === "emt" ? "EMT" : "现金"}收款`,
                                   },
@@ -1512,13 +1516,9 @@ function BatchDetail() {
                           if (r?.ok === false && r.reason === "already_paid") {
                             alert("该客户在本批次已结清");
                           } else if (r?.ok) {
-                            // 服务端按冻结账单金额扣款，可能与页面显示略有出入 —— 以实扣为准
-                            const actual = Number(r.deducted_cad ?? 0);
-                            if (actual > 0 && Math.abs(actual - (sub - disc)) > 0.01) {
-                              alert(
-                                `已按冻结账单结算 CA$${actual.toFixed(2)}（页面预估 CA$${(sub - disc).toFixed(2)}，价格可能已更新）`,
-                              );
-                            }
+                            alert(`已按账单结算 CA$${Number(r.deducted_cad).toFixed(2)}`);
+                          } else {
+                            throw new Error(r?.reason ?? "收款失败");
                           }
                           setDeductState(null);
                           setDeductDiscount("0");

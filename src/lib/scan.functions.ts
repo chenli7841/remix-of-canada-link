@@ -1,3 +1,4 @@
+import { assertSnapshotNumbers } from "./snapshot-validation";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
@@ -1290,16 +1291,12 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
       .maybeSingle(),
     admin.from("customs_rules").select("*").eq("route_id", route_id).maybeSingle(),
   ]);
-  if (!rule)
-    return {
-      freight_cad: 0,
-      duty_cad: 0,
-      insurance_cad: 0,
-      clearance_cad: 0,
-      chargeable_kg: 0,
-      route_id,
-      fx,
-    };
+  if (!rule) throw new Error(`运单 ${wb.waybill_no ?? wb.id}：快照未生成，缺少启用的运费规则`);
+  assertSnapshotNumbers(`运单 ${wb.waybill_no ?? wb.id}`, {
+    运费单价: rule.unit_price_cad ?? rule.unit_price_cny,
+    ...(rule.weight_mode !== "volumetric" ? { 实重: wb.weight_kg } : {}),
+    ...(rule.weight_mode !== "actual" ? { 长: wb.length_cm, 宽: wb.width_cm, 高: wb.height_cm } : {}),
+  });
   const w = Math.max(0, Number(wb.weight_kg ?? 0));
   const L = Number(wb.length_cm ?? 0),
     W = Number(wb.width_cm ?? 0),
@@ -1333,6 +1330,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     insurance_cad,
     clearance_cad: +clearance_cad.toFixed(2),
     chargeable_kg: +chargeable.toFixed(3),
+    weight_snapshot: { chargeable_weight: +chargeable.toFixed(3), actual_weight: w, volumetric_weight: +volW.toFixed(3), freight_cad, duty_cad, insurance_cad, computed_at: new Date().toISOString() },
     route_id,
     fx,
   };
@@ -1360,10 +1358,10 @@ export async function autoSnapshotWaybillFees(
     Number(wb.length_cm ?? 0) > 0 &&
     Number(wb.width_cm ?? 0) > 0 &&
     Number(wb.height_cm ?? 0) > 0;
-  if (!hasDims) return null;
+  if (!hasDims) throw new Error(`运单 ${wb.waybill_no}：未生成费用快照，缺少有效的重量或长宽高；请补齐后重新计算`);
   try {
     const fees = await computeWaybillFeesCad(admin, wb);
-    if (!fees.route_id) return null;
+    if (!fees.route_id) throw new Error(`运单 ${wb.waybill_no}：未生成费用快照，缺少线路`);
     const before = {
       freight_cad: wb.freight_cad,
       duty_cad: wb.duty_cad,
@@ -1379,8 +1377,9 @@ export async function autoSnapshotWaybillFees(
     const changed = (["freight_cad", "duty_cad", "insurance_cad", "clearance_cad"] as const).some(
       (k) => Number(before[k] ?? 0) !== Number(after[k] ?? 0),
     );
+    const { error: saveError } = await admin.from("waybills").update({ ...after, weight_snapshot: fees.weight_snapshot }).eq("id", waybillId);
+    if (saveError) throw new Error(saveError.message);
     if (!changed) return fees;
-    await admin.from("waybills").update(after).eq("id", waybillId);
     await admin.from("admin_action_logs").insert({
       entity_type: "waybill",
       entity_id: waybillId,
@@ -1401,7 +1400,7 @@ export async function autoSnapshotWaybillFees(
       operator_name: operatorName,
       note: `${ctx}: 自动计费失败 — ${e?.message ?? String(e)}`,
     });
-    return null;
+    throw new Error(`运单 ${wb.waybill_no}：费用快照生成失败：${e?.message ?? String(e)}`);
   }
 }
 
@@ -1602,6 +1601,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
     const { computeFreight } = await import("./orders.functions");
     const operatorName = await getOperatorName(supabaseAdmin, context.userId);
     let n = 0;
+    const snapshotWarnings: string[] = [];
     const touchedForwardingIds = new Set<string>();
     const touchedOrderIds = new Set<string>();
     const touchedWaybillIds = new Set<string>();
@@ -1663,16 +1663,19 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         const wbCtx = { ...(before as any), ...patch, id: it.id };
         const fees = await computeWaybillFeesCad(supabaseAdmin, wbCtx);
         if (fees.route_id) {
-          await supabaseAdmin
+          const { error: feeSaveError } = await supabaseAdmin
             .from("waybills")
             .update({
               freight_cad: fees.freight_cad,
               duty_cad: fees.duty_cad,
               insurance_cad: fees.insurance_cad,
               clearance_cad: fees.clearance_cad,
+              weight_snapshot: fees.weight_snapshot,
             })
             .eq("id", it.id);
+          if (feeSaveError) throw new Error(feeSaveError.message);
         } else {
+          snapshotWarnings.push(`运单 ${(before as any)?.waybill_no ?? it.id}：缺少线路，未生成费用快照`);
           await supabaseAdmin.from("admin_action_logs").insert({
             entity_type: "waybill",
             entity_id: it.id,
@@ -1683,6 +1686,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
           });
         }
       } catch (e: any) {
+        snapshotWarnings.push(`运单 ${(before as any)?.waybill_no ?? it.id}：${e?.message ?? String(e)}`);
         await supabaseAdmin.from("admin_action_logs").insert({
           entity_type: "waybill",
           entity_id: it.id,
@@ -1696,7 +1700,8 @@ export const measureSaveDims = createServerFn({ method: "POST" })
       try {
         const { persistWaybillItems } = await import("./duty.server");
         await persistWaybillItems(supabaseAdmin, it.id);
-      } catch (e) {
+      } catch (e: any) {
+        snapshotWarnings.push(`运单 ${(before as any)?.waybill_no ?? it.id}：关税快照失败 ${e?.message ?? String(e)}`);
         console.error("persistWaybillItems failed (measureSaveDims)", it.id, e);
       }
       n++;
@@ -1710,7 +1715,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         .select("id, route_id, declared_value_cad, fee_cny, freight_snapshot, status, box_count, insured")
         .eq("id", fid)
         .maybeSingle();
-      if (!fo?.route_id) continue;
+      if (!fo?.route_id) { snapshotWarnings.push(`订单 ${fid}：缺少线路，未生成费用快照`); continue; }
       const { data: wbs } = await supabaseAdmin
         .from("waybills")
         .select("weight_kg, length_cm, width_cm, height_cm")
@@ -1730,7 +1735,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         tw += wt;
         tv += l * wd * h;
       }
-      if (!complete || tw <= 0 || tv <= 0) continue;
+      if (!complete || tw <= 0 || tv <= 0) { snapshotWarnings.push(`订单 ${fid}：运单重量或长宽高未齐，未生成费用快照`); continue; }
       const snap = await computeFreight(supabaseAdmin, fo.route_id, tw, tv, fo.declared_value_cad ?? null, fo.insured === true);
       if (!snap) continue;
       await supabaseAdmin
@@ -1767,11 +1772,15 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         .select("id, route_id, shipping_cny, customs_cny, insurance_cny, freight_snapshot")
         .eq("id", oid)
         .maybeSingle();
-      if (!ord?.route_id) continue;
+      if (!ord?.route_id) { snapshotWarnings.push(`订单 ${oid}：缺少线路，未生成费用快照`); continue; }
       const { data: wbs } = await supabaseAdmin
         .from("waybills")
-        .select("freight_cad, duty_cad, insurance_cad, clearance_cad, weight_kg, length_cm, width_cm, height_cm")
+        .select("waybill_no, freight_cad, duty_cad, insurance_cad, clearance_cad, weight_kg, length_cm, width_cm, height_cm")
         .eq("order_id", oid);
+      try {
+        if (!wbs?.length) throw new Error(`订单 ${oid}：缺少关联运单`);
+        for (const w of wbs) assertSnapshotNumbers(`运单 ${w.waybill_no}`, { 运费: w.freight_cad, 关税: w.duty_cad, 保费: w.insurance_cad, 清关费: w.clearance_cad, 实重: w.weight_kg, 长: w.length_cm, 宽: w.width_cm, 高: w.height_cm });
+      } catch (e: any) { snapshotWarnings.push(e.message); continue; }
       let f = 0,
         du = 0,
         ins = 0,
@@ -1841,7 +1850,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, updated: n, autoFees, autoOrderFees };
+    return { ok: true, updated: n, autoFees, autoOrderFees, snapshotWarnings };
   });
 
 // Create new pallet and auto-assign first N waybills (in order) of a parent

@@ -815,7 +815,7 @@ function BatchesTab({ userId }: { userId: string }) {
         const known = r?.reason ? REASON_MSG[r.reason as string] : undefined;
         setMsg({ kind: r?.reason === "already_paid" || r?.reason === "nothing_to_pay" ? "ok" : "err", text: known ?? r?.reason ?? "付款失败" });
       } else {
-        setMsg({ kind: "ok", text: `付款成功 CA$${r.deducted_cad}，账单已生成` });
+        setMsg({ kind: "ok", text: `付款成功 CA$${r.deducted_cad}，账单已结清` });
       }
       await qc.invalidateQueries({ queryKey: ["admin-customer-batches", userId] });
       await qc.invalidateQueries({ queryKey: ["admin-customer-overview", userId] });
@@ -875,6 +875,7 @@ function BatchesTab({ userId }: { userId: string }) {
                 <div className="ml-auto text-right">
                   <div className="text-[10px] uppercase tracking-wider text-slate-500">
                     {b.is_paid ? "批次合计" : "批次待付"}
+                    <span className="ml-3">总计费重量：{b.chargeable_weight_kg == null ? "待更新" : `${b.chargeable_weight_kg.toFixed(3)} kg`}</span>
                   </div>
                   {b.subtotal_cad === null ? (
                     <div className="text-xs font-medium text-amber-400">
@@ -894,6 +895,7 @@ function BatchesTab({ userId }: { userId: string }) {
                       {it.kind === "order" ? "商城" : "集运"}
                     </span>
                     <span className="font-mono text-slate-300">{it.no}</span>
+                    <span className="text-slate-400">计费重量：{it.chargeable_weight_kg == null ? "待更新" : `${it.chargeable_weight_kg.toFixed(3)} kg`}</span>
                     {it.tracking_no && <span className="text-slate-500">· {it.tracking_no}</span>}
                     <span
                       className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${it.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}

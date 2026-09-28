@@ -94,7 +94,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
     deliveryAmt +
     inspAmt
   ).toFixed(2);
-  const finalDeduct = Math.max(0, +(subtotal - discAmt).toFixed(2));
+  const finalDeduct = confirmed ? Number(c.confirmed_invoice_total_cad ?? c.subtotal_cad) : Math.max(0, +(subtotal - discAmt).toFixed(2));
 
   const onSave = async () => {
     setBusy(true);
@@ -169,7 +169,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
     const methodLabel = method === "wallet" ? "钱包扣款" : method === "emt" ? "EMT 收款" : "现金收款";
     if (
       !confirm(
-        `确认${methodLabel} ${cad(finalDeduct)}（含派送费 ${cad(deliveryAmt)}，检查费 ${cad(inspAmt)}，折扣 ${cad(discAmt)}）？`,
+        `确认按该客户已生成的批次账单${methodLabel} ${cad(finalDeduct)}？（账单已包含折扣）`,
       )
     )
       return;
@@ -183,22 +183,20 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
           data: {
             batchId,
             userId: c.user_id,
-            amountCad: subtotal,
-            discountCad: discAmt,
+            amountCad: finalDeduct,
+            discountCad: 0,
             note: `批次扣款 · ${customerCode}`,
           },
         });
-        if (r?.ok === false && r.reason === "already_paid") {
-          alert("该客户在本批次已结清");
-          return;
-        }
+        if (r?.ok === false) throw new Error(r.reason === "already_paid" ? "该客户在本批次已结清" : (r.reason ?? "收款失败"));
       } else {
         const r: any = await deductOffline({
           data: {
             batchId,
             userId: c.user_id,
             method,
-            discountCad: discAmt,
+            amountCad: finalDeduct,
+            discountCad: 0,
             refNo: refNo || undefined,
             note: `批次${methodLabel} · ${customerCode}`,
           },
@@ -552,7 +550,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 <span className="font-mono text-sm text-slate-100">{cad(subtotal)}</span>
               </div>
               <div className="mt-2">
-                <label className="block text-[10px] uppercase tracking-wider text-slate-500">折扣 (CAD)</label>
+                <label className="block text-[10px] uppercase tracking-wider text-slate-500">已含折扣 (CAD)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -594,8 +592,8 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 )}
                 <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
                   {method === "wallet"
-                    ? "生成账单并结清 · 记录钱包流水 · 调整钱包余额 · 该客户批次未付运单标记为已付款。"
-                    : "生成账单并结清 · 记录一条流水（不影响钱包余额）· 该客户批次未付运单标记为已付款。"}
+                    ? "按已生成账单结清 · 记录钱包流水 · 调整钱包余额 · 该客户批次未付运单标记为已付款。"
+                    : "按已生成账单结清 · 记录一条流水（不影响钱包余额）· 该客户批次未付运单标记为已付款。"}
                 </p>
               </div>
             </Card>

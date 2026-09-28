@@ -122,7 +122,7 @@ function MeasurePage() {
           printText = `，面单打印失败: ${e.message}`;
         }
       }
-      setMsg({ ok: true, text: `✓ 已保存 ${r.updated} 条尺寸/重量${printText}，可扫描下一个单号` });
+      setMsg({ ok: !(r.snapshotWarnings?.length), text: `已保存 ${r.updated} 条尺寸/重量${printText}${r.snapshotWarnings?.length ? `；快照未全部生成：${r.snapshotWarnings.join("；")}` : "，可扫描下一个单号"}` });
       // Auto-refresh: clear and refocus scan input
       setRows([]); setParent(null); setParentKind(null); setParentNo(null); setSelected(new Set());
       setCode("");

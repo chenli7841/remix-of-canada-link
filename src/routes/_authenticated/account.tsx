@@ -1400,6 +1400,7 @@ function AddressTab() {
 // and only falls back to a full computeBatchFeeSummary when that snapshot is missing
 // or stale, re-writing it afterwards. A batch appears once it's shipped/arrived/closed.
 interface BatchItem {
+  chargeable_weight_kg?: number | null;
   kind: "order" | "forwarding";
   id: string;
   no: string;
@@ -1430,6 +1431,7 @@ interface BatchDutyItem {
   duty_cad: number;
 }
 interface Batch {
+  chargeable_weight_kg?: number | null;
   batch_id: string;
   batch_no: string;
   shipping_method: string | null;
@@ -1480,7 +1482,7 @@ function BatchesTab({ onJump }: { onJump: (t: Tab) => void }) {
     )
       return;
     setPaying(batchId);
-    const data: any = await doPay({ data: { batchId } }).catch((e: any) => ({
+    const data: any = await doPay({ data: { batchId, amountCad } }).catch((e: any) => ({
       ok: false,
       reason: e.message,
     }));
@@ -1678,6 +1680,7 @@ function BatchCard({
         <div className="ml-auto text-right">
           <div className="text-[10px] uppercase tracking-wider text-ink-soft">
             {b.is_paid ? tr("批次合计", "Batch total") : tr("批次待付", "Batch unpaid")}
+            <span className="ml-3 normal-case">{tr("总计费重量", "Total billable weight")}：{b.chargeable_weight_kg == null ? tr("待更新", "Pending update") : `${b.chargeable_weight_kg.toFixed(3)} kg`}</span>
           </div>
           {b.subtotal_cad === null ? (
             <div className="text-xs font-medium text-amber-600">
@@ -1818,6 +1821,7 @@ function BatchCard({
                 )}
               </span>
               <span className="font-mono text-xs font-semibold">{it.no}</span>
+              <span className="text-xs text-ink-soft">{tr("计费重量", "Billable weight")}：{it.chargeable_weight_kg == null ? tr("待更新", "Pending update") : `${it.chargeable_weight_kg.toFixed(3)} kg`}</span>
               {it.tracking_no && (
                 <span className="text-[11px] text-ink-soft">
                   · <span className="font-mono">{it.tracking_no}</span>

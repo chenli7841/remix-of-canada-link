@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getFxCadPerCny } from "./orders.functions";
+import { getFxCadPerCny, settleBatchForCustomer } from "./orders.functions";
 import { recordAdminLog } from "@/lib/admin-log";
 
 async function assertStaff(supabase: any, userId: string) {
@@ -287,6 +287,16 @@ export const payInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data, context }) => {
+    const {data: invoice, error: lookupError} = await context.supabase.from("invoices").select("*").eq("id",data.id).maybeSingle();
+    if(lookupError) throw new Error(lookupError.message);
+    if(!invoice || invoice.user_id !== context.userId) throw new Error("账单不存在或不属于当前客户");
+    if(invoice.type === "batch") {
+      const {supabaseAdmin} = await import("@/integrations/supabase/client.server");
+      const {data: batch,error: batchError} = await supabaseAdmin.from("batches").select("id").eq("batch_no",invoice.batch_no!).single();
+      if(batchError || !batch) throw new Error("账单关联批次不唯一或不存在，请联系客服");
+      const {data: profile} = await context.supabase.from("profiles").select("customer_code").eq("id",context.userId).single();
+      return settleBatchForCustomer(supabaseAdmin,{batchId:batch.id,customerUserId:context.userId,customerCode:profile?.customer_code ?? "",method:"wallet",expectedCad:+(Number(invoice.total_cny)*Number(invoice.fx_rate)).toFixed(2),operatorId:context.userId,operatorName:context.userId,enforceBalance:true,awardPoints:true});
+    }
     const { data: r, error } = await context.supabase.rpc("pay_invoice", { _invoice_id: data.id });
     if (error) throw new Error(error.message);
     return r;
@@ -536,6 +546,18 @@ export const addOfflinePayment = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (!(data.amount_cad > 0)) throw new Error("金额必须 > 0");
+    const {data: invoice,error: invoiceError} = await supabaseAdmin.from("invoices").select("*").eq("id",data.invoice_id).single();
+    if(invoiceError) throw new Error(invoiceError.message);
+    if(invoice.type === "batch") {
+      if(!["cash","interac","bank_transfer"].includes(data.method)) throw new Error("批次账单请使用现金或银行转账/Interac收款");
+      const {data: batch,error: batchError} = await supabaseAdmin.from("batches").select("id").eq("batch_no",invoice.batch_no!).single();
+      if(batchError || !batch) throw new Error("账单关联批次不唯一或不存在");
+      const {data: profile} = await supabaseAdmin.from("profiles").select("customer_code").eq("id",invoice.user_id).single();
+      const r=await settleBatchForCustomer(supabaseAdmin,{batchId:batch.id,customerUserId:invoice.user_id,customerCode:profile?.customer_code ?? "",method:data.method==="cash"?"cash":"emt",expectedCad:data.amount_cad,receipt:{method:data.method,paid_at:data.paid_at,attachment_url:data.attachment_url},refNo:data.reference,note:data.note,operatorId:context.userId,operatorName:context.userId});
+      if(!r.ok) throw new Error(r.reason === "already_paid" ? "账单已结清，不能重复登记收款" : (r.reason ?? "收款失败"));
+      return {ok:true,payment:r};
+    }
+
     const { data: row, error } = await supabaseAdmin
       .from("offline_payments")
       .insert({
