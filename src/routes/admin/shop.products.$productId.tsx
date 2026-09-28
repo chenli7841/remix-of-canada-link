@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getProduct, saveProduct, listCategories, saveVariant, deleteVariant } from "@/lib/shop.functions";
 import { listHsCodes } from "@/lib/hs-codes.functions";
+import { HsCodeNames } from "@/components/HsCodeNames";
 import { MediaUpload, uploadShopMedia } from "@/components/admin/MediaUpload";
 import {
   Loader2,
@@ -1647,7 +1648,7 @@ function HsCodeField({ form, setForm }: { form: any; setForm: (f: any) => void }
                 className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left hover:bg-accent"
               >
                 <span>
-                  <span className="font-mono">{h.hs_code}</span> · {h.name_zh}
+                  <span className="font-mono">{h.hs_code}</span><HsCodeNames nameZh={h.name_zh} nameEn={h.name_en} />
                 </span>
                 <span className="text-ink-soft">{(Number(h.mfn_rate) * 100).toFixed(1)}%</span>
               </button>

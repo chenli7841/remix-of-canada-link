@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { listHsCodes, upsertHsCode, deleteHsCode } from "@/lib/hs-codes.functions";
 import { HsCodeInput } from "@/components/HsCodeInput";
+import { HsCodeNames } from "@/components/HsCodeNames";
 import { BookText, Loader2, Plus, Save, Trash2, Search, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
 const PAGE_SIZE = 50;
@@ -106,7 +107,7 @@ function HsCodesPage() {
                   <tr>
                     <th className="p-3">HS 编码</th>
                     <th className="p-3">章节</th>
-                    <th className="p-3">品名 / 别名</th>
+                    <th className="p-3">中文 / English / 别名</th>
                     <th className="p-3 text-right">MFN</th>
                     <th className="p-3 text-right">GST</th>
                     <th className="p-3 text-center">SIMA</th>
@@ -120,8 +121,11 @@ function HsCodesPage() {
                       <td className="p-3 font-mono text-xs">{c.hs_code}</td>
                       <td className="p-3 text-slate-400">{c.chapter ?? "-"}</td>
                       <td className="p-3 max-w-md">
-                        <div>{c.name_zh}</div>
-                        {c.name_en && <div className="text-[11px] text-slate-500">{c.name_en}</div>}
+                        <HsCodeNames nameZh={c.name_zh} nameEn={c.name_en} />
+                        {c.note && <details className="mt-1 text-[11px] text-slate-400">
+                          <summary className="cursor-pointer">分类说明 / 原始资料</summary>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{c.note}</div>
+                        </details>}
                         <div className="text-[11px] text-slate-500">
                           材质：{c.material || "—"} · 产地：{c.origin || "China"}
                         </div>
