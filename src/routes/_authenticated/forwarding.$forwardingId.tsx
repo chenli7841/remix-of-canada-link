@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/i18n";
+import { savedVolumetricWeight, orderVolumetricWeight } from "@/lib/saved-volumetric-weight";
 import { OrderAttachments } from "@/components/order-attachments";
 import { WaybillsList } from "@/components/waybills-list";
 import { TrackingTimeline } from "@/components/tracking-timeline";
@@ -34,14 +35,6 @@ export const Route = createFileRoute("/_authenticated/forwarding/$forwardingId")
 });
 
 const sb = supabase as any;
-
-// Read saved backend values only; never infer a route divisor in the client.
-function savedVolumetricWeight(snapshot: any): number | null {
-  const raw = snapshot?.volumetric_weight;
-  if (raw == null || raw === "" || (typeof raw !== "number" && typeof raw !== "string")) return null;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
 
 function volumetricWeightKg(w: any): number | null {
   return savedVolumetricWeight(w?.weight_snapshot);
@@ -191,12 +184,7 @@ function ForwardingDetailPage() {
   // Same authoritative order snapshot as the admin's “当前运费快照”.
   // Only fall back to a complete sum of saved waybill snapshots when absent.
   const snap: any = fo.freight_snapshot ?? null;
-  const perWaybillVolWeights = waybills.map((w) => volumetricWeightKg(w));
-  const totalVolumetricWeight = savedVolumetricWeight(snap) ?? (
-    waybills.length > 0 && perWaybillVolWeights.every((v) => v !== null)
-      ? (perWaybillVolWeights as number[]).reduce((sum, v) => sum + v, 0)
-      : null
-  );
+  const totalVolumetricWeight = orderVolumetricWeight(snap, waybills.map((w) => w.weight_snapshot));
   const feeCad = Number(snap?.freight_cad ?? Number(fo.fee_cny ?? 0) * (snap?.fx_rate || 0.19));
   const insCad = fo.insured ? Number(snap?.insurance_cad ?? 0) : 0;
   const cusCad = Number(snap?.duty_cad ?? 0);

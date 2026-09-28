@@ -1217,7 +1217,7 @@ export const getWaybillDetail = createServerFn({ method: "POST" })
     let unmatched_names: string[] = [];
     if (wb.forwarding_id) {
       const { computeWaybillDutyBreakdown } = await import("./duty.server");
-      const br = await computeWaybillDutyBreakdown(supabaseAdmin, wb);
+      const br = await computeWaybillDutyBreakdown(supabaseAdmin, wb, undefined, {allowInvalidRates:true});
       items_breakdown = br.items;
       declared_cad_computed = br.declared_cad;
       duty_cad_computed = br.duty_cad;

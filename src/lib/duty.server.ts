@@ -27,6 +27,7 @@ export type DutyItemRow = {
   tax_rate: number;
   duty_cad: number;
   duty_applied: boolean; // customs_rules.enabled && 达到免税额
+  tax_rate_valid?: boolean;
 };
 
 export type DutyBreakdown = {
@@ -152,7 +153,7 @@ export function matchHsForName(
 // 避免这里对着几千条 hs_codes 每张运单都重建一次 buildHsIndex（原来是这里最大的耗时）。
 export type DutyInputs = { fo: any; fi: any[]; hs: any[]; hsIndex?: ReturnType<typeof buildHsIndex>; customs: any; fx: number };
 
-export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: DutyInputs): Promise<DutyBreakdown> {
+export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: DutyInputs, options?: {allowInvalidRates?: boolean}): Promise<DutyBreakdown> {
   const empty: DutyBreakdown = {
     items: [],
     declared_cad: 0,
@@ -216,6 +217,9 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: 
   let declared_total = 0;
 
   for (const it of (fi ?? []) as any[]) {
+    // A populated waybill manifest identifies what is actually in this box.
+    if (summaryByName.size && !summaryByName.has(it.name)) continue;
+    const allocated = summary.find(s => s?.name === it.name && Number(s?.extras?.box_count) === 1);
     const explicitInner = Number(it?.extras?.items_per_carton ?? it?.extras?.inner_qty ?? 0);
     const itemBoxes = Number(it?.extras?.box_count ?? 0);
     const totalQty = Number(it.quantity ?? 0);
@@ -225,7 +229,10 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: 
     // its own boxes) always wins — items_summary is copied verbatim onto every
     // waybill of the order, so treating its raw quantity as "this waybill's
     // share" would count the item's full value on each box it touches.
-    if (explicitInner > 0) {
+    if (allocated && Number.isFinite(Number(allocated.quantity)) && Number(allocated.quantity)>0) {
+      rawPerWb = Number(allocated.quantity);
+      source = "quantity";
+    } else if (explicitInner > 0) {
       rawPerWb = explicitInner;
       source = "items_per_carton";
     } else if (itemBoxes > 1) {
@@ -244,19 +251,20 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: 
     const declared = +(unit * qtyFrac.value).toFixed(2);
     declared_total += declared;
 
-    const { hs: hsRow, matched } = matchHsForName(it.name ?? "", index, it.hs_code ?? null);
+    const { hs: hsRow, matched } = matchHsForName(it.name ?? "", index, it.hs_code || it.extras?.hscode || null);
     if (!hsRow) unmatched.add(it.name ?? "(未命名)");
     const mfn = Number(hsRow?.mfn_rate ?? 0);
     const gst = Number(hsRow?.gst_rate ?? 0);
     const ad = Number(hsRow?.anti_dumping_rate ?? 0);
     const rate = mfn + gst + ad;
+    const taxRateValid = [mfn,gst,ad].every(v=>Number.isFinite(v)&&v>=0);
 
     items.push({
       forwarding_item_id: it.id,
       name: it.name ?? "",
       hs_code: hsRow?.hs_code ?? null,
       hs_matched: hsRow ? matched : "none",
-      box_count: boxCount,
+      box_count: summaryByName.size ? 1 : (itemBoxes || boxCount),
       quantity_total: totalQty,
       quantity_per_waybill: qtyFrac.value,
       quantity_display: qtyFrac.display,
@@ -264,19 +272,21 @@ export async function computeWaybillDutyBreakdown(admin: any, wb: any, loaded?: 
       quantity_source: source,
       unit_price_cad: +unit.toFixed(2),
       declared_value_cad: declared,
-      mfn_rate: mfn,
-      gst_rate: gst,
-      anti_dumping_rate: ad,
-      tax_rate: rate,
+      mfn_rate: Number.isFinite(mfn) ? mfn : 0,
+      gst_rate: Number.isFinite(gst) ? gst : 0,
+      anti_dumping_rate: Number.isFinite(ad) ? ad : 0,
+      tax_rate: taxRateValid ? rate : 0,
+      tax_rate_valid: taxRateValid,
       duty_cad: 0, // 下面按线路开关统一置位
       duty_applied: false,
     });
   }
 
   const applies = customs_enabled && declared_total >= threshold_cad;
+  if (applies && items.some(it=>it.tax_rate_valid === false) && !options?.allowInvalidRates) throw new Error("HS税率存在无效值，请核对后再计算关税");
   let duty_total = 0;
   for (const row of items) {
-    if (applies) {
+    if (applies && row.tax_rate_valid !== false) {
       row.duty_cad = +(row.declared_value_cad * row.tax_rate).toFixed(2);
       row.duty_applied = true;
       duty_total += row.duty_cad;
@@ -442,6 +452,9 @@ export async function persistWaybillItems(
   }
 
   const br = await computeAnyWaybillDutyBreakdown(admin, row);
+  if (br.customs_enabled && br.items.some(it => it.tax_rate_valid === false)) {
+    throw new Error("HS税率存在无效值，须核对后才能保存关税；原费用未覆盖");
+  }
 
   const rows = br.items.map((it) => ({
     waybill_id: row.id,

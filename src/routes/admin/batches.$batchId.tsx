@@ -59,6 +59,8 @@ import {
   getBatchInvoiceExport,
 } from "@/lib/batch-customs.functions";
 import { downloadBatchInvoiceWorkbook } from "@/lib/batch-invoice-xls";
+import { getBatchPickingList } from "@/lib/picking-list.functions";
+import { downloadPickingList } from "@/lib/picking-list-xls";
 
 export const Route = createFileRoute("/admin/batches/$batchId")({ component: BatchDetail });
 
@@ -101,6 +103,7 @@ function BatchDetail() {
   const matchHsCodes = useServerFn(autoMatchBatchHsCodes);
   const parseHbl = useServerFn(extractBatchHbl);
   const fetchInvoiceExport = useServerFn(getBatchInvoiceExport);
+  const fetchPickingList = useServerFn(getBatchPickingList);
 
   // 客户号账单 / 运单 / 箱号 / 托盘：默认收起，点击展开才渲染表格，减少长批次的初始滚动长度。
   // 箱号/托盘各自是独立请求，收起时干脆不发请求（enabled 门控）；运单/客户账单的数据
@@ -166,6 +169,13 @@ function BatchDetail() {
   const [hblBusy, setHblBusy] = useState(false);
   const [hsBusy, setHsBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [pickingBusy, setPickingBusy] = useState(false);
+  const onDownloadPicking = async () => {
+    setPickingBusy(true);
+    try { downloadPickingList(await fetchPickingList({data:{batchId}})); }
+    catch(e:any) { toast.error(e?.message ?? "Picking List 生成失败"); }
+    finally { setPickingBusy(false); }
+  };
   const [confirmAllBusy, setConfirmAllBusy] = useState(false);
   const [bulkDeductBusy, setBulkDeductBusy] = useState(false);
   const hblInputRef = useRef<HTMLInputElement>(null);
@@ -447,6 +457,11 @@ function BatchDetail() {
           >
             {invoiceBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
             下载 Invoice
+          </button>
+          <button onClick={onDownloadPicking} disabled={pickingBusy}
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">
+            {pickingBusy ? <Loader2 className="h-3 w-3 animate-spin"/> : <Download className="h-3 w-3"/>}
+            下载 Picking List
           </button>
           {canEdit && (
             <>

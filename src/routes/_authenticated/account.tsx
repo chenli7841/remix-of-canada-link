@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { TrackingTimeline } from "@/components/tracking-timeline";
 import { HsCodeInput } from "@/components/HsCodeInput";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
+import { orderVolumetricWeight } from "@/lib/saved-volumetric-weight";
 import {
   User,
   MapPin,
@@ -2628,7 +2629,7 @@ interface MyOrderItem {
   lineItems?: MyLineItem[];
   total_weight_kg?: number;
   total_volume_m3?: number;
-  total_volumetric_weight_kg?: number;
+  total_volumetric_weight_kg?: number | null;
   total_cad?: number | null;
 }
 
@@ -2697,8 +2698,8 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
         if (!itemsByFwd.has(r.forwarding_id)) itemsByFwd.set(r.forwarding_id, []);
         itemsByFwd.get(r.forwarding_id)!.push({ name: r.name || "—", qty: Number(r.quantity ?? 0) });
       });
-      const sumOrder = new Map<string, { w: number; v: number; vw: number }>();
-      const sumFwd = new Map<string, { w: number; v: number; vw: number }>();
+      const sumOrder = new Map<string, { w: number; v: number; snapshots: any[] }>();
+      const sumFwd = new Map<string, { w: number; v: number; snapshots: any[] }>();
       (w.data ?? []).forEach((wb: any) => {
         const m = wb.order_id ? byOrder : byFwd;
         const s = wb.order_id ? sumOrder : sumFwd;
@@ -2706,14 +2707,14 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
         if (!key) return;
         if (!m.has(key)) m.set(key, []);
         m.get(key)!.push({ waybill_no: wb.waybill_no, status: wb.status });
-        const cur = s.get(key) ?? { w: 0, v: 0, vw: 0 };
+        const cur = s.get(key) ?? { w: 0, v: 0, snapshots: [] };
+        cur.snapshots.push(wb.weight_snapshot);
         cur.w += Number(wb.weight_kg ?? 0);
         const l = Number(wb.length_cm ?? 0),
           wd = Number(wb.width_cm ?? 0),
           h = Number(wb.height_cm ?? 0);
         if (l && wd && h) {
           cur.v += (l * wd * h) / 1_000_000;
-          cur.vw += Number(wb.weight_snapshot?.volumetric_weight ?? 0) || (l * wd * h) / 6000;
         }
         s.set(key, cur);
       });
@@ -2733,7 +2734,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
           lineItems: itemsByOrder.get(r.id) ?? [],
           total_weight_kg: sumOrder.get(r.id)?.w ?? 0,
           total_volume_m3: sumOrder.get(r.id)?.v ?? 0,
-          total_volumetric_weight_kg: sumOrder.get(r.id)?.vw ?? 0,
+          total_volumetric_weight_kg: orderVolumetricWeight(null, sumOrder.get(r.id)?.snapshots ?? []),
         })),
         ...(f.data ?? []).map((r: any) => {
           const snap: any = r.freight_snapshot ?? null;
@@ -2757,7 +2758,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
             lineItems: itemsByFwd.get(r.id) ?? [],
             total_weight_kg: sumFwd.get(r.id)?.w ?? Number(r.weight_kg ?? 0),
             total_volume_m3: sumFwd.get(r.id)?.v ?? 0,
-            total_volumetric_weight_kg: sumFwd.get(r.id)?.vw ?? 0,
+            total_volumetric_weight_kg: orderVolumetricWeight(snap, sumFwd.get(r.id)?.snapshots ?? []),
           };
         }),
       ];
@@ -2999,7 +3000,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
                       {(o.total_weight_kg ?? 0) > 0 && (o.total_volume_m3 ?? 0) > 0 && <span> · </span>}
                       {(o.total_volume_m3 ?? 0) > 0 && (
                         <span>
-                          {(o.total_volume_m3 ?? 0).toFixed(3)} m³ / {(o.total_volumetric_weight_kg ?? 0).toFixed(2)} kg {tr("体积重", "vol. wt.")}
+                          {(o.total_volume_m3 ?? 0).toFixed(3)} m³ / {o.total_volumetric_weight_kg == null ? "—" : `${o.total_volumetric_weight_kg.toFixed(3)} kg`} {tr("体积重", "vol. wt.")}
                         </span>
                       )}
                     </div>

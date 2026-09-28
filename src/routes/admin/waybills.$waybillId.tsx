@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getWaybillDetail, setWaybillStatus, addTrackingEvents, editTrackingEvent, deleteTrackingEvent, listTrackingPresets, updateWaybillDomesticTrackingNo, type WaybillStatus } from "@/lib/orders.functions";
 import { listHsCodes, bindNameToHs, setForwardingItemHs } from "@/lib/hs-codes.functions";
+import { HsCodeNames } from "@/components/HsCodeNames";
 import { getMyRoles } from "@/lib/admin.functions";
 import { WAYBILL_STATUS_LABEL, WAYBILL_STATUS_COLOR, METHOD_LABEL, StatusBadge, Card, fmtDate, fmtCAD, BackLink } from "@/lib/admin-shared";
 import { SurchargePanel } from "@/components/admin/SurchargePanel";
@@ -188,7 +189,8 @@ function WaybillDetail() {
                 该线路未开启关税征收（customs_rules.enabled = false），本单关税按 0 计。
               </div>
             )}
-            <Card title="物品明细（品名来源：forwarding_items · 数量按 箱数 拆分到本运单）">
+            <Card title="物品明细（按本运单已分配物品显示）">
+              {(detailQ.data as any).items_breakdown.some((it: any) => it.tax_rate_valid === false) && <div role="alert" className="mb-3 text-amber-300">HS税率数据无效，关税待核对；下方合计不含这些物品的关税，不能作为完整应缴金额。</div>}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-xs">
                   <thead className="text-slate-400">
@@ -220,11 +222,13 @@ function WaybillDetail() {
                         <td className="py-1 pr-2">{fmtCAD(it.unit_price_cad)}</td>
                         <td className="py-1 pr-2">{fmtCAD(it.declared_value_cad)}</td>
                         <td className="py-1 pr-2 text-slate-400">
+                          {it.tax_rate_valid === false ? "税率待核对" : <>
                           {(it.mfn_rate * 100).toFixed(1)}%+{(it.gst_rate * 100).toFixed(1)}%
                           {it.anti_dumping_rate > 0 && <>+<span className="text-rose-400">{(it.anti_dumping_rate * 100).toFixed(1)}%</span></>}
                           <span className="ml-1 text-slate-500">= {(it.tax_rate * 100).toFixed(1)}%</span>
+                          </>}
                         </td>
-                        <td className="py-1 pr-2 text-slate-100">{fmtCAD(it.duty_cad)}</td>
+                        <td className="py-1 pr-2 text-slate-100">{it.tax_rate_valid === false ? "待核对" : fmtCAD(it.duty_cad)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -239,7 +243,7 @@ function WaybillDetail() {
                 </table>
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
-                数量优先取 <code>forwarding_items.extras.items_per_carton</code>；无此字段时按 <code>quantity / forwarding_orders.box_count</code> 计算，非整数以分数展示便于后续汇总。
+                已分配物品按本运单记录显示；每箱数量优先使用本运单的明确分配数据，未明确分配时才使用商品箱规。
               </div>
             </Card>
           </div>
@@ -393,7 +397,7 @@ function HsCell({ item, onChanged }: { item: any; onChanged: () => void }) {
                   } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
                 }}
                 className="flex w-full items-start justify-between rounded px-2 py-1 text-left hover:bg-white/5">
-                <span><span className="font-mono">{h.hs_code}</span> · {h.name_zh}</span>
+                <span className="min-w-0"><span className="font-mono">{h.hs_code}</span><HsCodeNames nameZh={h.name_zh} nameEn={h.name_en} /></span>
                 <span className="text-slate-500">{(Number(h.mfn_rate)*100).toFixed(1)}%</span>
               </button>
             ))}
