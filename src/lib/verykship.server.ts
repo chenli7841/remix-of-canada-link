@@ -102,7 +102,7 @@ export async function accountUnits() {
   return { weight: weight as "kg" | "lb", length: length as "cm" | "in" };
 }
 export function providerPayload(
-  d: ExpressDraft,
+  d: Omit<ExpressDraft, "source" | "leg">,
   units: Awaited<ReturnType<typeof accountUnits>>,
   rate?: ExpressRate,
 ) {

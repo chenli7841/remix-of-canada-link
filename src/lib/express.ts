@@ -206,7 +206,7 @@ export function mapAddress(a: any): ExpressAddress {
   };
 }
 export function convertedPackages(
-  d: ExpressDraft,
+  d: Pick<ExpressDraft, "packages">,
   units: { weight: "kg" | "lb"; length: "cm" | "in" },
 ) {
   const round = (n: number) => Math.ceil(n * 1000 - 1e-9) / 1000;
