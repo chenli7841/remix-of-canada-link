@@ -31,6 +31,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedCheckoutRouteImport } from './routes/_authenticated/checkout'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
+import { Route as AuthenticatedPartnerShippingRouteImport } from './routes/_authenticated/partner-shipping'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminApiTokensRouteImport } from './routes/admin/api-tokens'
 import { Route as AdminCargoTypesRouteImport } from './routes/admin/cargo-types'
@@ -79,6 +80,7 @@ import { Route as AdminPalletsIndexRouteImport } from './routes/admin/pallets.in
 import { Route as AdminPalletsPalletIdRouteImport } from './routes/admin/pallets.$palletId'
 import { Route as AdminReceivingsIndexRouteImport } from './routes/admin/receivings.index'
 import { Route as AdminReceivingsReceivingIdRouteImport } from './routes/admin/receivings.$receivingId'
+import { Route as AdminRoutesPartnerSettingsRouteImport } from './routes/admin/routes_.partner-settings'
 import { Route as AdminShopIndexRouteImport } from './routes/admin/shop.index'
 import { Route as AdminShopArticlesRouteImport } from './routes/admin/shop.articles'
 import { Route as AdminShopBannersRouteImport } from './routes/admin/shop.banners'
@@ -229,6 +231,12 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   path: '/invoices',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPartnerShippingRoute =
+  AuthenticatedPartnerShippingRouteImport.update({
+    id: '/partner-shipping',
+    path: '/partner-shipping',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -476,6 +484,12 @@ const AdminReceivingsReceivingIdRoute =
     path: '/receivings/$receivingId',
     getParentRoute: () => AdminRouteRoute,
   } as any)
+const AdminRoutesPartnerSettingsRoute =
+  AdminRoutesPartnerSettingsRouteImport.update({
+    id: '/routes_/partner-settings',
+    path: '/routes/partner-settings',
+    getParentRoute: () => AdminRouteRoute,
+  } as any)
 const AdminShopIndexRoute = AdminShopIndexRouteImport.update({
   id: '/shop/',
   path: '/shop/',
@@ -704,6 +718,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthenticatedAccountRoute
   '/checkout': typeof AuthenticatedCheckoutRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/partner-shipping': typeof AuthenticatedPartnerShippingRoute
   '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
@@ -743,6 +758,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/procurement': typeof AdminOrdersProcurementRoute
   '/admin/pallets/$palletId': typeof AdminPalletsPalletIdRoute
   '/admin/receivings/$receivingId': typeof AdminReceivingsReceivingIdRoute
+  '/admin/routes/partner-settings': typeof AdminRoutesPartnerSettingsRoute
   '/admin/shop/articles': typeof AdminShopArticlesRoute
   '/admin/shop/banners': typeof AdminShopBannersRoute
   '/admin/shop/categories': typeof AdminShopCategoriesRoute
@@ -811,6 +827,7 @@ export interface FileRoutesByTo {
   '/account': typeof AuthenticatedAccountRoute
   '/checkout': typeof AuthenticatedCheckoutRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/partner-shipping': typeof AuthenticatedPartnerShippingRoute
   '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
@@ -850,6 +867,7 @@ export interface FileRoutesByTo {
   '/admin/orders/procurement': typeof AdminOrdersProcurementRoute
   '/admin/pallets/$palletId': typeof AdminPalletsPalletIdRoute
   '/admin/receivings/$receivingId': typeof AdminReceivingsReceivingIdRoute
+  '/admin/routes/partner-settings': typeof AdminRoutesPartnerSettingsRoute
   '/admin/shop/articles': typeof AdminShopArticlesRoute
   '/admin/shop/banners': typeof AdminShopBannersRoute
   '/admin/shop/categories': typeof AdminShopCategoriesRoute
@@ -922,6 +940,7 @@ export interface FileRoutesById {
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/checkout': typeof AuthenticatedCheckoutRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
+  '/_authenticated/partner-shipping': typeof AuthenticatedPartnerShippingRoute
   '/admin/api-tokens': typeof AdminApiTokensRoute
   '/admin/cargo-types': typeof AdminCargoTypesRoute
   '/admin/customer-view': typeof AdminCustomerViewRoute
@@ -961,6 +980,7 @@ export interface FileRoutesById {
   '/admin/orders/procurement': typeof AdminOrdersProcurementRoute
   '/admin/pallets/$palletId': typeof AdminPalletsPalletIdRoute
   '/admin/receivings/$receivingId': typeof AdminReceivingsReceivingIdRoute
+  '/admin/routes_/partner-settings': typeof AdminRoutesPartnerSettingsRoute
   '/admin/shop/articles': typeof AdminShopArticlesRoute
   '/admin/shop/banners': typeof AdminShopBannersRoute
   '/admin/shop/categories': typeof AdminShopCategoriesRoute
@@ -1033,6 +1053,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/checkout'
     | '/invoices'
+    | '/partner-shipping'
     | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
@@ -1072,6 +1093,7 @@ export interface FileRouteTypes {
     | '/admin/orders/procurement'
     | '/admin/pallets/$palletId'
     | '/admin/receivings/$receivingId'
+    | '/admin/routes/partner-settings'
     | '/admin/shop/articles'
     | '/admin/shop/banners'
     | '/admin/shop/categories'
@@ -1140,6 +1162,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/checkout'
     | '/invoices'
+    | '/partner-shipping'
     | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
@@ -1179,6 +1202,7 @@ export interface FileRouteTypes {
     | '/admin/orders/procurement'
     | '/admin/pallets/$palletId'
     | '/admin/receivings/$receivingId'
+    | '/admin/routes/partner-settings'
     | '/admin/shop/articles'
     | '/admin/shop/banners'
     | '/admin/shop/categories'
@@ -1250,6 +1274,7 @@ export interface FileRouteTypes {
     | '/_authenticated/account'
     | '/_authenticated/checkout'
     | '/_authenticated/invoices'
+    | '/_authenticated/partner-shipping'
     | '/admin/api-tokens'
     | '/admin/cargo-types'
     | '/admin/customer-view'
@@ -1289,6 +1314,7 @@ export interface FileRouteTypes {
     | '/admin/orders/procurement'
     | '/admin/pallets/$palletId'
     | '/admin/receivings/$receivingId'
+    | '/admin/routes_/partner-settings'
     | '/admin/shop/articles'
     | '/admin/shop/banners'
     | '/admin/shop/categories'
@@ -1536,6 +1562,13 @@ declare module '@tanstack/react-router' {
       path: '/invoices'
       fullPath: '/invoices'
       preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/partner-shipping': {
+      id: '/_authenticated/partner-shipping'
+      path: '/partner-shipping'
+      fullPath: '/partner-shipping'
+      preLoaderRoute: typeof AuthenticatedPartnerShippingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/admin/': {
@@ -1874,6 +1907,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminReceivingsReceivingIdRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/routes_/partner-settings': {
+      id: '/admin/routes_/partner-settings'
+      path: '/routes/partner-settings'
+      fullPath: '/admin/routes/partner-settings'
+      preLoaderRoute: typeof AdminRoutesPartnerSettingsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/shop/': {
       id: '/admin/shop/'
       path: '/shop'
@@ -2147,6 +2187,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedCheckoutRoute: typeof AuthenticatedCheckoutRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
+  AuthenticatedPartnerShippingRoute: typeof AuthenticatedPartnerShippingRoute
   AuthenticatedForwardingForwardingIdRoute: typeof AuthenticatedForwardingForwardingIdRoute
   AuthenticatedOrdersOrderIdRoute: typeof AuthenticatedOrdersOrderIdRoute
   AuthenticatedPayOrderIdRoute: typeof AuthenticatedPayOrderIdRoute
@@ -2157,6 +2198,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedCheckoutRoute: AuthenticatedCheckoutRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
+  AuthenticatedPartnerShippingRoute: AuthenticatedPartnerShippingRoute,
   AuthenticatedForwardingForwardingIdRoute:
     AuthenticatedForwardingForwardingIdRoute,
   AuthenticatedOrdersOrderIdRoute: AuthenticatedOrdersOrderIdRoute,
@@ -2199,6 +2241,7 @@ interface AdminRouteRouteChildren {
   AdminOrdersProcurementRoute: typeof AdminOrdersProcurementRoute
   AdminPalletsPalletIdRoute: typeof AdminPalletsPalletIdRoute
   AdminReceivingsReceivingIdRoute: typeof AdminReceivingsReceivingIdRoute
+  AdminRoutesPartnerSettingsRoute: typeof AdminRoutesPartnerSettingsRoute
   AdminShopArticlesRoute: typeof AdminShopArticlesRoute
   AdminShopBannersRoute: typeof AdminShopBannersRoute
   AdminShopCategoriesRoute: typeof AdminShopCategoriesRoute
@@ -2258,6 +2301,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminOrdersProcurementRoute: AdminOrdersProcurementRoute,
   AdminPalletsPalletIdRoute: AdminPalletsPalletIdRoute,
   AdminReceivingsReceivingIdRoute: AdminReceivingsReceivingIdRoute,
+  AdminRoutesPartnerSettingsRoute: AdminRoutesPartnerSettingsRoute,
   AdminShopArticlesRoute: AdminShopArticlesRoute,
   AdminShopBannersRoute: AdminShopBannersRoute,
   AdminShopCategoriesRoute: AdminShopCategoriesRoute,

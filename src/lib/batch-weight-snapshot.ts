@@ -2,6 +2,8 @@ export function savedChargeableWeight(w: any): number | null {
   const value = w.weight_snapshot?.chargeable_weight;
   if (value == null || (typeof value === "string" && !value.trim()) || typeof value === "boolean") return null;
   const n = Number(value);
+  // A pre-measurement zero snapshot must not hide a later positive measurement.
+  if (n === 0 && (Number(w.weight_kg) > 0 || Number(w.length_cm) * Number(w.width_cm) * Number(w.height_cm) > 0)) return null;
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
@@ -9,6 +11,14 @@ export function weightTotal(rows: any[]): number | null {
   const values = rows.map(r => savedChargeableWeight({ weight_snapshot: { chargeable_weight: r.chargeable_weight_kg } }));
   if (!values.length || values.some(v => v == null)) return null;
   return +values.reduce<number>((sum, v) => sum + v!, 0).toFixed(3);
+}
+
+// Merged freight uses max(sum(actual), sum(volume)/divisor), not sum of
+// individually billable weights. Consume the very snapshot that priced freight.
+export function billingWeight(scheme: string, orders: any[], freightSnapshot?: any): number | null {
+  return scheme === "merged"
+    ? savedChargeableWeight({ weight_snapshot: freightSnapshot })
+    : weightTotal(orders);
 }
 
 // One order can span several route buckets; merge its stored subtotals once.

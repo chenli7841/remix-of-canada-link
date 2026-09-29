@@ -139,7 +139,7 @@ function RootComponent() {
   // down instead of it owning the full viewport. Staff-facing pages own
   // their own chrome; nothing else here needs it.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isConsoleShell = pathname === "/admin-login" || pathname === "/admin" || pathname.startsWith("/admin/");
+  const isConsoleShell = pathname === "/partner-shipping" || pathname === "/admin-login" || pathname === "/admin" || pathname.startsWith("/admin/");
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

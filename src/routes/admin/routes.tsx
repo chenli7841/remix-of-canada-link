@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -68,7 +68,7 @@ function RoutesPage() {
   const [editing, setEditing] = useState<any | null>(null);
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div className="mx-auto max-w-7xl p-6"><div className="mb-4"><Link to="/admin/routes/partner-settings" className="inline-flex rounded-lg border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-400">同行专属线路设置 · 草稿</Link></div>
       <div className="mb-5 flex items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold inline-flex items-center gap-2">

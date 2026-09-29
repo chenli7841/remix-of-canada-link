@@ -1,6 +1,6 @@
 import { buildConfirmedBatchInvoice, assertConfirmedInvoice } from "./confirmed-batch-invoice";
 import { assertSnapshotNumbers, assertBatchWeightSnapshot } from "./snapshot-validation";
-import { buildWeightOrders, mergeWeightOrders, weightTotal } from "./batch-weight-snapshot";
+import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal } from "./batch-weight-snapshot";
 import { loadBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
@@ -1809,6 +1809,9 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     route_code: string | null;
     route_id: string | null;
     waybill_ids: Set<string>;
+    freight_waybill_ids: Set<string>;
+    freight_weight_snapshot?: any;
+    freight_weight_inputs: { ref: string; weight: unknown; volume: unknown }[];
     freight: number;
     customs: number;
     insurance: number;
@@ -1864,6 +1867,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         route_code: routeCode,
         route_id: routeId,
         waybill_ids: new Set(),
+        freight_waybill_ids: new Set(),
+        freight_weight_inputs: [],
         freight: 0,
         customs: 0,
         insurance: 0,
@@ -2028,6 +2033,9 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     const cc = wbCustomer(w);
     const { code: rc, id: rid } = wbRoute(w);
     const b = bucket(cc, rc, rid);
+    b.freight_waybill_ids.add(w.id);
+    b.freight_weight_inputs.push({ ref: w.waybill_no, weight: w.weight_kg,
+      volume: [w.length_cm,w.width_cm,w.height_cm].every(v => v != null && v !== "") ? Number(w.length_cm)*Number(w.width_cm)*Number(w.height_cm) : null });
     const { w: wt, v: vol } = wbWV(w);
     const fee = wbFreight(w);
     b.weight_kg += wt;
@@ -2053,6 +2061,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     const rc: string | null = c.route_code ?? null;
     const rid: string | null = c.route_id ?? null;
     const b = bucket(cc, rc, rid);
+    for (const w of contained) b.freight_waybill_ids.add(w.id);
+    b.freight_weight_inputs.push({ ref: c.carton_no, weight: c.self_weight_kg, volume: c.self_volume_m3 });
     const scheme = schemeOf(cc);
     let wt = 0,
       vol = 0,
@@ -2092,6 +2102,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     const rc: string | null = p.route_code ?? null;
     const rid: string | null = p.route_id ?? null;
     const b = bucket(cc, rc, rid);
+    for (const w of [...direct, ...cartonsUnder.flatMap(c => c.wbs)]) b.freight_waybill_ids.add(w.id);
+    b.freight_weight_inputs.push({ ref: p.pallet_no, weight: p.self_weight_kg, volume: p.self_volume_m3 });
     const scheme = schemeOf(cc);
     let wt = 0,
       vol = 0,
@@ -2135,6 +2147,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   for (const w of directWbs) pushWbDisplay(w, "direct");
   // Direct cartons under batch (pallet_id null)
   for (const c of cartons) {
+    if (c.pallet_id && palletIds.includes(c.pallet_id)) continue;
     const contained = cartonWbs.filter((w) => w.carton_id === c.id);
     if (c.customer_code) pushCartonDisplay(c, contained);
     else for (const w of contained) pushWbDisplay(w, "carton");
@@ -2172,10 +2185,16 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     if (!b.customer_code) continue;
     if (schemeOf(b.customer_code) !== "merged") continue;
     if (!b.route_id) continue;
+    const mode = mergedRuleMap.get(b.route_id)?.weight_mode;
+    for (const input of b.freight_weight_inputs) assertSnapshotNumbers(`计费对象 ${input.ref}`, {
+      ...(mode !== "volumetric" ? { 实重: input.weight } : {}),
+      ...(mode !== "actual" ? { 体积: input.volume } : {}),
+    });
     // Only freight is consumed here; insurance and duty remain waybill-level values.
     const snap = await computeFreight(admin, b.route_id, b.weight_kg, b.volume_m3 * 1_000_000, null, false,
       { rule: mergedRuleMap.get(b.route_id), customs: null, fx, insuranceRate: 0 });
     b.freight = snap ? +Number((snap as any).freight_cad ?? 0).toFixed(2) : 0;
+    b.freight_weight_snapshot = snap;
   }
 
   // === 10. Customs items per (customer, route) — HS 明细统一口径 ===
@@ -2457,7 +2476,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       const subtotal = Math.max(0, +(grossSubtotal - discount).toFixed(2));
       const scheme = schemeOf(b.customer_code);
       const items = itemsMapMerged.get(k) ?? [];
-      const weightOrders = buildWeightOrders(allWbs.filter(w => wbCustomer(w) === b.customer_code && (wbRoute(w).code ?? null) === (b.route_code ?? null)), oMap, fMap);
+      const weightOrders = buildWeightOrders(allWbs.filter(w => b.freight_waybill_ids.has(w.id)), oMap, fMap);
+      const noFreight = !b.freight_weight_inputs.length && b.freight === 0;
       return {
         customer_code: b.customer_code,
         customer_name: b.customer_name,
@@ -2466,7 +2486,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         group_key: k,
         fee_scheme: scheme,
         freight_rate_cad: mergedRuleMap.has(b.route_id ?? "") ? (Number(mergedRuleMap.get(b.route_id!)?.unit_price_cad) || Number(mergedRuleMap.get(b.route_id!)?.unit_price_cny) * fx) : null,
-        chargeable_weight_kg: weightTotal(weightOrders),
+        chargeable_weight_kg: noFreight ? 0 : billingWeight(scheme, weightOrders, b.freight_weight_snapshot),
+        billing_weight_basis: noFreight ? "no_freight" : scheme === "merged" ? "merged_freight_snapshot" : "waybill_snapshots",
         weight_orders: weightOrders,
         paid_waybill_count: allWbs.filter(w => wbCustomer(w) === b.customer_code && (wbRoute(w).code ?? null) === (b.route_code ?? null) && w.payment_status === "paid").length,
         waybill_count: b.waybills.length,
@@ -2537,6 +2558,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       (row as any).confirmed_invoice_paid = stored.is_paid;
       row.subtotal_cad = saved.subtotal_cad; row.subtotal_cny = saved.subtotal_cad;
       row.chargeable_weight_kg = saved.chargeable_weight_kg;
+      row.billing_weight_basis = saved.billing_weight_basis;
       row.freight_rate_cad = saved.freight_rate_cad;
       row.weight_orders = saved.weight_orders;
       row.items = saved.duty_items ?? row.items;
@@ -2680,6 +2702,7 @@ function aggregateSettlementBuckets(perCustomer: any[]): Map<string, any> {
       route_id: p.route_id ?? null,
       group_key: p.group_key ?? null,
       fee_scheme: p.fee_scheme ?? null,
+      billing_weight_basis: p.billing_weight_basis ?? null,
       waybill_count: p.waybill_count ?? 0,
       carton_count: p.carton_count ?? 0,
       pallet_count: p.pallet_count ?? 0,
@@ -3686,7 +3709,8 @@ export async function computeMyBatchesForUser(admin: any, userId: string) {
       });
       // is_paid 已在付款时写入 batch_settlements 快照（settleBatchForCustomer / refreshBatchSettlements）；
       // 这里仍按本客户运单实时判定，数据已在内存、零成本且不会有滞后。
-      const weightFresh = snap?.fee_breakdown?.weight_version === 1 && !!snap.snapshot_at && (snap.fee_breakdown?.billing_version === 2 || +new Date(snap.snapshot_at) >= (b.fees_dirty_at ? +new Date(b.fees_dirty_at) : 0));
+      const weightSavedAt = snap?.fee_breakdown?.weight_snapshot_at ?? snap?.snapshot_at;
+      const weightFresh = snap?.fee_breakdown?.weight_version === 1 && !!weightSavedAt && (snap.fee_breakdown?.billing_version === 2 || +new Date(weightSavedAt) >= (b.fees_dirty_at ? +new Date(b.fees_dirty_at) : 0));
       const storedOrders = Array.isArray(snap?.fee_breakdown?.weight_orders) ? snap.fee_breakdown.weight_orders : [];
       const liveOrders = new Map(mergeWeightOrders(legacyItems).map(o => [`${o.kind}:${o.id}`, o]));
       const items = storedOrders.length

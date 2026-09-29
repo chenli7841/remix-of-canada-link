@@ -5,8 +5,13 @@ export function assertSnapshotNumbers(label: string, values: Record<string, unkn
 }
 
 export function assertBatchWeightSnapshot(customer: string, buckets: any[]) {
-  const issues = buckets.flatMap(b => (b.weight_orders ?? []).filter((o: any) => o.chargeable_weight_kg == null).map((o: any) => `${o.no ?? o.id} / 运单 ${(o.missing_waybills ?? []).join("、")}（计费重量）`));
+  const issues = buckets.flatMap(b => b.billing_weight_basis === "merged_freight_snapshot" ? [] : (b.weight_orders ?? []).filter((o: any) => o.chargeable_weight_kg == null).map((o: any) => `${o.no ?? o.id} / 运单 ${(o.missing_waybills ?? []).join("、")}（计费重量）`));
   for (const b of buckets) {
+    if (b.billing_weight_basis === "no_freight" && b.chargeable_weight_kg === 0 && b.fee_freight_cad === 0) continue;
+    if (b.billing_weight_basis === "merged_freight_snapshot") {
+      assertSnapshotNumbers(`客户 ${customer} / ${b.route_code ?? "未指定线路"}`, { 合并计费重量: b.chargeable_weight_kg });
+      continue;
+    }
     if (!(b.weight_orders?.length) && Number(b.waybill_count ?? 0) + Number(b.carton_count ?? 0) + Number(b.pallet_count ?? 0) > 0) {
       issues.push(`${b.route_code ?? "未指定线路"}（订单关联或计费重量）`);
     }
