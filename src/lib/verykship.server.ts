@@ -95,8 +95,10 @@ export async function verykRequest(
 }
 export async function accountUnits() {
   const a = await verykRequest("account");
-  const weight = String(a.weightUnit).toLowerCase(),
-    length = String(a.lengthunit).toLowerCase();
+  // The account endpoint returns units as unit.weight.code / unit.length.code;
+  // the flat weightUnit/lengthunit fields are kept only as a fallback.
+  const weight = String(a.unit?.weight?.code ?? a.weightUnit).toLowerCase(),
+    length = String(a.unit?.length?.code ?? a.lengthunit).toLowerCase();
   if (!["kg", "lb"].includes(weight) || !["cm", "in"].includes(length))
     throw new Error("账号计量单位无法识别，已停止请求以免错误计费");
   return { weight: weight as "kg" | "lb", length: length as "cm" | "in" };
