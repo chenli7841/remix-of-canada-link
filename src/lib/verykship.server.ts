@@ -67,18 +67,36 @@ export async function verykRequest(
   };
   params.sign = signParameters(params, c.secret);
   let json: any;
+  let responseStatus: number | undefined;
+  let receivedResponse = false;
   try {
     const res = await fetch(`${c.url}?${new URLSearchParams(params)}`, {
       method: "POST",
-      redirect: "error",
+      // Cloudflare Workers rejects redirect: "error"; "manual" returns the 3xx
+      // response, which !res.ok below still treats as a failure.
+      redirect: "manual",
       headers: { "Content-Type": "application/json", "Accept-Language": "zh-CN" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(45000),
     });
+    responseStatus = res.status;
+    receivedResponse = true;
     if (!res.ok) throw new Error("HTTP failure");
     json = await res.json();
-  } catch {
-    throw new Error("VerykShip 请求未获得确定结果；提交操作请核对平台订单后再处理");
+  } catch (error) {
+    // Only expose bounded diagnostics, never a signed URL, response body or raw exception.
+    const name = (error as { name?: string })?.name;
+    const reason = receivedResponse
+      ? (responseStatus && responseStatus >= 200 && responseStatus < 300
+          ? "响应不是有效 JSON"
+          : `HTTP ${responseStatus}`)
+      : name === "TimeoutError" || name === "AbortError"
+        ? "请求超时"
+        : "网络连接失败";
+    const caution = action === "shipment/create" || action === "shipment/void"
+      ? "；操作结果不确定，请核对平台订单，勿重复提交"
+      : "；未创建面单或扣款";
+    throw new Error(`VerykShip ${reason}${caution}`);
   }
   if (![true, 1, "1"].includes(json?.status)) {
     // Never forward the query, signed URL, headers or unfiltered provider response.

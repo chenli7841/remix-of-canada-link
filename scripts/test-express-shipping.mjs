@@ -179,7 +179,7 @@ test("provider uses POST, timestamp signature, sandbox credentials, no redirects
   await api.verykRequest("shipment/quote", { test: 1 });
   assert.ok(request.url.startsWith("https://3hlrnj-shipper.veryk.dev/api?"));
   assert.equal(request.init.method, "POST");
-  assert.equal(request.init.redirect, "error");
+  assert.equal(request.init.redirect, "manual"); // Workers rejects "error"; 3xx fails via !res.ok
   assert.equal(request.init.body, '{"test":1}');
   assert.ok(!request.url.includes("test-secret"));
 });
@@ -212,7 +212,14 @@ test("false status and network errors never expose credentials or signed URLs", 
       },
     },
   );
-  await assert.rejects(offline.verykRequest("shipment/create"), /未获得确定结果/);
+  await assert.rejects(offline.verykRequest("shipment/create"), /操作结果不确定/);
+});
+test("provider HTTP failures are distinguishable without disclosing response bodies", async () => {
+  const api = load(apiPath, { "./express": core }, {
+    process: { env },
+    fetch: async () => ({ ok: false, status: 403, json: async () => { throw Error("test-secret"); } }),
+  });
+  await assert.rejects(api.verykRequest("account"), e => e.message.includes("HTTP 403") && !e.message.includes("test-secret"));
 });
 test("unrecognized provider units stop instead of falling back to pounds", async () => {
   const api = load(
