@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import {readIntakeReminder} from '@/lib/intake-reminder.functions';
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, useEffect } from "react";
 import { intakeScanSearch, intakeScanCommit, markDetained, intakeScanReceiveWaybill, intakeScanReceiveOrder } from "@/lib/scan.functions";
@@ -16,6 +17,16 @@ function IntakeScanPage() {
   const receiveWb = useServerFn(intakeScanReceiveWaybill);
   const receiveOrder = useServerFn(intakeScanReceiveOrder);
   const detain = useServerFn(markDetained);
+  const readReminder = useServerFn(readIntakeReminder);
+  const [reminder,setReminder]=useState<{note:string;number:string}|null>(null);
+  const reminderResolve=useRef<((ok:boolean)=>void)|null>(null);
+  const checkReminder=async(kind:'order'|'forwarding',id:string,number:string)=>{
+    const r=await readReminder({data:{kind,id}});
+    if(!r.intake_reminder)return true;
+    setReminder({note:r.note||'备注为空，请联系订单负责人核实额外操作',number});
+    return new Promise<boolean>(resolve=>{reminderResolve.current=resolve;});
+  };
+  const closeReminder=(ok:boolean)=>{setReminder(null);reminderResolve.current?.(ok);reminderResolve.current=null;};
 
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,6 +55,9 @@ function IntakeScanPage() {
   };
 
   const handleCandidate = async (cand: Candidate, c: string) => {
+    setBusy(true);
+    try { if(!await checkReminder(cand.kind,cand.id,cand.display_no))return; }
+    catch(e:any){setMsg({ok:false,text:e.message});return;} finally {setBusy(false);}
     const kind = classifyCandidate(cand);
     if (kind === "manual") {
       setPicked(cand);
@@ -67,7 +81,7 @@ function IntakeScanPage() {
   const onSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const c = code.trim();
-    if (!c || busy) return;
+    if (!c || busy || reminder) return;
     setBusy(true); setMsg(null); setPicked(null);
     try {
       const r: any = await search({ data: { code: c } });
@@ -76,6 +90,10 @@ function IntakeScanPage() {
       if (r.match === "waybill" && r.waybill) {
         // 运单号 → 直接入库（面单在量尺称重保存时打印）
         try {
+          const wb=r.waybill;
+          if(wb.order_id || wb.forwarding_id){
+            if(!await checkReminder(wb.order_id?'order':'forwarding',wb.order_id||wb.forwarding_id,wb.waybill_no))return;
+          }
           await receiveWb({ data: { waybillId: r.waybill.id } });
           const note = r.waybill.parent_buyer_note || r.waybill.parent_note;
           const noteText = note ? ` | 客户备注: ${note}` : "";
@@ -113,6 +131,7 @@ function IntakeScanPage() {
 
   const autoReceiveOrder = async (cand: Candidate, c: string) => {
     try {
+      if(!await checkReminder('order',cand.id,cand.display_no))return;
       const r: any = await receiveOrder({ data: { orderId: cand.id } });
       const ids = (r.waybills ?? []).map((w: any) => w.id);
       setMsg({ ok: true, text: `✓ 电商订单 ${r.parentNo} 已按 ${ids.length} 个运单全部收件` });
@@ -129,6 +148,7 @@ function IntakeScanPage() {
     const overwrite = (picked.existing_waybill_count ?? 0) > 0;
     setBusy(true); setMsg(null);
     try {
+      if(!await checkReminder(picked.kind,picked.id,picked.display_no))return;
       const r = await commit({ data: { parentKind: picked.kind, parentId: picked.id, boxCount, weightPerBox: weight ? Number(weight) : undefined, overwrite } });
       setMsg({ ok: true, text: `✓ 已${overwrite ? "覆盖重建为" : "生成"} ${r.waybills.length} 个运单 (${r.parentNo})，面单请在量尺称重保存时打印` });
       setLog(l => [{ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), code: code.trim(), action: `${overwrite ? "覆盖重建" : "入库"} ${picked.display_no} → ${r.waybills.length}单` }, ...l].slice(0, 30));
@@ -155,6 +175,7 @@ function IntakeScanPage() {
 
   return (
     <Page title="入库扫描" subtitle="运单号/电商订单号 → 直接收件; 集运订单号/国内单号 → 手动输入箱数生成运单; 无匹配 → 自动登记滞留">
+      {reminder&&<div role="alertdialog" aria-modal="true" aria-labelledby="intake-reminder-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><div className="w-full max-w-xl space-y-4 rounded-2xl border-2 border-amber-400 bg-slate-900 p-6"><h2 id="intake-reminder-title" className="text-xl font-bold text-amber-300">入库额外操作提醒</h2><p className="font-mono">{reminder.number}</p><p className="whitespace-pre-wrap text-lg text-amber-100">{reminder.note}</p><p>请查看备注并安排额外操作后继续入库。</p><div className="flex gap-4"><button className="rounded bg-amber-500 px-4 py-2 text-black" onClick={()=>closeReminder(true)}>已查看备注，继续入库</button><button onClick={()=>closeReminder(false)}>暂不入库</button></div></div></div>}
       <div className="mx-auto max-w-4xl space-y-4">
         <form onSubmit={onSearch} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <label className="text-xs font-semibold text-slate-300 inline-flex items-center gap-1.5"><ScanLine className="h-4 w-4 text-brand"/>扫描单号 (运单号 / 电商订单号 / 集运订单号 / 国内单号 均可)</label>
@@ -170,7 +191,7 @@ function IntakeScanPage() {
           {msg && <div className={`mt-2 text-sm ${msg.ok ? "text-emerald-300" : "text-rose-300"}`}>{msg.text}</div>}
         </form>
 
-        <InventoryIntakePanel />
+        <InventoryIntakePanel beforeReceive={async(id,number)=>{setBusy(true);try{return await checkReminder('forwarding',id,number);}finally{setBusy(false);}}} />
 
 
         {waybillNote && (

@@ -1,3 +1,4 @@
+import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -105,6 +106,8 @@ function OrderDetail() {
           )}
         </div>
       </div>
+
+      <OrderNoteCard kind="order" row={order} onSaved={() => detailQ.refetch()}/>
 
       <WorkflowStepper
         flow={order.source === "shop" ? SHOP_FLOW : WAYBILL_FLOW}
@@ -266,3 +269,4 @@ function Stat({ label, value }: { label: string; value: any }) {
     </div>
   );
 }
+

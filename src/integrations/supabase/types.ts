@@ -1426,6 +1426,7 @@ export type Database = {
           intl_tracking_no: string | null
           items_desc: string | null
           length_cm: number | null
+          intake_reminder: boolean
           note: string | null
           pallet_id: string | null
           pallet_no: string | null
@@ -1471,6 +1472,7 @@ export type Database = {
           intl_tracking_no?: string | null
           items_desc?: string | null
           length_cm?: number | null
+          intake_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null
@@ -1516,6 +1518,7 @@ export type Database = {
           intl_tracking_no?: string | null
           items_desc?: string | null
           length_cm?: number | null
+          intake_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null
@@ -2311,6 +2314,7 @@ export type Database = {
           insurance_cny: number
           insured: boolean
           intl_tracking_no: string | null
+          intake_reminder: boolean
           note: string | null
           order_no: string
           overridden_by: string | null
@@ -2360,6 +2364,7 @@ export type Database = {
           insurance_cny?: number
           insured?: boolean
           intl_tracking_no?: string | null
+          intake_reminder?: boolean
           note?: string | null
           order_no: string
           overridden_by?: string | null
@@ -2409,6 +2414,7 @@ export type Database = {
           insurance_cny?: number
           insured?: boolean
           intl_tracking_no?: string | null
+          intake_reminder?: boolean
           note?: string | null
           order_no?: string
           overridden_by?: string | null
@@ -5965,3 +5971,4 @@ export const Constants = {
     },
   },
 } as const
+

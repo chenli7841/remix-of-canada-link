@@ -1,3 +1,4 @@
+import { OrderNoteEditor } from "@/components/admin/OrderNoteEditor";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -87,7 +88,7 @@ function ForwardingsPage() {
             {q.data?.items.length === 0 && <tr><td colSpan={11} className="py-10 text-center text-slate-500">暂无数据</td></tr>}
             {q.data?.items.map((f: any) => (
               <tr key={f.id} className="hover:bg-white/[0.03]">
-                <td className="px-4 py-2.5 font-mono text-base">{f.request_no}</td>
+                <td className="px-4 py-2.5 font-mono text-base">{f.request_no}<OrderNoteEditor kind="forwarding" row={f} onSaved={() => qc.invalidateQueries({queryKey:["admin-forwardings"]})}/></td>
                 <td className="px-4 py-2.5 text-xs">{f.customer_code ?? "—"}</td>
                 <td className="px-4 py-2.5 text-xs">{f.warehouse} · {METHOD_LABEL[f.shipping_method] ?? f.shipping_method}</td>
                 <td className="px-4 py-2.5 text-xs">
@@ -123,3 +124,4 @@ function ForwardingsPage() {
     </Page>
   );
 }
+

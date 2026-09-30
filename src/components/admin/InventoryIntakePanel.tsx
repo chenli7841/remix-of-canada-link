@@ -10,7 +10,7 @@ import { Warehouse, ChevronDown, ChevronRight, Check, AlertCircle, Loader2, Scan
 
 type Scanned = { id: string; no: string; itemKey: string; name: string; sku: string | null };
 
-export function InventoryIntakePanel() {
+export function InventoryIntakePanel({beforeReceive}:{beforeReceive?:(id:string,number:string)=>Promise<boolean>}) {
   const list = useServerFn(listInventoryIntakeOrders);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["inventory-intake-orders"],
@@ -58,7 +58,7 @@ export function InventoryIntakePanel() {
                   {o.items.reduce((s: number, i: any) => s + i.required_boxes, 0)} 箱
                 </span>
               </button>
-              {openId === o.id && <OrderCard order={o} onDone={() => { setOpenId(null); refetch(); }} />}
+              {openId === o.id && <OrderCard order={o} beforeReceive={beforeReceive} onDone={() => { setOpenId(null); refetch(); }} />}
             </li>
           ))}
         </ul>
@@ -67,7 +67,7 @@ export function InventoryIntakePanel() {
   );
 }
 
-function OrderCard({ order, onDone }: { order: any; onDone: () => void }) {
+function OrderCard({ order, onDone, beforeReceive }: { order: any; onDone: () => void; beforeReceive?:(id:string,number:string)=>Promise<boolean> }) {
   const check = useServerFn(inventoryIntakeCheckWaybill);
   const commit = useServerFn(inventoryIntakeCommit);
   const [code, setCode] = useState("");
@@ -106,6 +106,7 @@ function OrderCard({ order, onDone }: { order: any; onDone: () => void }) {
     setBusy(true);
     setMsg(null);
     try {
+      if(beforeReceive && !await beforeReceive(order.id,order.request_no))return;
       const r: any = await commit({ data: { forwardingId: order.id, waybillIds: scanned.map((s) => s.id), makePallet } });
       setMsg({
         ok: true,

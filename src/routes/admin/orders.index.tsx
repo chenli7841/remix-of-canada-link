@@ -1,3 +1,4 @@
+import { OrderNoteEditor } from "@/components/admin/OrderNoteEditor";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,7 +79,7 @@ function OrdersPage() {
             {q.data?.orders.length === 0 && <tr><td colSpan={10} className="py-10 text-center text-slate-500">暂无数据</td></tr>}
             {q.data?.orders.map((o: any) => (
               <tr key={o.id} className="hover:bg-white/[0.03]">
-                <td className="px-4 py-2.5 font-mono text-base">{o.order_no}</td>
+                <td className="px-4 py-2.5 font-mono text-base">{o.order_no}<OrderNoteEditor kind="order" row={o} onSaved={() => qc.invalidateQueries({queryKey:["admin-orders"]})}/></td>
                 <td className="px-4 py-2.5 text-xs">{o.customer_code ?? "—"}</td>
                 <td className="px-4 py-2.5 text-xs">
                   <div>{METHOD_LABEL[o.shipping_method] ?? o.shipping_method}</div>
@@ -121,3 +122,4 @@ function OrdersPage() {
     </Page>
   );
 }
+

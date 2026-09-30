@@ -685,7 +685,7 @@ export const listOrders = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("orders")
       .select(
-        "id, order_no, customer_code, shipping_method, route_code, total_cny, payment_status, status, batch_no, domestic_tracking_no, tracking_no, created_at, user_id",
+        "id, order_no, customer_code, shipping_method, route_code, total_cny, payment_status, status, batch_no, domestic_tracking_no, tracking_no, created_at, user_id, note, intake_reminder",
         { count: "exact" },
       )
       .eq("source", "shop")
@@ -837,7 +837,7 @@ export const listForwardings = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("forwarding_orders")
       .select(
-        "id, request_no, tracking_no, domestic_tracking_no, customer_code, warehouse, shipping_method, status, payment_status, fee_cny, freight_snapshot, batch_no, intake_at, created_at, box_count, route_code, route_id, destination_code, shipping_routes:route_id(code, name_zh)",
+        "id, request_no, tracking_no, domestic_tracking_no, customer_code, warehouse, shipping_method, status, payment_status, fee_cny, freight_snapshot, batch_no, intake_at, created_at, box_count, route_code, route_id, destination_code, note, intake_reminder, shipping_routes:route_id(code, name_zh)",
         { count: "exact" },
       )
       .order("created_at", { ascending: false });
@@ -4773,3 +4773,4 @@ export const updateForwardingBasicInfo = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+

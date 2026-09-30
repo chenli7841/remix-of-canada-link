@@ -1,3 +1,4 @@
+import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
 import { SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 import { HsCodeInput } from "@/components/HsCodeInput";
@@ -144,6 +145,8 @@ function FwDetail() {
         </div>
       </div>
 
+
+
       <WorkflowStepper
         flow={WAYBILL_FLOW}
         current={(() => {
@@ -159,6 +162,7 @@ function FwDetail() {
         title="集运流程"
       />
 
+      <OrderNoteCard kind="forwarding" row={fo} onSaved={() => detailQ.refetch()}>{({notes,reminder}) => (
       <div className="grid gap-4 md:grid-cols-3">
         <Card title="客户">
           {user ? (
@@ -168,6 +172,7 @@ function FwDetail() {
               <div className="text-xs font-mono text-slate-500">客户号 {user.customer_code ?? "—"}</div>
             </div>
           ) : "—"}
+          {notes}
         </Card>
         <Card title="基础信息">
           <div className="space-y-1 text-xs text-slate-300">
@@ -244,8 +249,10 @@ function FwDetail() {
             canEdit={canIntake}
             onSave={async (next) => { await setInsured({ data: { id, insured: next } }); await qc.invalidateQueries({ queryKey: ["admin-fo", id] }); }}
           />
+          {reminder}
         </Card>
       </div>
+      )}</OrderNoteCard>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card title={<span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5"/>收件地址</span> as any}>
@@ -868,3 +875,5 @@ function BasicField({ label, value, onChange, mono }: { label: string; value: st
     </div>
   );
 }
+
+
