@@ -103,13 +103,13 @@ export function PartnerRouteSettings({
         if (storage) {
           const [s, r] = await Promise.all([storage.settings(), storage.list()]);
           if (active) {
-            setSettings({ ...initial, ...s });
+            setSettings({ ...initial, ...s, general: {...emptyGeneral, ...s.general} });
             setRecords(r);
           }
         } else {
           const v = JSON.parse(localStorage.getItem("partner-settings-v2-preview") || "null");
           if (v && active) {
-            setSettings({ ...initial, ...v.settings });
+            setSettings({ ...initial, ...v.settings, general: {...emptyGeneral, ...v.settings?.general} });
             setRecords(v.records);
           }
         }
@@ -266,6 +266,28 @@ export function PartnerRouteSettings({
                 <Card title="汇率">
                   {fields("general", [["fx", "1 USD 折合 CAD", "CAD"]])}
                   <p>报价统一换算为 CAD。</p>
+                </Card>
+                <Card title="本地长途转运 · 超长附加费">
+                  <p>UPS 尺寸规则参考预设，可修改。当前为设置预览，暂不参与报价；费用留空表示待填写，不代表免费。</p>
+                  <h3>一级：额外操作费</h3>
+                  <p>单件满足以下任意一项即触发（严格大于，不含等于）。</p>
+                  {fields("general", [
+                    ["localHandlingLength", "最长边超过", "cm"],
+                    ["localHandlingSecondSide", "第二长边超过", "cm"],
+                    ["localHandlingGirth", "长加围长超过", "cm"],
+                    ["localHandlingFee", "额外操作费", "/件"],
+                  ])}
+                  <h3>二级：大包裹附加费</h3>
+                  <p>满足以下任意一项即触发。与一级同时触发时，仅收二级附加费。</p>
+                  {fields("general", [
+                    ["localLargeLength", "最长边超过", "cm"],
+                    ["localLargeGirth", "长加围长超过", "cm"],
+                    ["localLargeFee", "大包裹附加费", "/件"],
+                    ["localOversizeCurrency", "附加费币种"],
+                  ])}
+                  <p className="prs-formula">先按尺寸从大到小排列：长 ≥ 宽 ≥ 高。长加围长 = 长 + 2 × 宽 + 2 × 高。按件判定后乘以对应包裹数。</p>
+                  <p>这是仓间转运的独立规则模板。快递 API 已返回的 UPS 附加费不重复计算；本预设仅参考尺寸触发条件，不包含 UPS 全套重量、旺季及计费重量规则。</p>
+                  <label>规则备注（待设置）<textarea value={settings.general.localOversizeNotes || ""} onChange={e => setSettings(s => ({...s, general: {...s.general, localOversizeNotes: e.target.value}}))} /></label>
                 </Card>
                 {button("general")}
               </div>

@@ -14,6 +14,15 @@ export const generalSchema = z.object({
   portRate: num,
   portCurrency: currency,
   fx: num,
+  localOversizeNotes: z.string().trim().max(2000).default(""),
+  localHandlingLength: num.default("122"),
+  localHandlingSecondSide: num.default("76"),
+  localHandlingGirth: num.default("266"),
+  localHandlingFee: num.default(""),
+  localLargeLength: num.default("244"),
+  localLargeGirth: num.default("330"),
+  localLargeFee: num.default(""),
+  localOversizeCurrency: currency.default("CAD"),
 });
 export const transportSchema = z.object({
   seaRate: num,
@@ -123,6 +132,15 @@ export const emptyGeneral: General = {
   portRate: "",
   portCurrency: "CAD",
   fx: "",
+  localOversizeNotes: "",
+  localHandlingLength: "122",
+  localHandlingSecondSide: "76",
+  localHandlingGirth: "266",
+  localHandlingFee: "",
+  localLargeLength: "244",
+  localLargeGirth: "330",
+  localLargeFee: "",
+  localOversizeCurrency: "CAD",
 };
 export const emptyTransport: Transport = {
   seaRate: "",

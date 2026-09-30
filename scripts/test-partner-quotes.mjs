@@ -42,6 +42,27 @@ const id='11111111-1111-4111-8111-111111111111';
 const to={name:'Test',mobile_phone:'4165550100',address:'Test',city:'Saint-Hyacinthe',province:'QC',postalcode:'J2T1X3',region_id:'CA'};
 const raw={routeId:id,to,items:[{name:'硬顶凉亭',hsId:id,value:1000,count:5,specs:[[215,35,29,39],[177,39,30,27.6],[261,32,24,48],[165,64,10,57.4],[118,64,17,48.2]].map(([lengthCm,widthCm,heightCm,weightKg])=>({lengthCm,widthCm,heightCm,weightKg,count:1}))}]};
 const input=model.quoteInputSchema.parse(raw),hs=[{id,hs_code:'TEST',mfn_rate:.05,gst_rate:.05,anti_dumping_rate:0}];
+
+test('all dispatch warehouses are quoted; transfer-inclusive minimum and source are persisted',async()=>{
+ const w=(id,label)=>({id,label,name:'Test',phone:'4165550100',street:'Test',unit:'',city:'Toronto',province:'ON',postal:'M5V1A1',density:'200',currency:'CAD',transfers:[]});
+ const a=w('a','Arrival'), b=w('b','Other'); a.transfers=[{target:'b',rate:'100'}];
+ const shared={...cfg,shared:true,originId:'a',rounding:'0.5'};
+ const rows=[{section:'general',value:{...settingsModel.emptyGeneral,...cfg}},{section:'transport',value:{...settingsModel.emptyTransport,seaRate:'325',seaCurrency:'USD',seaMinKg:'10',seaDivisor:'6000',seaMaxKgPerM3:'300'}},{section:'warehouses',value:[a,b]}];
+ let saved, calls=0;
+ const db={from(table){const q={select(){return q},eq(){return q},in(){return q},insert(v){saved=v;return q},maybeSingle:async()=>({data:table==='profiles'?{customer_code:'09013'}:{id,config:shared}}),single:async()=>({data:{id}}),then(resolve){return Promise.resolve({data:table==='partner_shipping_settings'?rows:hs}).then(resolve)}};return q;}};
+ const api={quotePartnerDelivery:async()=>({rates:[{key:'same',carrier:'Test',service:'Ground',currency:'CAD',price:++calls===1?80:20}],expiresAt:new Date(Date.now()+600000).toISOString()})};
+ const svc=load('src/lib/partner-quote.server.ts',{'./partner-number':numbering,'./partner-settings':settingsModel,'./partner-quote':model,'@/integrations/supabase/client.server':{supabaseAdmin:db},'./partner-delivery.server':api});
+ const auth={userId:id,supabase:{rpc:async()=>({data:false})}};
+ const result=await svc.createQuote(auth,raw);
+ assert.equal(calls,2);assert.equal(result.rates[0].dispatchWarehouse.id,'a');
+ assert.equal(result.rates[1].transfer.amount,110.1);assert.equal(result.rates[0].transfer.amount,0);
+ assert.notEqual(result.rates[0].key,result.rates[1].key);assert.equal(saved.result.rates.length,2);
+ a.transfers=[]; calls=0;
+ await assert.rejects(()=>svc.createQuote(auth,raw),/转运单价/);assert.equal(calls,0);
+ a.transfers=[{target:'b',rate:'100'}];
+ api.quotePartnerDelivery=async()=>{throw Error('HTTP 429')};
+ await assert.rejects(()=>svc.createQuote(auth,raw),/尚未完成全部仓库比价/);
+});
 test('gazebo: five packages use actual kg for volume fees and individually rounded chargeable kg',()=>{const q=model.baseQuote(cfg,input,hs);assert.equal(q.packages.length,5);assert.ok(Math.abs(q.actual-220.2)<1e-8);assert.equal(q.chargeable,228);assert.ok(Math.abs(q.volume-.859747)<1e-9);assert.equal(q.fees[0].amount,44.59);assert.equal(q.fees[3].amount,100);});
 test('missing rate, FX or HS data never becomes zero',()=>{assert.throws(()=>model.baseQuote({...cfg,portRate:''},input,hs),/费用参数/);assert.throws(()=>model.baseQuote({...cfg,fx:''},input,hs),/汇率/);assert.throws(()=>model.baseQuote(cfg,input,[]),/税率缺失/);});
 test('reject inconsistent count and limit quote size before API calls',()=>{assert.throws(()=>model.quoteInputSchema.parse({...raw,items:[{...raw.items[0],count:6}]}));assert.throws(()=>model.quoteInputSchema.parse({...raw,items:Array.from({length:21},()=>raw.items[0])}));});

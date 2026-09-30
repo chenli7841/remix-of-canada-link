@@ -136,7 +136,8 @@ export async function createQuote(c: Auth, raw: unknown) {
   );
   if (!route) throw Error("线路不存在");
   const stored = partnerRouteSchema.parse(route.config);
-  const config = stored.shared ? resolvePartnerRoute(stored, await readSettings()) : stored;
+  const settings = stored.shared ? await readSettings() : null;
+  const config = settings ? resolvePartnerRoute(stored, settings) : stored;
   if (!config.enabled || !config.allowQuote || !canQuote(config, who))
     throw Error("线路未启用或您无权查询");
   const hs = checked(
@@ -147,19 +148,47 @@ export async function createQuote(c: Auth, raw: unknown) {
       .eq("is_active", true),
     "税率读取失败",
   );
-  const base = baseQuote(config, input, hs),
-    from = routeOrigin(config);
-  const delivery = await quotePartnerDelivery({
-    draft: { from, to: input.to, packages: base.packages, packageType: "parcel" },
-    rule: { currency: "CAD" },
-  });
-  const rates = delivery.rates.filter((r) => r.currency === "CAD");
+  const base = baseQuote(config, input, hs);
+  const arrival = settings?.warehouses.find(w => w.id === config.originId);
+  const origins = settings ? settings.warehouses.map(w => {
+    let transferAmount = 0, billableM3 = 0;
+    if (w.id !== arrival?.id) {
+      const transfer = arrival?.transfers.find(t => t.target === w.id);
+      if (!transfer || transfer.rate === "" || !(Number(arrival?.density) > 0))
+        throw Error(`缺少 ${arrival?.label || "到货仓"} → ${w.label} 的转运单价或每立方折算重量，无法比较全部仓库`);
+      billableM3 = Math.max(base.volume, base.actual / Number(arrival!.density));
+      const fx = arrival!.currency === "USD" ? Number(config.fx) : 1;
+      if (!(fx > 0) || !Number.isFinite(fx) || !Number.isFinite(Number(transfer.rate)) || Number(transfer.rate) < 0)
+        throw Error("转运单价或汇率无效");
+      transferAmount = Math.round(billableM3 * Number(transfer.rate) * fx * 100) / 100;
+    }
+    const from = routeOrigin({...config, originName:w.name, originPhone:w.phone,
+      originStreet:[w.street,w.unit].filter(Boolean).join(", "), originCity:w.city,
+      originProvince:w.province, originPostal:w.postal});
+    return {id:w.id, label:w.label, from, transferAmount, billableM3};
+  }) : [{id:"route", label:config.originCity, from:routeOrigin(config), transferAmount:0, billableM3:0}];
+  const rates = [];
+  const expiries: number[] = [];
+  // Sequential requests avoid a burst against the provider's shared account quota.
+  for (const origin of origins) {
+    let delivery;
+    try {
+      delivery = await quotePartnerDelivery({draft:{from:origin.from,to:input.to,packages:base.packages,packageType:"parcel"},rule:{currency:"CAD"}});
+    } catch (error) {
+      throw Error(`${origin.label} 派送查询失败，尚未完成全部仓库比价：${error instanceof Error ? error.message : "请重试"}`);
+    }
+    expiries.push(Date.parse(delivery.expiresAt));
+    rates.push(...delivery.rates.filter(r => r.currency === "CAD").map(r => ({...r,
+      providerKey:r.key, key:`${origin.id}:${r.key}`, dispatchWarehouse:{id:origin.id,label:origin.label,address:origin.from},
+      transfer:{from:arrival?.label || config.originCity,to:origin.label,amount:origin.transferAmount,billableM3:origin.billableM3,currency:"CAD"}})));
+  }
   if (!rates.length) throw Error("未返回可用 CAD 派送服务，请核对地址、尺寸和重量");
   const subtotal = base.fees.reduce((s, r) => s + Math.round(r.amount * 100), 0);
   const result = {
     ...base,
-    rates: rates.map((r) => ({ ...r, total: Math.round(subtotal + r.price * 100) / 100 })),
-    expiresAt: delivery.expiresAt,
+    rates: rates.map((r) => ({ ...r, total: Math.round(subtotal + r.price * 100 + r.transfer.amount * 100) / 100 })).sort((a,b) => a.total-b.total || a.key.localeCompare(b.key)),
+    expiresAt: new Date(Math.min(...expiries)).toISOString(),
+    localOversizePending: true,
     currency: "CAD",
     routeName: config.name,
   };
@@ -170,9 +199,9 @@ export async function createQuote(c: Auth, raw: unknown) {
         user_id: c.userId,
         route_id: route.id,
         input,
-        route_snapshot: { ...route, config },
+        route_snapshot: { ...route, config, warehouses:settings?.warehouses },
         result,
-        expires_at: delivery.expiresAt,
+        expires_at: result.expiresAt,
       })
       .select("id")
       .single(),
