@@ -1,6 +1,7 @@
 import {partnerDeliverySchema} from './partner-delivery';
 import {normalizeRates,chooseRate} from './express';
 import {accountUnits,providerConfig,providerPayload,verykRequest} from './verykship.server';
+import {createHash} from 'node:crypto';
 type Auth={userId:string;supabase:any};
 async function authorize(c:Auth){
  const results=await Promise.all(['owner','manager'].map(role=>c.supabase.rpc('has_role',{_user_id:c.userId,_role:role})));
@@ -18,7 +19,23 @@ export async function testPartnerDelivery(input:unknown,c:Auth){
  return quotePartnerDelivery(input);
 }
 // Server-only: callers must authorize access to their persisted route before calling.
+const quoteCache=new Map<string,{result:Awaited<ReturnType<typeof fetchPartnerDelivery>>;until:number}>();
+const pendingQuotes=new Map<string,Promise<Awaited<ReturnType<typeof fetchPartnerDelivery>>>>();
 export async function quotePartnerDelivery(input:unknown){
+ const parsed=partnerDeliverySchema.parse(input),cfg=providerConfig();
+ const key=createHash('sha256').update(JSON.stringify([cfg.environment,cfg.id,cfg.secret,parsed])).digest('hex');
+ for(const [k,v] of quoteCache)if(v.until<=Date.now())quoteCache.delete(k);
+ const hit=quoteCache.get(key);if(hit)return hit.result;
+ const pending=pendingQuotes.get(key);if(pending)return pending;
+ if(pendingQuotes.size>=100)throw Error('快递查询繁忙，请稍后再试');
+ const promise=fetchPartnerDelivery(parsed).then(result=>{
+   if(quoteCache.size>=100)quoteCache.delete(quoteCache.keys().next().value!);
+   quoteCache.set(key,{result,until:Math.min(Date.now()+120000,Date.parse(result.expiresAt))});
+   return result;
+ }).finally(()=>pendingQuotes.delete(key));
+ pendingQuotes.set(key,promise);return promise;
+}
+async function fetchPartnerDelivery(input:unknown){
  const {draft,rule}=partnerDeliverySchema.parse(input);
  if(draft.from.region_id!=='CA'||draft.to.region_id!=='CA')throw new Error('同行派送报价目前仅支持加拿大境内');
  if(draft.signature||draft.liftgate)throw new Error('当前同行报价仅支持普通包裹，不支持签名或尾板附加服务');

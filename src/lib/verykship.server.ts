@@ -49,17 +49,27 @@ export function accountKey() {
 }
 type ProviderAction = 'account'|'shipment/quote'|'shipment/create'|'shipment/label'|'shipment/detail'|'shipment/void';
 const readRequests = new Map<string, Promise<any>>();
+const accountResponses = new Map<string, {value:any;until:number}>();
 let quoteCooldown = {key:'',until:0};
 export async function verykRequest(action:ProviderAction,payload:unknown={}) {
  const readonly=action==='account'||action==='shipment/quote';
  if(!readonly)return sendVerykRequest(action,payload);
  const c=providerConfig(), account=fingerprint([c.environment,c.id,c.secret]);
+ const cached=accountResponses.get(account);
+ if(action==='account'&&cached&&cached.until>Date.now())return cached.value;
  if(quoteCooldown.key===account&&quoteCooldown.until>Date.now())throw Error('快递平台请求过于频繁（HTTP 429），请等待 '+Math.ceil((quoteCooldown.until-Date.now())/1000)+' 秒后再查询；未创建面单或扣款');
  const key=fingerprint([account,action,payload]);
  const existing=readRequests.get(key);if(existing)return existing;
  // Bound memory without sharing or caching quotes across different addresses/packages.
  if(readRequests.size>=100)throw Error('快递查询繁忙，请稍后再试');
- const pending=sendVerykRequest(action,payload).finally(()=>readRequests.delete(key));
+ const pending=sendVerykRequest(action,payload).then(value=>{
+   if(action==='account'){
+     for(const [k,v] of accountResponses)if(v.until<=Date.now())accountResponses.delete(k);
+     if(accountResponses.size>=20)accountResponses.delete(accountResponses.keys().next().value!);
+     accountResponses.set(account,{value,until:Date.now()+300000});
+   }
+   return value;
+ }).finally(()=>readRequests.delete(key));
  readRequests.set(key,pending);return pending;
 }
 async function sendVerykRequest(
