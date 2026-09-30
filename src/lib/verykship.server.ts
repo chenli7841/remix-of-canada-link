@@ -47,7 +47,22 @@ export function accountKey() {
   const c = providerConfig();
   return `${c.environment}:${c.id}`;
 }
-export async function verykRequest(
+type ProviderAction = 'account'|'shipment/quote'|'shipment/create'|'shipment/label'|'shipment/detail'|'shipment/void';
+const readRequests = new Map<string, Promise<any>>();
+let quoteCooldown = {key:'',until:0};
+export async function verykRequest(action:ProviderAction,payload:unknown={}) {
+ const readonly=action==='account'||action==='shipment/quote';
+ if(!readonly)return sendVerykRequest(action,payload);
+ const c=providerConfig(), account=fingerprint([c.environment,c.id,c.secret]);
+ if(quoteCooldown.key===account&&quoteCooldown.until>Date.now())throw Error('快递平台请求过于频繁（HTTP 429），请等待 '+Math.ceil((quoteCooldown.until-Date.now())/1000)+' 秒后再查询；未创建面单或扣款');
+ const key=fingerprint([account,action,payload]);
+ const existing=readRequests.get(key);if(existing)return existing;
+ // Bound memory without sharing or caching quotes across different addresses/packages.
+ if(readRequests.size>=100)throw Error('快递查询繁忙，请稍后再试');
+ const pending=sendVerykRequest(action,payload).finally(()=>readRequests.delete(key));
+ readRequests.set(key,pending);return pending;
+}
+async function sendVerykRequest(
   action:
     | "account"
     | "shipment/quote"
@@ -69,6 +84,7 @@ export async function verykRequest(
   let json: any;
   let responseStatus: number | undefined;
   let receivedResponse = false;
+  let retrySeconds = 60;
   try {
     const res = await fetch(`${c.url}?${new URLSearchParams(params)}`, {
       method: "POST",
@@ -81,10 +97,16 @@ export async function verykRequest(
     });
     responseStatus = res.status;
     receivedResponse = true;
+    if(res.status===429&&(action==='account'||action==='shipment/quote')){
+      const retry=res.headers?.get('Retry-After');
+      if(retry){const n=Number(retry),seconds=Number.isFinite(n)?n:(Date.parse(retry)-Date.now())/1000;if(Number.isFinite(seconds)&&seconds>0)retrySeconds=Math.ceil(seconds);}
+      quoteCooldown={key:fingerprint([c.environment,c.id,c.secret]),until:Date.now()+retrySeconds*1000};
+    }
     if (!res.ok) throw new Error("HTTP failure");
     json = await res.json();
   } catch (error) {
     // Only expose bounded diagnostics, never a signed URL, response body or raw exception.
+    if(responseStatus===429&&(action==='account'||action==='shipment/quote'))throw Error('快递平台请求过于频繁（HTTP 429，'+(action==='account'?'账号信息查询':'派送报价查询')+'），请等待 '+retrySeconds+' 秒后再查询；未创建面单或扣款');
     const name = (error as { name?: string })?.name;
     const reason = receivedResponse
       ? (responseStatus && responseStatus >= 200 && responseStatus < 300

@@ -23,6 +23,11 @@ export const addressSchema = z.object({
   email: z.union([z.literal(""), z.string().email()]).default(""),
   type: z.enum(["resident", "commercial"]).default("resident"),
 });
+// Quote-only recipient fields; shipment creation continues to use addressSchema.
+export const quoteRecipientSchema = addressSchema.extend({
+  name: text.default(""),
+  mobile_phone: text.default(""),
+});
 export type ExpressAddress = z.infer<typeof addressSchema>;
 export const emptyAddress: ExpressAddress = {
   name: "",

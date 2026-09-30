@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addressSchema, packageSchema } from "./express";
+import { addressSchema, quoteRecipientSchema, packageSchema } from "./express";
 import {
   partnerPackageWeight,
   partnerVolumeFee,
@@ -51,7 +51,7 @@ export type PartnerRouteDraft = z.infer<typeof partnerRouteSchema>;
 export const quoteInputSchema = z
   .object({
     routeId: z.string().uuid(),
-    to: addressSchema,
+    to: quoteRecipientSchema,
     items: z
       .array(
         z.object({

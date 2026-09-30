@@ -1,4 +1,5 @@
-import {partnerRouteCodeSchema} from '@/lib/partner-number';
+import { AmazonWarehouseSettings } from "./AmazonWarehouseSettings";
+import { partnerRouteCodeSchema } from "@/lib/partner-number";
 import { useEffect, useState, type ReactNode } from "react";
 import { PartnerDeliveryTest, type DeliveryApi } from "./PartnerDeliveryTest";
 import {
@@ -18,7 +19,7 @@ type Storage = {
   settings: () => Promise<Settings>;
   saveSettings: (data: unknown) => Promise<unknown>;
 };
-const initial: Settings = { general: emptyGeneral, transport: emptyTransport, warehouses: [] };
+const initial: Settings = { general: emptyGeneral, transport: emptyTransport, warehouses: [], amazonWarehouses: [] };
 const tabs = ["基础设置", "运输方式设置", "仓库地址设置", "线路设置", "使用权限"];
 const currencies = [
   ["USD", "USD"],
@@ -102,13 +103,13 @@ export function PartnerRouteSettings({
         if (storage) {
           const [s, r] = await Promise.all([storage.settings(), storage.list()]);
           if (active) {
-            setSettings(s);
+            setSettings({ ...initial, ...s });
             setRecords(r);
           }
         } else {
           const v = JSON.parse(localStorage.getItem("partner-settings-v2-preview") || "null");
           if (v && active) {
-            setSettings(v.settings);
+            setSettings({ ...initial, ...v.settings });
             setRecords(v.records);
           }
         }
@@ -431,6 +432,16 @@ export function PartnerRouteSettings({
                   </Card>
                 ))}
                 {button("warehouses")}
+                <Card title="亚马逊收货地址预设">
+                  <AmazonWarehouseSettings
+                    rows={settings.amazonWarehouses}
+                    onChange={(amazonWarehouses) =>
+                      setSettings((s) => ({ ...s, amazonWarehouses }))
+                    }
+                    onSave={() => saveSection("amazonWarehouses")}
+                    busy={busy}
+                  />
+                </Card>
               </div>
               <div hidden={tab !== 3}>
                 <div className="prs-actions">

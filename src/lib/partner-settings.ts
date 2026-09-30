@@ -65,15 +65,57 @@ export const warehousesSchema = z
       }
     }
   });
+export const amazonWarehousesSchema = z
+  .array(
+    z.object({
+      id: z.string().uuid(),
+      code: str.toUpperCase().min(1, "请填写亚马逊仓库代码"),
+      company: str.min(1, "请填写仓库名称"),
+      street: str.min(1, "请填写详细地址"),
+      city: str.min(1, "请填写城市"),
+      province: z.enum([
+        "AB",
+        "BC",
+        "MB",
+        "NB",
+        "NL",
+        "NS",
+        "NT",
+        "NU",
+        "ON",
+        "PE",
+        "QC",
+        "SK",
+        "YT",
+      ]),
+      postal: str.toUpperCase().regex(/^[A-Z]\d[A-Z] ?\d[A-Z]\d$/, "请填写有效加拿大邮编"),
+      phone: str,
+      enabled: z.boolean(),
+    }),
+  )
+  .max(500)
+  .superRefine((rows, ctx) => {
+    if (new Set(rows.map((r) => r.code)).size !== rows.length)
+      ctx.addIssue({ code: "custom", message: "亚马逊仓库代码不能重复" });
+    if (new Set(rows.map((r) => r.id)).size !== rows.length)
+      ctx.addIssue({ code: "custom", message: "亚马逊仓库记录重复" });
+  });
+export type AmazonWarehouseSetting = z.infer<typeof amazonWarehousesSchema>[number];
 export const settingInput = z.discriminatedUnion("section", [
   z.object({ section: z.literal("general"), value: generalSchema }),
   z.object({ section: z.literal("transport"), value: transportSchema }),
   z.object({ section: z.literal("warehouses"), value: warehousesSchema }),
+  z.object({ section: z.literal("amazonWarehouses"), value: amazonWarehousesSchema }),
 ]);
 export type General = z.infer<typeof generalSchema>;
 export type Transport = z.infer<typeof transportSchema>;
 export type Warehouse = z.infer<typeof warehouseSchema>;
-export type Settings = { general: General; transport: Transport; warehouses: Warehouse[] };
+export type Settings = {
+  general: General;
+  transport: Transport;
+  warehouses: Warehouse[];
+  amazonWarehouses: AmazonWarehouseSetting[];
+};
 export const emptyGeneral: General = {
   domesticRate: "",
   domesticDensity: "",

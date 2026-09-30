@@ -31,3 +31,5 @@ export const searchPartnerHsCodes = createServerFn({ method: "GET" })
 
 export const getPartnerShippingRoutes = createServerFn({ method: "GET" })
 .middleware([requireSupabaseAuth]).handler(async ({context}) => (await import('./partner-quote.server')).listRoutes(context));
+
+export const getPartnerAmazonWarehouses = createServerFn({method:'GET'}).middleware([requireSupabaseAuth]).handler(async()=>(await import('./partner-quote.server')).listAmazonWarehouses());

@@ -191,6 +191,7 @@ async function readSettings(): Promise<Settings> {
     general: { ...emptyGeneral, ...values.general },
     transport: { ...emptyTransport, ...values.transport },
     warehouses: values.warehouses || [],
+    amazonWarehouses: values.amazonWarehouses || [],
   };
 }
 export async function getSettings(c: Auth) {
@@ -211,3 +212,5 @@ export async function saveSettings(c: Auth, raw: unknown) {
   );
   return data.value;
 }
+
+export async function listAmazonWarehouses(){const row=checked(await db.from('partner_shipping_settings').select('value').eq('section','amazonWarehouses').maybeSingle(),'亚马逊仓库地址读取失败，请重试');return (row?.value||[]).filter((w:any)=>w.enabled).map((w:any)=>({code:w.code,company:w.company,street:w.street,city:w.city,province:w.province,postal:w.postal,phone:w.phone}));}

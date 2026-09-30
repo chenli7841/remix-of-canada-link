@@ -490,3 +490,5 @@ test("mixed ownership containers never expose other customers' contents", async 
   await assert.rejects(ctx.expressContext({kind:"pallet",id:ids.pallet},"customer",false), /归属/);
   await assert.rejects(ctx.expressContext({kind:"waybill",id:ids.waybill},"intruder",false), /无权/);
 });
+test('429 honors provider cooldown and does not send another read request',async()=>{let calls=0;const api=load(apiPath,{'./express':core},{process:{env},fetch:async()=>{calls++;return {ok:false,status:429,headers:{get:()=> '90'}};}});await assert.rejects(api.verykRequest('shipment/quote',{}),/90 秒/);await assert.rejects(api.verykRequest('account'),/429/);assert.equal(calls,1);});
+test('identical concurrent quote requests share one provider call',async()=>{let calls=0;const api=load(apiPath,{'./express':core},{process:{env},fetch:async()=>{calls++;return {ok:true,status:200,json:async()=>({status:1,response:{rates:[]}})};}});await Promise.all([api.verykRequest('shipment/quote',{test:1}),api.verykRequest('shipment/quote',{test:1})]);assert.equal(calls,1);await api.verykRequest('shipment/quote',{test:2});assert.equal(calls,2);});

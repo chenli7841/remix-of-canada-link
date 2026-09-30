@@ -24,12 +24,19 @@ export async function quotePartnerDelivery(input:unknown){
  if(draft.signature||draft.liftgate)throw new Error('当前同行报价仅支持普通包裹，不支持签名或尾板附加服务');
  if(!providerConfig().configured)throw new Error('未配置当前环境的 VerykShip 服务端凭证');
  const units=await accountUnits();
- let rates=normalizeRates(await verykRequest('shipment/quote',providerPayload(draft,units)));
+ const quotePayload=(rate?:Parameters<typeof providerPayload>[2])=>{
+  const payload=providerPayload(draft,units,rate);
+  const destination:Record<string,unknown>={...payload.destination};
+  if(!draft.to.name)delete destination.name;
+  if(!draft.to.mobile_phone)delete destination.mobile_phone;
+  return {...payload,destination};
+ };
+ let rates=normalizeRates(await verykRequest('shipment/quote',quotePayload()));
  // Purolator requires explicit no-signature mapping; do not use its initial unqualified rate.
  const special=rates.filter(r=>r.carrier.toLowerCase().replace(/[^a-z]/g,'')==='purolator');
  if(special.length>40)throw new Error('可用服务过多，请缩小服务范围');
  for(const rate of special){
-  const updated=normalizeRates(await verykRequest('shipment/quote',{...providerPayload(draft,units,rate),carrier_ids:[rate.carrierId]})).find(r=>r.key===rate.key);
+  const updated=normalizeRates(await verykRequest('shipment/quote',{...quotePayload(rate),carrier_ids:[rate.carrierId]})).find(r=>r.key===rate.key);
   rates=rates.filter(r=>r.key!==rate.key);if(updated)rates.push(updated);
  }
  const recommendation=chooseRate(rates,rule).rate;
