@@ -1,6 +1,7 @@
 import {partnerRouteCodeSchema} from './partner-number';
 import {
   settingInput,
+  selectDispatchWarehouse,
   emptyGeneral,
   emptyTransport,
   resolvePartnerRoute,
@@ -79,6 +80,7 @@ export async function listRoutes(c: Auth, management = false) {
         volumetric_divisor: d.shared ? Number(d.divisor) : 6000,
         minimum_kg: d.shared ? Number(d.minKg) : 10,
         weight_step: d.shared ? (d.rounding === "none" ? 0 : Number(d.rounding)) : 0.5,
+        dispatchWarehouses: d.shared ? settings!.warehouses.map(w=>({id:w.id,label:w.label,serviceProvinces:w.serviceProvinces||[]})) : [],
       };
     });
 }
@@ -150,12 +152,13 @@ export async function createQuote(c: Auth, raw: unknown) {
   );
   const base = baseQuote(config, input, hs);
   const arrival = settings?.warehouses.find(w => w.id === config.originId);
-  const origins = settings ? settings.warehouses.map(w => {
+  if(!settings && input.dispatchWarehouseId)throw Error('此线路使用固定发货仓库');
+  const origins = settings ? [selectDispatchWarehouse(settings.warehouses,input.to.province,input.dispatchWarehouseId)].map(w => {
     let transferAmount = 0, billableM3 = 0;
     if (w.id !== arrival?.id) {
       const transfer = arrival?.transfers.find(t => t.target === w.id);
       if (!transfer || transfer.rate === "" || !(Number(arrival?.density) > 0))
-        throw Error(`缺少 ${arrival?.label || "到货仓"} → ${w.label} 的转运单价或每立方折算重量，无法比较全部仓库`);
+        throw Error(`缺少 ${arrival?.label || "到货仓"} → ${w.label} 的转运单价或每立方折算重量，无法计算此仓报价`);
       billableM3 = Math.max(base.volume, base.actual / Number(arrival!.density));
       const fx = arrival!.currency === "USD" ? Number(config.fx) : 1;
       if (!(fx > 0) || !Number.isFinite(fx) || !Number.isFinite(Number(transfer.rate)) || Number(transfer.rate) < 0)
@@ -175,7 +178,7 @@ export async function createQuote(c: Auth, raw: unknown) {
     try {
       delivery = await quotePartnerDelivery({draft:{from:origin.from,to:input.to,packages:base.packages,packageType:"parcel"},rule:{currency:"CAD"}});
     } catch (error) {
-      throw Error(`${origin.label} 派送查询失败，尚未完成全部仓库比价：${error instanceof Error ? error.message : "请重试"}`);
+      throw Error(`${origin.label} 派送查询失败：${error instanceof Error ? error.message : "请重试"}`);
     }
     expiries.push(Date.parse(delivery.expiresAt));
     rates.push(...delivery.rates.filter(r => r.currency === "CAD").map(r => ({...r,

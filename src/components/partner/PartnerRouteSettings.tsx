@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PartnerDeliveryTest, type DeliveryApi } from "./PartnerDeliveryTest";
 import {
   settingInput,
+  CANADA_SERVICE_PROVINCES,
   emptyGeneral,
   emptyTransport,
   emptyRoute,
@@ -345,6 +346,7 @@ export function PartnerRouteSettings({
                             density: "",
                             currency: "CAD",
                             transfers: [],
+                            serviceProvinces: [],
                           },
                         ],
                       }))
@@ -375,6 +377,9 @@ export function PartnerRouteSettings({
                         />
                       ))}
                     </div>
+                    <h3>推荐派送省份 / 地区</h3>
+                    <p>按收货省份推荐此仓库。只匹配一个仓库时自动选择；匹配多个时由客户选择。邮编首字母仅供核对，X 不能单独区分 NT 与 NU。</p>
+                    <div className="prs-grid">{CANADA_SERVICE_PROVINCES.map(([code,name,prefix])=><label key={code} style={{display:'flex',alignItems:'center',gap:8}}><input type="checkbox" style={{width:'auto'}} checked={(w.serviceProvinces||[]).includes(code)} onChange={e=>updateWarehouse(w.id,{serviceProvinces:e.target.checked?[...(w.serviceProvinces||[]),code]:(w.serviceProvinces||[]).filter(p=>p!==code)})}/><span>{name} ({code}) · 邮编 {prefix}</span></label>)}</div>
                     <h3>仓库转运总参数</h3>
                     <div className="prs-grid">
                       <Field

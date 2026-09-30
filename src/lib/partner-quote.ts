@@ -51,6 +51,7 @@ export type PartnerRouteDraft = z.infer<typeof partnerRouteSchema>;
 export const quoteInputSchema = z
   .object({
     routeId: z.string().uuid(),
+    dispatchWarehouseId: z.string().uuid().optional(),
     to: quoteRecipientSchema,
     items: z
       .array(

@@ -7,6 +7,22 @@ const num = z
   .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), "请输入非负数");
 const str = z.string().trim().max(200),
   currency = z.enum(["CAD", "USD"]);
+// Canada Post postal-code first-character regions. X is shared by NT and NU;
+// dispatch selection uses the recipient's explicit province, not X alone.
+export const CANADA_SERVICE_PROVINCES = [
+  ["BC","不列颠哥伦比亚","V"],["AB","阿尔伯塔","T"],
+  ["SK","萨斯喀彻温","S"],["MB","曼尼托巴","R"],
+  ["ON","安大略","K / L / M / N / P"],["QC","魁北克","G / H / J"],
+  ["NB","新不伦瑞克","E"],["NS","新斯科舍","B"],
+  ["PE","爱德华王子岛","C"],["NL","纽芬兰与拉布拉多","A"],
+  ["YT","育空","Y"],["NT","西北地区","X（与 NU 共用）"],["NU","努纳武特","X（与 NT 共用）"],
+] as const;
+export function selectDispatchWarehouse<T extends {id:string;serviceProvinces?:string[]}>(warehouses:T[],province:string,selected?:string):T {
+  if(selected){const w=warehouses.find(w=>w.id===selected);if(!w)throw Error('所选发货仓库不存在，请刷新后重选');return w;}
+  const matches=warehouses.filter(w=>(w.serviceProvinces||[]).includes(province));
+  if(matches.length!==1)throw Error(matches.length?'此省份有多个推荐仓库，请选择一个发货仓库':'此省份尚未分配发货仓库，请手动选择或联系管理员');
+  return matches[0];
+}
 export const generalSchema = z.object({
   domesticRate: num,
   domesticDensity: num,
@@ -36,6 +52,7 @@ export const transportSchema = z.object({
   airDivisor: num,
 });
 export const warehouseSchema = z.object({
+  serviceProvinces: z.array(z.string().refine(v=>CANADA_SERVICE_PROVINCES.some(p=>p[0]===v),'无效省份')).max(13).default([]),
   id: z.string().uuid(),
   label: str.min(1),
   name: str,
