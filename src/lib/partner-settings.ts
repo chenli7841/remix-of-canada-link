@@ -1,0 +1,148 @@
+import { z } from "zod";
+import type { PartnerRouteDraft } from "./partner-quote";
+const num = z
+  .string()
+  .trim()
+  .max(30)
+  .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), "请输入非负数");
+const str = z.string().trim().max(200),
+  currency = z.enum(["CAD", "USD"]);
+export const generalSchema = z.object({
+  domesticRate: num,
+  domesticDensity: num,
+  domesticCurrency: currency,
+  portRate: num,
+  portCurrency: currency,
+  fx: num,
+});
+export const transportSchema = z.object({
+  seaRate: num,
+  seaCurrency: currency,
+  seaMinKg: num,
+  seaDivisor: num,
+  seaMaxKgPerM3: num,
+  airRate: num,
+  airCurrency: currency,
+  airMinKg: num,
+  airDivisor: num,
+});
+export const warehouseSchema = z.object({
+  id: z.string().uuid(),
+  label: str.min(1),
+  name: str,
+  company: str,
+  phone: str,
+  street: str,
+  unit: str,
+  city: str,
+  province: str,
+  postal: str,
+  density: num,
+  currency,
+  transfers: z.array(z.object({ target: z.string().uuid(), rate: num })).max(100),
+});
+export const warehousesSchema = z
+  .array(warehouseSchema)
+  .max(100)
+  .superRefine((rows, ctx) => {
+    const ids = new Set(rows.map((w) => w.id));
+    if (ids.size !== rows.length) ctx.addIssue({ code: "custom", message: "仓库编号重复" });
+    for (const w of rows) {
+      const targets = new Set();
+      for (const t of w.transfers) {
+        if (
+          t.target === w.id ||
+          !ids.has(t.target) ||
+          targets.has(t.target) ||
+          t.rate === "" ||
+          !(Number(w.density) > 0)
+        )
+          ctx.addIssue({
+            code: "custom",
+            message: "请补齐有效转运单价及折算重量，目的仓不能重复或为自身",
+          });
+        targets.add(t.target);
+      }
+    }
+  });
+export const settingInput = z.discriminatedUnion("section", [
+  z.object({ section: z.literal("general"), value: generalSchema }),
+  z.object({ section: z.literal("transport"), value: transportSchema }),
+  z.object({ section: z.literal("warehouses"), value: warehousesSchema }),
+]);
+export type General = z.infer<typeof generalSchema>;
+export type Transport = z.infer<typeof transportSchema>;
+export type Warehouse = z.infer<typeof warehouseSchema>;
+export type Settings = { general: General; transport: Transport; warehouses: Warehouse[] };
+export const emptyGeneral: General = {
+  domesticRate: "",
+  domesticDensity: "",
+  domesticCurrency: "USD",
+  portRate: "",
+  portCurrency: "CAD",
+  fx: "",
+};
+export const emptyTransport: Transport = {
+  seaRate: "",
+  seaCurrency: "USD",
+  seaMinKg: "",
+  seaDivisor: "",
+  seaMaxKgPerM3: "",
+  airRate: "",
+  airCurrency: "USD",
+  airMinKg: "",
+  airDivisor: "",
+};
+export const emptyRoute: PartnerRouteDraft = {
+  shared: true,
+  name: "",
+  code: "",
+  method: "sea",
+  cargo: "general",
+  enabled: false,
+  originId: "",
+  rounding: "0.5",
+  ...emptyGeneral,
+  seaRate: "",
+  seaDensity: "",
+  seaCurrency: "USD",
+  originName: "",
+  originPhone: "",
+  originStreet: "",
+  originCity: "",
+  originProvince: "",
+  originPostal: "",
+  carrier: "",
+  audience: "全部同行客户",
+  customers: "",
+  editors: "管理员",
+  allowQuote: true,
+  allowOrder: false,
+};
+export function resolvePartnerRoute(d: PartnerRouteDraft, s: Settings): PartnerRouteDraft {
+  if (!d.shared) return d;
+  const w = s.warehouses.find((w) => w.id === d.originId);
+  if (!w) throw Error("线路起始仓库未设置或不存在");
+  const t = s.transport,
+    sea = d.method === "sea";
+  const result = {
+    ...d,
+    ...s.general,
+    seaRate: t.seaRate,
+    seaDensity: t.seaMaxKgPerM3,
+    seaCurrency: t.seaCurrency,
+    airRate: t.airRate,
+    airCurrency: t.airCurrency,
+    divisor: sea ? t.seaDivisor : t.airDivisor,
+    minKg: sea ? t.seaMinKg : t.airMinKg,
+    originName: w.name,
+    originPhone: w.phone,
+    originStreet: [w.street, w.unit].filter(Boolean).join(", "),
+    originCity: w.city,
+    originProvince: w.province,
+    originPostal: w.postal,
+  };
+  if (!result.divisor || Number(result.divisor) <= 0 || result.minKg === "" || !d.rounding)
+    throw Error("请补齐运输方式的体积重除数、最低计费重量和线路进位方式");
+  return result;
+}

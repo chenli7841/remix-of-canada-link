@@ -1,9 +1,10 @@
 /** Partner quote rule: cm and kg, charged separately for each package. */
-export function partnerPackageWeight(length:number,width:number,height:number,actual:number) {
+export function partnerPackageWeight(length:number,width:number,height:number,actual:number,rule={divisor:6000,minimum:10,step:0.5}) {
  if (![length,width,height,actual].every(n=>Number.isFinite(n)&&n>0)) return null;
- const volumetric=length*width*height/6000;
+ if(!Number.isFinite(rule.divisor)||rule.divisor<=0||!Number.isFinite(rule.minimum)||rule.minimum<0||![0,0.5,1].includes(rule.step))return null;
+ const volumetric=length*width*height/rule.divisor;
  if (!Number.isFinite(volumetric)) return null;
- const chargeable=Math.max(10,Math.ceil(Math.max(volumetric,actual)*2)/2);
+ const chargeable=Math.max(rule.minimum,rule.step?Math.ceil(Math.max(volumetric,actual)/rule.step-1e-9)*rule.step:Math.max(volumetric,actual));
  return {actual,volumetric,chargeable};
 }
 export type VolumeFeeRule = {ratePerM3:number;kgPerM3:number;currency:'USD'|'CAD'};

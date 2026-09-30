@@ -1,25 +1,560 @@
-import {PartnerDeliveryTest,type DeliveryApi} from './PartnerDeliveryTest';
-import { useState, useEffect } from 'react';
-import './partner-route-settings.css';
-const defaults={name:'加拿大海运 · 普货',code:'',method:'sea',cargo:'general',enabled:false,domesticRate:'30',domesticDensity:'200',domesticCurrency:'USD',seaRate:'',seaDensity:'',seaCurrency:'USD',portRate:'',portCurrency:'CAD',fx:'',originName:'',originPhone:'',originStreet:'',originCity:'',originProvince:'',originPostal:'',carrier:'',audience:'指定同行客户',customers:'',editors:'管理员',allowQuote:true,allowOrder:false};
-type Draft=typeof defaults;
-export function PartnerRouteSettings({embedded=false,deliveryApi,storage}:{embedded?:boolean;deliveryApi?:DeliveryApi;storage?:{list:()=>Promise<any[]>;save:(data:any)=>Promise<any>}}){
- const [draft,setDraft]=useState<Draft>(()=>{try{return {...defaults,...JSON.parse(localStorage.getItem('partner-route-settings-preview')||'{}')}}catch{return defaults}});
- const [records,setRecords]=useState<any[]>([]),[recordId,setRecordId]=useState(''),[busy,setBusy]=useState(false),[loadError,setLoadError]=useState('');
- useEffect(()=>{if(storage)storage.list().then(setRecords).catch(e=>setLoadError(e.message));},[storage]);
- const save=async()=>{setBusy(true);try{if(storage){const saved=await storage.save({id:recordId||undefined,config:{...draft,editors:'管理员',allowOrder:false}});setRecordId(saved.id);setRecords(rows=>[...rows.filter(r=>r.id!==saved.id),saved]);setNotice('已保存到后台，客户询价将读取此线路');}else{localStorage.setItem('partner-route-settings-preview',JSON.stringify(draft));setNotice('已保存本地草稿 · 未写入后台');}}catch(e){setNotice(e instanceof Error?e.message:'保存失败');}finally{setBusy(false);}};
- const [notice,setNotice]=useState(''),[section,setSection]=useState('basic');
- const update=(key:keyof Draft,value:string|boolean)=>{setDraft(d=>({...d,[key]:value}));setNotice('');};
- const field=(key:keyof Draft,label:string,unit='',placeholder='待填写')=><label>{label}<div className="prs-input"><input value={String(draft[key])} type={['domesticRate','domesticDensity','seaRate','seaDensity','portRate','fx'].includes(key)?'number':'text'} min={key.includes('Density')||key==='fx'?'0.000001':'0'} step="any" placeholder={placeholder} onChange={e=>update(key,e.target.value)}/>{unit&&<span>{unit}</span>}</div></label>;
- const select=(key:keyof Draft,label:string,options:[string,string][]) =><label>{label}<select value={String(draft[key])} onChange={e=>update(key,e.target.value)}>{options.map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></label>;
- const currencies:[string,string][]=[['USD','USD · 美元'],['CAD','CAD · 加币']];
- const valid=(s:string,zero=false)=>s.trim()!==''&&Number.isFinite(Number(s))&&(zero?Number(s)>=0:Number(s)>0);
- const checks=[['基本资料',!!draft.name.trim()&&!!draft.code.trim()],['国内费用',valid(draft.domesticRate,true)&&valid(draft.domesticDensity)],['海运费用',draft.method==='sea'&&valid(draft.seaRate,true)&&valid(draft.seaDensity)],['目的港费用',valid(draft.portRate,true)],['派送发货资料',[draft.originName,draft.originPhone,draft.originStreet,draft.originCity,draft.originProvince,draft.originPostal].every(x=>x.trim())],['USD → CAD 汇率',valid(draft.fx)],['客户权限',draft.audience==='全部同行客户'||!!draft.customers.trim()]] as const;
- const sections=[['basic','01','基本资料'],['cost','02','费用与计费规则'],['origin','03','派送发货地点'],['access','04','访问权限']];
- return <div className={embedded?"prs prs-embedded":"prs"}><header><a href={embedded?"/partner-shipping":"http://127.0.0.1:4178/"}>eplus<span>+</span><small>同行业务后台</small></a><span className="prs-badge">本地设计预览</span></header><div className="prs-shell"><nav><div className="prs-nav-title">专属线路管理</div>{sections.map(([id,n,label])=><button key={id} className={section===id?'active':''} onClick={()=>setSection(id)}><span>{n}</span>{label}</button>)}<div className="prs-nav-note">独立于现有集运线路<br/>配置完成后再接入报价</div></nav><main><div className="prs-heading"><div><div className="prs-eyebrow">PARTNER / ROUTE SETTINGS</div><h1>同行专属线路设置</h1><p>一条线路，统一管理费用、派送起点与客户使用范围。</p></div><span className="prs-draft">{storage?(recordId?"后台已保存":"尚未保存到后台"):"草稿 · 未发布"}</span></div><div className="prs-banner">{storage?'启用并保存后，授权客户的询价页面将读取此配置。':'本地设计预览，仅保存浏览器草稿。'}</div>{storage&&<section><label>已保存线路<select value={recordId} onChange={e=>{const row=records.find(r=>r.id===e.target.value);setRecordId(e.target.value);setDraft(row?{...defaults,...row.config}:defaults);setNotice('');}}><option value="">新线路 / 当前浏览器草稿</option>{records.map(r=><option key={r.id} value={r.id}>{r.config.name} · {r.code}</option>)}</select></label>{loadError&&<p role="alert">{loadError}</p>}</section>}<div className="prs-layout"><div>
- {section==='basic'&&<section><h2>基本资料 <small>决定客户可选择的运输方案</small></h2><div className="prs-grid">{field('name','线路名称','','例如：加拿大海运 · 普货')}{field('code','线路编号','','例如：PARTNER-SEA-CA-01')}{select('method','运输方式',[['sea','海运'],['air','空运（计费方式待确认）']])}{select('cargo','货物类型',[['general','普货'],['sensitive','敏感货']])}</div><label className="prs-toggle"><input type="checkbox" checked={draft.enabled} onChange={e=>update('enabled',e.target.checked)}/>启用此线路 <small>{storage?"保存后生效":"仅草稿"}</small></label><div className="prs-note">收件国家：加拿大 · 通过专属链接登录使用 · 前端菜单暂不增加入口</div></section>}
- {section==='cost'&&<><section><h2>国内费用 <small>体积与重量折算取大值</small></h2><div className="prs-grid three">{field('domesticRate','每立方单价','/ m³')}{field('domesticDensity','每立方折算重量','kg/m³')}{select('domesticCurrency','费用币种',currencies)}</div><div className="prs-formula">max（总体积，总实重 ÷ {draft.domesticDensity||'折算重量'}）× {draft.domesticRate||'单价'} {draft.domesticCurrency}</div></section><section><h2>{draft.method==='sea'?'海运费用':'空运费用'} <small>每条线路独立设置</small></h2>{draft.method==='sea'?<><div className="prs-grid three">{field('seaRate','每立方单价','/ m³')}{field('seaDensity','每立方折算重量','kg/m³','例如 300，需自行确定')}{select('seaCurrency','费用币种',currencies)}</div><div className="prs-formula">max（总体积，总实重 ÷ {draft.seaDensity||'折算重量'}）× {draft.seaRate||'单价'} {draft.seaCurrency}</div></>:<p className="prs-note">空运费计算方式待确认，不套用海运参数。</p>}</section><section><h2>目的港费用 <small>仅按总体积计算</small></h2><div className="prs-grid">{field('portRate','每立方单价','/ m³')}{select('portCurrency','费用币种',currencies)}</div><div className="prs-formula">总体积 × {draft.portRate||'单价'} {draft.portCurrency}</div></section><section><h2>关税与派送费</h2><div className="prs-rule"><b>关税</b><p>各品名总货值 × HS 编码税率，再合计。税率沿用编码库 MFN + GST + 反倾销；缺失时提示补齐。</p></div><div className="prs-rule"><b>派送费</b><p>由快递面单 API 查询报价。使用本线路发货地点、客户地址及包裹尺寸和实重；查询不创建面单。</p></div></section><section><h2>包裹重量规则 <small>已确认规则 · 当前只读</small></h2><div className="prs-metrics"><div><b>6000</b><span>体积重除数</span></div><div><b>0.5 kg</b><span>向上进位</span></div><div><b>10 kg</b><span>单包最低计费重</span></div></div><p className="prs-note">长 × 宽 × 高 ÷ 6000；与实重取大值后逐包进位，再汇总。国内与海运折算使用总实重。</p></section><section><h2>报价币种与汇率</h2><div className="prs-grid"><label>客户报价币种<input value="CAD · 加币" readOnly/></label>{field('fx','1 USD 折合 CAD','CAD')}</div><p className="prs-note">币种不同先换算再合计；汇率或任一必要费用缺失时，不生成完整报价。</p></section></>}
- {section==='origin'&&<><section><h2>派送发货地点 <small>提供给快递面单 API 的寄件地址</small></h2><div className="prs-grid">{field('originName','发货人 / 公司')}{field('originPhone','联系电话')}</div><div className="prs-gap">{field('originStreet','详细地址','','街道、门牌、单元号')}</div><div className="prs-grid three prs-gap">{field('originCity','城市')}{select('originProvince','省份 / 地区',[['','请选择省份'],...['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'].map(x=>[x,x] as [string,string])])}{field('originPostal','邮编')}</div><p className="prs-note">国家：Canada。每条线路绑定一个发货地点，客户不需要填写发货资料。</p></section><section><h2>快递报价来源</h2>{field('carrier','快递账号 / 服务标识','','待关联现有快递面单系统')}<p className="prs-note">这里将选择现有系统已配置的账号或服务，不填写 API 密钥。报价联调见下方，只查询价格。</p></section><PartnerDeliveryTest key={[draft.originName,draft.originPhone,draft.originStreet,draft.originCity,draft.originProvince,draft.originPostal].join('|')} api={deliveryApi} origin={{name:draft.originName,company:draft.originName,mobile_phone:draft.originPhone,region_id:'CA',province:draft.originProvince,city:draft.originCity,postalcode:draft.originPostal,address:draft.originStreet,address2:'',email:'',type:'commercial'}}/></>}
- {section==='access'&&<section><h2>访问权限 <small>保存后生效</small></h2><div className="prs-grid">{select('audience','哪些客户可使用',[['指定同行客户','指定同行客户'],['全部同行客户','全部同行客户']])}{select('editors','后台可编辑角色',[['管理员','负责人 / 管理员']])}</div>{draft.audience==='指定同行客户'&&<div className="prs-gap">{field('customers','指定客户号','','用逗号分隔，后台接入后改为客户选择器')}</div>}<label className="prs-toggle"><input type="checkbox" checked={draft.allowQuote} onChange={e=>update('allowQuote',e.target.checked)}/>允许查询价格</label><label className="prs-toggle"><input type="checkbox" checked={false} disabled/>允许提交运单 <small>仅草稿选项，下单功能尚未接入</small></label><div className="prs-note">指定客户使用客户号匹配；全部同行客户指所有已登录且有客户号的客户。下单功能暂不开放。</div></section>}
- <div className="prs-actions"><span role="status">{notice||'修改后可保存为本地草稿，便于继续讨论。'}</span><button disabled={busy||!!loadError} onClick={save}>{busy?'保存中…':storage?'保存到后台':'保存本地草稿'}</button></div></div><aside><div className="prs-summary-title">线路配置概览</div><h3>{draft.name||'未命名线路'}</h3><p>{draft.method==='sea'?'海运':'空运'} / {draft.cargo==='general'?'普货':'敏感货'} / 加拿大</p><div className="prs-completion"><b>{checks.filter(x=>x[1]).length}<small> / {checks.length}</small></b><span>项资料已填写</span></div>{checks.map(([name,ok])=><div className="prs-check" key={name}><span>{name}</span><b className={ok?'ok':''}>{ok?'已填写':'待补充'}</b></div>)}<p className="prs-summary-note">保存时由后台校验；报价时重新读取线路、税率和快递服务。</p><a href={embedded?"/partner-shipping":"http://127.0.0.1:4178/"}>查看客户询价页面 ↗</a></aside></div></main></div></div>;
+import { useEffect, useState, type ReactNode } from "react";
+import { PartnerDeliveryTest, type DeliveryApi } from "./PartnerDeliveryTest";
+import {
+  settingInput,
+  emptyGeneral,
+  emptyTransport,
+  emptyRoute,
+  type Settings,
+  type Warehouse,
+} from "@/lib/partner-settings";
+import type { PartnerRouteDraft } from "@/lib/partner-quote";
+import "./partner-route-settings.css";
+type RecordRow = { id: string; config: PartnerRouteDraft };
+type Storage = {
+  list: () => Promise<RecordRow[]>;
+  save: (data: unknown) => Promise<RecordRow>;
+  settings: () => Promise<Settings>;
+  saveSettings: (data: unknown) => Promise<unknown>;
+};
+const initial: Settings = { general: emptyGeneral, transport: emptyTransport, warehouses: [] };
+const tabs = ["基础设置", "运输方式设置", "仓库地址设置", "线路设置", "使用权限"];
+const currencies = [
+  ["USD", "USD"],
+  ["CAD", "CAD"],
+];
+function Card({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="prs-card">
+      <details>
+        <summary>
+          <h2>{title}</h2>
+          <span className="prs-fold" />
+        </summary>
+        <div className="prs-card-body">{children}</div>
+      </details>
+    </section>
+  );
+}
+function Field({
+  label,
+  value,
+  onChange,
+  options,
+  unit,
+  numeric = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options?: string[][];
+  unit?: string;
+  numeric?: boolean;
+}) {
+  return (
+    <label>
+      {label}
+      {options ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          {options.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="prs-input">
+          <input
+            type={numeric ? "number" : "text"}
+            min="0"
+            step="any"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {unit && <span>{unit}</span>}
+        </div>
+      )}
+    </label>
+  );
+}
+export function PartnerRouteSettings({
+  embedded = false,
+  storage,
+  deliveryApi,
+}: {
+  embedded?: boolean;
+  storage?: Storage;
+  deliveryApi?: DeliveryApi;
+}) {
+  const [settings, setSettings] = useState<Settings>(initial),
+    [records, setRecords] = useState<RecordRow[]>([]),
+    [tab, setTab] = useState(0),
+    [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        if (storage) {
+          const [s, r] = await Promise.all([storage.settings(), storage.list()]);
+          if (active) {
+            setSettings(s);
+            setRecords(r);
+          }
+        } else {
+          const v = JSON.parse(localStorage.getItem("partner-settings-v2-preview") || "null");
+          if (v && active) {
+            setSettings(v.settings);
+            setRecords(v.records);
+          }
+        }
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "加载失败");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [storage]);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setNotice("");
+    try {
+      await fn();
+      setNotice(storage ? "已保存到后台" : "已保存本地草稿");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveSection = (section: keyof Settings) =>
+    run(async () => {
+      const data = settingInput.parse({ section, value: settings[section] });
+      if (storage) await storage.saveSettings(data);
+      else {
+        const old = JSON.parse(localStorage.getItem("partner-settings-v2-preview") || "null") || {
+          settings: initial,
+          records: [],
+        };
+        old.settings[section] = settings[section];
+        localStorage.setItem("partner-settings-v2-preview", JSON.stringify(old));
+      }
+    });
+  const saveRoute = (row: RecordRow) =>
+    run(async () => {
+      if (!row.config.name.trim() || !row.config.code.trim() || !row.config.originId)
+        throw Error("请填写线路名称、编号并选择起始仓库");
+      const config = {
+        ...row.config,
+        rounding: row.config.rounding || "0.5",
+        shared: true,
+        audience: "全部同行客户" as const,
+        customers: "",
+        allowQuote: true,
+        allowOrder: false as const,
+      };
+      if (storage) {
+        const saved = await storage.save({
+          id: row.id.startsWith("new:") ? undefined : row.id,
+          config,
+        });
+        setRecords((rs) => rs.map((r) => (r.id === row.id ? saved : r)));
+      } else {
+        const old = JSON.parse(localStorage.getItem("partner-settings-v2-preview") || "null") || {
+          settings: initial,
+          records: [],
+        };
+        const saved = { id: row.id, config };
+        const i = old.records.findIndex((r: RecordRow) => r.id === row.id);
+        if (i < 0) old.records.push(saved);
+        else old.records[i] = saved;
+        localStorage.setItem("partner-settings-v2-preview", JSON.stringify(old));
+      }
+    });
+  const fields = (section: "general" | "transport", specs: string[][]) => (
+    <div className="prs-grid">
+      {specs.map(([k, label, unit]) => (
+        <Field
+          key={k}
+          label={label}
+          unit={unit}
+          value={String((settings[section] as any)[k])}
+          options={k.endsWith("Currency") ? currencies : undefined}
+          numeric={!k.endsWith("Currency")}
+          onChange={(v) => setSettings((s) => ({ ...s, [section]: { ...s[section], [k]: v } }))}
+        />
+      ))}
+    </div>
+  );
+  const updateWarehouse = (id: string, patch: Partial<Warehouse>) =>
+    setSettings((s) => ({
+      ...s,
+      warehouses: s.warehouses.map((w) => (w.id === id ? { ...w, ...patch } : w)),
+    }));
+  const button = (section: keyof Settings) => (
+    <div className="prs-actions">
+      <button type="button" disabled={busy} onClick={() => saveSection(section)}>
+        保存{tabs[section === "general" ? 0 : section === "transport" ? 1 : 2]}
+      </button>
+    </div>
+  );
+  return (
+    <div className={`prs ${embedded ? "prs-embedded" : ""}`}>
+      <header>
+        <a href="/partner-shipping">
+          eplus<span>+</span>
+          <small>同行业务后台</small>
+        </a>
+      </header>
+      <div className="prs-shell">
+        <nav>
+          <div className="prs-nav-title">同行线路管理</div>
+          {tabs.map((t, i) => (
+            <button
+              key={t}
+              className={tab === i ? "active" : ""}
+              onClick={() => {
+                setTab(i);
+                setNotice("");
+              }}
+            >
+              {String(i + 1).padStart(2, "0")}　{t}
+            </button>
+          ))}
+        </nav>
+        <main>
+          <div className="prs-heading">
+            <div>
+              <div className="prs-eyebrow">PARTNER / SETTINGS</div>
+              <h1>{tabs[tab]}</h1>
+              <p>公共价格统一管理，每一步独立保存。</p>
+            </div>
+          </div>
+          {loading ? (
+            <p>正在读取设置…</p>
+          ) : error ? (
+            <p role="alert">{error}。未加载完成前不能保存。</p>
+          ) : (
+            <fieldset disabled={busy} className="prs-settings-fields">
+              <div hidden={tab !== 0}>
+                <Card title="国内操作费用">
+                  {fields("general", [
+                    ["domesticRate", "每立方单价", "/m³"],
+                    ["domesticCurrency", "币种"],
+                    ["domesticDensity", "每立方折算 kg 数", "kg/m³"],
+                  ])}
+                  <p className="prs-formula">max（实际总体积，总实重 ÷ 每立方 kg 数）× 单价</p>
+                </Card>
+                <Card title="目的港费用">
+                  {fields("general", [
+                    ["portRate", "每立方单价", "/m³"],
+                    ["portCurrency", "币种"],
+                  ])}
+                  <p>实际总体积 × 单价</p>
+                </Card>
+                <Card title="汇率">
+                  {fields("general", [["fx", "1 USD 折合 CAD", "CAD"]])}
+                  <p>报价统一换算为 CAD。</p>
+                </Card>
+                {button("general")}
+              </div>
+              <div hidden={tab !== 1}>
+                <Card title="海运基础设置">
+                  {fields("transport", [
+                    ["seaRate", "每立方单价", "/m³"],
+                    ["seaCurrency", "币种"],
+                    ["seaMinKg", "单包最低计费重量", "kg/包"],
+                    ["seaDivisor", "体积重除数", "cm³/kg"],
+                    ["seaMaxKgPerM3", "每立方最大 kg 数", "kg/m³"],
+                  ])}
+                  <p className="prs-formula">
+                    单包体积重 = 长 × 宽 × 高 ÷ 体积重除数。
+                    <br />
+                    收费立方 = max（实际总体积，总实重 ÷ 每立方最大 kg 数），按 0.1 m³ 向上进位。
+                    <br />
+                    例：1 m³、400 kg、300 kg/m³ → 按 1.4 m³ 收费。
+                  </p>
+                </Card>
+                <Card title="空运基础设置">
+                  {fields("transport", [
+                    ["airRate", "每 kg 单价", "/kg"],
+                    ["airCurrency", "币种"],
+                    ["airMinKg", "单包最低计费重量", "kg/包"],
+                    ["airDivisor", "体积重除数", "cm³/kg"],
+                  ])}
+                  <p className="prs-formula">
+                    逐包取实重与体积重的较大值，按线路进位后与最低计费重量取大值，再合计 × 单价。
+                  </p>
+                </Card>
+                {button("transport")}
+              </div>
+              <div hidden={tab !== 2}>
+                <div className="prs-actions">
+                  <span>仓库地址用于实际快递发货；每个仓库均可设置对外转运价格。</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettings((s) => ({
+                        ...s,
+                        warehouses: [
+                          ...s.warehouses,
+                          {
+                            id: crypto.randomUUID(),
+                            label: "新仓库",
+                            name: "",
+                            company: "",
+                            phone: "",
+                            street: "",
+                            unit: "",
+                            city: "",
+                            province: "",
+                            postal: "",
+                            density: "",
+                            currency: "CAD",
+                            transfers: [],
+                          },
+                        ],
+                      }))
+                    }
+                  >
+                    ＋ 新增仓库
+                  </button>
+                </div>
+                {settings.warehouses.map((w) => (
+                  <Card key={w.id} title={w.label}>
+                    <div className="prs-grid">
+                      {[
+                        ["label", "仓库名称"],
+                        ["name", "发货人姓名"],
+                        ["company", "公司"],
+                        ["phone", "电话"],
+                        ["street", "详细地址"],
+                        ["unit", "地址补充"],
+                        ["city", "城市"],
+                        ["province", "省份代码"],
+                        ["postal", "邮编"],
+                      ].map(([k, l]) => (
+                        <Field
+                          key={k}
+                          label={l}
+                          value={String(w[k as keyof Warehouse])}
+                          onChange={(v) => updateWarehouse(w.id, { [k]: v })}
+                        />
+                      ))}
+                    </div>
+                    <h3>仓库转运总参数</h3>
+                    <div className="prs-grid">
+                      <Field
+                        label="每立方折算 kg 数"
+                        numeric
+                        value={w.density}
+                        onChange={(density) => updateWarehouse(w.id, { density })}
+                      />
+                      <Field
+                        label="币种"
+                        value={w.currency}
+                        options={currencies}
+                        onChange={(currency) =>
+                          updateWarehouse(w.id, { currency: currency as "CAD" | "USD" })
+                        }
+                      />
+                    </div>
+                    <h3>各目的仓转运价格</h3>
+                    {w.transfers.map((t, i) => (
+                      <div className="prs-note" key={i}>
+                        <div className="prs-grid">
+                          <Field
+                            label="目的仓库"
+                            value={t.target}
+                            options={[
+                              ["", "请选择目的仓"],
+                              ...settings.warehouses
+                                .filter((x) => x.id !== w.id)
+                                .map((x) => [x.id, x.label]),
+                            ]}
+                            onChange={(target) =>
+                              updateWarehouse(w.id, {
+                                transfers: w.transfers.map((x, j) =>
+                                  j === i ? { ...x, target } : x,
+                                ),
+                              })
+                            }
+                          />
+                          <Field
+                            label="每立方单价"
+                            numeric
+                            value={t.rate}
+                            onChange={(rate) =>
+                              updateWarehouse(w.id, {
+                                transfers: w.transfers.map((x, j) =>
+                                  j === i ? { ...x, rate } : x,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateWarehouse(w.id, {
+                              transfers: w.transfers.filter((_, j) => j !== i),
+                            })
+                          }
+                        >
+                          删除此转运价格
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateWarehouse(w.id, {
+                          transfers: [...w.transfers, { target: "", rate: "" }],
+                        })
+                      }
+                    >
+                      ＋ 添加目的仓库及价格
+                    </button>
+                    <p className="prs-formula">
+                      max（实际 m³，实重 kg ÷ 本仓每立方 kg 数）× 目的仓单价。正反向分别设置。
+                    </p>
+                    <PartnerDeliveryTest
+                      api={deliveryApi}
+                      origin={{
+                        name: w.name,
+                        company: w.company,
+                        mobile_phone: w.phone,
+                        region_id: "CA",
+                        province: w.province,
+                        city: w.city,
+                        postalcode: w.postal,
+                        address: w.street,
+                        address2: w.unit,
+                        email: "",
+                        type: "commercial",
+                      }}
+                    />
+                  </Card>
+                ))}
+                {button("warehouses")}
+              </div>
+              <div hidden={tab !== 3}>
+                <div className="prs-actions">
+                  <span>线路 {records.length} 条 · 各自保存</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRecords((rs) => [
+                        ...rs,
+                        { id: "new:" + crypto.randomUUID(), config: { ...emptyRoute } },
+                      ])
+                    }
+                  >
+                    ＋ 新增线路
+                  </button>
+                </div>
+                {records.map((row) => {
+                  const d = row.config;
+                  const update = (key: string, value: unknown) =>
+                    setRecords((rs) =>
+                      rs.map((r) =>
+                        r.id === row.id ? { ...r, config: { ...r.config, [key]: value } } : r,
+                      ),
+                    );
+                  return (
+                    <Card key={row.id} title={d.name || "新增线路"}>
+                      {!d.shared && (
+                        <p className="prs-note">
+                          旧版线路：原配置已保留。选择仓库后保存，将切换为公共价格。
+                        </p>
+                      )}
+                      <div className="prs-grid">
+                        <Field
+                          label="线路名称"
+                          value={d.name}
+                          onChange={(v) => update("name", v)}
+                        />
+                        <Field
+                          label="线路编号"
+                          value={d.code}
+                          onChange={(v) => update("code", v)}
+                        />
+                        <Field
+                          label="运输方式"
+                          value={d.method}
+                          options={[
+                            ["sea", "海运"],
+                            ["air", "空运"],
+                          ]}
+                          onChange={(v) => update("method", v)}
+                        />
+                        <Field
+                          label="货物类型"
+                          value={d.cargo}
+                          options={[
+                            ["general", "普货"],
+                            ["sensitive", "敏感货"],
+                          ]}
+                          onChange={(v) => update("cargo", v)}
+                        />
+                        <Field
+                          label="线路状态"
+                          value={String(d.enabled)}
+                          options={[
+                            ["false", "停用"],
+                            ["true", "启用"],
+                          ]}
+                          onChange={(v) => update("enabled", v === "true")}
+                        />
+                        <Field
+                          label="包裹重量进位方式"
+                          value={d.rounding || "0.5"}
+                          options={[
+                            ["0.5", "每 0.5 kg 向上进位"],
+                            ["1", "每 1 kg 向上进位"],
+                            ["none", "不进位"],
+                          ]}
+                          onChange={(v) => update("rounding", v)}
+                        />
+                        <Field
+                          label="起始仓库（到货仓库）"
+                          value={d.originId || ""}
+                          options={[
+                            ["", "请选择已保存仓库"],
+                            ...settings.warehouses.map((w) => [w.id, w.label]),
+                          ]}
+                          onChange={(v) => update("originId", v)}
+                        />
+                      </div>
+                      <p className="prs-note">
+                        统一使用公共价格。请先保存仓库及公共参数，再启用线路。
+                      </p>
+                      <div className="prs-actions">
+                        <button type="button" onClick={() => saveRoute(row)}>
+                          保存此线路
+                        </button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              <div hidden={tab !== 4}>
+                <Card title="使用权限">
+                  <p>后台仅 owner 可设置；客户登录后可查询已启用线路。</p>
+                  <p>所有线路使用公共价格。快递服务及附加费由 API 返回。</p>
+                </Card>
+              </div>
+            </fieldset>
+          )}
+          <p role="status">{notice}</p>
+        </main>
+      </div>
+    </div>
+  );
 }

@@ -30,6 +30,20 @@ function load(path, mocks = {}, globals = {}) {
   return module.exports;
 }
 const core = load("src/lib/express.ts");
+test('Chinese labels distinguish peak charges and UPS rules stay carrier-specific', () => {
+  const {DeliveryRateDetails,deliveryChargeLabel} = load('src/components/partner/DeliveryRateDetails.tsx');
+  assert.equal(deliveryChargeLabel('LARGE PACKAGE'),'大型包裹附加费');
+  assert.equal(deliveryChargeLabel('PEAK SEASON SURCHARGE – LARGE PACKAGE'),'旺季大型包裹附加费');
+  assert.equal(deliveryChargeLabel('PEAK SEASON SURCHARGE – ADDITIONAL HANDLING'),'旺季额外操作附加费');
+  assert.equal(deliveryChargeLabel('GST'),'商品及服务税（GST）');
+  const {renderToStaticMarkup} = require('react-dom/server');
+  const {createElement} = require('react');
+  const rate = {carrier:'UPS Canada & Export',currency:'CAD',price:681.19,chargeDetails:[{name:'LARGE PACKAGE',price:94.16},{name:'ADDITIONAL HANDLING',price:26.92}]};
+  const html = renderToStaticMarkup(createElement(DeliveryRateDetails,{rate}));
+  for(const text of ['122 cm','330 cm','标准示例']) assert.ok(html.includes(text));
+  assert.ok(!html.includes('<details'));
+  assert.ok(!renderToStaticMarkup(createElement(DeliveryRateDetails,{rate:{...rate,carrier:'FedEx'}})).includes('122 cm'));
+});
 test('delivery detail UI shows surcharges and missing values, including legacy quotes', () => {
   const {DeliveryRateDetails} = load('src/components/partner/DeliveryRateDetails.tsx');
   const {renderToStaticMarkup} = require('react-dom/server');
