@@ -93,6 +93,7 @@ export const defaultRule: ExpressRule = {
   maxPrice: null,
   latestDelivery: null,
 };
+export type ExpressChargeDetail = { code: string; name: string; price: number | null };
 export type ExpressRate = {
   key: string;
   carrierId: string;
@@ -105,6 +106,9 @@ export type ExpressRate = {
   eta: string;
   deliveryDate: string | null;
   message: string;
+  freight?: number | null;
+  chargeDetails?: ExpressChargeDetail[];
+  taxDetails?: ExpressChargeDetail[];
 };
 export const sourceKey = (s: ExpressSource) => `${s.kind}:${s.id}`;
 export const sourceNames: Record<ExpressSource["kind"], string> = {
@@ -128,6 +132,15 @@ function amount(value: unknown): number | null {
   if (typeof value === "object") return amount((value as { value?: unknown }).value);
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : null;
+}
+function chargeDetails(value: unknown): ExpressChargeDetail[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(row => row && typeof row === 'object').map(row => {
+    const raw = row.price;
+    // Credits may be negative; missing/invalid prices must not become zero.
+    const price = (typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')) && Number.isFinite(Number(raw)) ? Number(raw) : null;
+    return {code: String(row.code ?? ''), name: String(row.name ?? ''), price};
+  });
 }
 export function normalizeRates(response: unknown): ExpressRate[] {
   if (!Array.isArray(response)) throw new Error("平台报价格式异常");
@@ -153,6 +166,9 @@ export function normalizeRates(response: unknown): ExpressRate[] {
           eta,
           deliveryDate,
           message: String(s.message ?? ""),
+          freight: amount(s.freight),
+          chargeDetails: chargeDetails(s.charge_details),
+          taxDetails: chargeDetails(s.tax_details),
         },
       ];
     }),

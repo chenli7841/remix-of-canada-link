@@ -13,14 +13,18 @@ export const searchPartnerHsCodes = createServerFn({ method: "GET" })
     const term = data.query.replace(/[\\%_]/g, c => "\\" + c);
     const numeric = /^[\d.\s]+$/.test(data.query);
     const digits = data.query.replace(/\D/g, "");
+    if (numeric && !digits) return [];
     const code = numeric ? [digits.slice(0,4), ...(digits.slice(4).match(/.{1,2}/g) ?? [])].filter(Boolean).join(".") : term;
     // Quote PostgREST filter values so punctuation cannot alter the expression.
     const quote = (v: string) => JSON.stringify(`%${v}%`);
-    const result = await supabaseAdmin.from("hs_codes")
+    const search = supabaseAdmin.from("hs_codes")
       .select("id,hs_code,name_zh,name_en,mfn_rate,gst_rate,anti_dumping_rate")
-      .eq("is_active", true)
-      .or(`hs_code.ilike.${quote(code)},name_zh.ilike.${quote(term)},name_en.ilike.${quote(term)}`)
-      .order("hs_code").limit(30);
+      .eq("is_active", true);
+    // Numeric input is a code prefix, never a substring or a product-name query.
+    const result = await (numeric
+      ? search.ilike("hs_code", `${code}%`)
+      : search.or(`name_zh.ilike.${quote(term)},name_en.ilike.${quote(term)}`)
+    ).order("hs_code").limit(30);
     if (result.error) throw new Error("HS 编码库读取失败，请重试");
     return result.data ?? [];
   });

@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 function load(path, mocks = {}, globals = {}) {
   const module = { exports: {} };
   const js = ts.transpileModule(readFileSync(path, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   vm.runInNewContext(
     js,
@@ -30,6 +30,39 @@ function load(path, mocks = {}, globals = {}) {
   return module.exports;
 }
 const core = load("src/lib/express.ts");
+test('delivery detail UI shows surcharges and missing values, including legacy quotes', () => {
+  const {DeliveryRateDetails} = load('src/components/partner/DeliveryRateDetails.tsx');
+  const {renderToStaticMarkup} = require('react-dom/server');
+  const {createElement} = require('react');
+  const rate = {carrier:'Test',service:'Ground',currency:'CAD',price:100,tax:5,
+    freight:70,chargeDetails:[{name:'Overlength',code:'L',price:10},{name:'Remote area',price:15},{name:'Unknown',price:null}],message:'Carrier notice'};
+  const html = renderToStaticMarkup(createElement(DeliveryRateDetails,{rate}));
+  for(const text of ['超长附加费','偏远／延伸地区附加费','Overlength','CAD 10.00','CAD 100.00','未提供','Carrier notice']) assert.ok(html.includes(text),text);
+  const legacy = renderToStaticMarkup(createElement(DeliveryRateDetails,{rate:{...rate,chargeDetails:undefined,freight:undefined}}));
+  assert.ok(legacy.includes('接口未提供附加费明细'));
+});
+test('delivery breakdown preserves provider details without double charging', () => {
+  const [rate] = core.normalizeRates([{carrier_id:1,currency:{code:'CAD'},services:[{
+    id:1,charge:'40.43',freight:'33.77',tax:'4.65',
+    charge_details:[{code:'FUELSC',name:'Fuel surcharge',price:'2.01'},
+      {code:'LONG',name:'Overlength',price:0},{name:'Remote area',price:null},
+      {name:'Credit',price:'-1.00'},{name:'Invalid',price:'NaN'}],
+    tax_details:[{name:'HST',price:'4.65'}],message:'Carrier note',token:'must-not-leak'
+  }]}]);
+  assert.equal(rate.price,40.43);
+  assert.equal(rate.freight,33.77);
+  assert.equal(rate.chargeDetails[0].price,2.01);
+  assert.equal(rate.chargeDetails[1].price,0);
+  assert.equal(rate.chargeDetails[2].price,null);
+  assert.equal(rate.chargeDetails[3].price,-1);
+  assert.equal(rate.chargeDetails[4].price,null);
+  assert.equal(rate.taxDetails[0].price,4.65);
+  assert.equal(rate.message,'Carrier note');
+  assert.equal(rate.token,undefined);
+  const [missing] = core.normalizeRates([{carrier_id:1,currency:{code:'CAD'},services:[{id:1,charge:10}]}]);
+  assert.equal(missing.freight,null);
+  assert.equal(missing.chargeDetails.length,0);
+});
 const addr = {
   ...core.emptyAddress,
   name: "Test",
