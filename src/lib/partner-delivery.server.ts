@@ -15,6 +15,10 @@ export async function deliveryConnection(c:Auth,probe=false){
 // This endpoint deliberately never imports order creation, purchase, or label functions.
 export async function testPartnerDelivery(input:unknown,c:Auth){
  await authorize(c);
+ return quotePartnerDelivery(input);
+}
+// Server-only: callers must authorize access to their persisted route before calling.
+export async function quotePartnerDelivery(input:unknown){
  const {draft,rule}=partnerDeliverySchema.parse(input);
  if(draft.from.region_id!=='CA'||draft.to.region_id!=='CA')throw new Error('同行派送报价目前仅支持加拿大境内');
  if(draft.signature||draft.liftgate)throw new Error('当前同行报价仅支持普通包裹，不支持签名或尾板附加服务');

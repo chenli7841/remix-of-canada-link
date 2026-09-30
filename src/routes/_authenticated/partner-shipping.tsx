@@ -1,3 +1,4 @@
+import {requestPartnerQuote} from '@/lib/partner-quote.functions';
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -10,9 +11,10 @@ export const Route = createFileRoute("/_authenticated/partner-shipping")({
   component: Page,
 });
 function Page() {
+  const quote = useServerFn(requestPartnerQuote);
   const load = useServerFn(getPartnerShippingRoutes);
   const search = useServerFn(searchPartnerHsCodes);
   const searchHs = useCallback((query: string) => search({ data: { query } }), [search]);
   const query = useQuery({ queryKey: ["partner-shipping-routes"], queryFn: () => load(), staleTime: 60000 });
-  return <PartnerShippingPage routes={query.data ?? []} searchHs={searchHs} loading={query.isLoading} error={query.error ? "线路或规则读取失败，请刷新重试。" : undefined} />;
+  return <PartnerShippingPage requestQuote={data=>quote({data})} routes={query.data ?? []} searchHs={searchHs} loading={query.isLoading} error={query.error ? "线路或规则读取失败，请刷新重试。" : undefined} />;
 }

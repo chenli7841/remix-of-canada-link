@@ -25,21 +25,5 @@ export const searchPartnerHsCodes = createServerFn({ method: "GET" })
     return result.data ?? [];
   });
 
-// Internal page reference data only; never return cost tables to the browser.
 export const getPartnerShippingRoutes = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const routes = await context.supabase.from("shipping_routes")
-      .select("id,code,name_zh,cargo_type,shipping_method")
-      .eq("is_active", true).in("usage_scope", ["forwarding", "both"]).order("sort_order");
-    if (routes.error) throw new Error("线路读取失败，请重试");
-    const rules = await context.supabase.from("freight_rules")
-      .select("route_id,weight_mode,volumetric_divisor,created_at")
-      .eq("is_active", true).order("created_at", { ascending: false });
-    if (rules.error) throw new Error("计费规则读取失败，请重试");
-    return (routes.data ?? []).map(route => {
-      const rule = rules.data?.find(r => r.route_id === route.id);
-      return { ...route, weight_mode: rule?.weight_mode ?? null, volumetric_divisor: rule?.volumetric_divisor ?? null };
-    });
-  });
-
+.middleware([requireSupabaseAuth]).handler(async ({context}) => (await import('./partner-quote.server')).listRoutes(context));

@@ -1,10 +1,11 @@
 import locations from './canada-locations.json';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 export type AmazonWarehouse = {code:string;company:string;street:string;city:string;province:string;postal:string;phone?:string};
-export function PartnerRecipient({warehouses=[]}:{warehouses?:AmazonWarehouse[]}) {
+export function PartnerRecipient({warehouses=[],onAddress}:{warehouses?:AmazonWarehouse[];onAddress?:(value:any)=>void}) {
  const [type,setType]=useState('private'),[query,setQuery]=useState(''),[candidate,setCandidate]=useState<AmazonWarehouse|null>(null),[confirmed,setConfirmed]=useState('');
  const [address,setAddress]=useState({company:'',phone:'',street:'',city:'',province:'',postal:'',code:''});
  const change=(key:keyof typeof address,value:string)=>{setAddress(a=>({...a,[key]:value,...(key==='province'?{city:''}:{})}));setConfirmed('');};
+ useEffect(()=>{onAddress?.({name:address.company,company:address.company,mobile_phone:address.phone,address:address.street,city:address.city,province:address.province,postalcode:address.postal,region_id:'CA',type:type==='private'?'resident':'commercial'});},[address,type,onAddress]);
  const term=query.trim().toLowerCase();
  const matches=term?warehouses.filter(w=>[w.code,w.company,w.street,w.city,w.province,w.postal].some(v=>v.toLowerCase().includes(term))).slice(0,10):[];
  return <section className="partner-card"><h2><em>03</em>收件信息<span>DESTINATION</span></h2>
