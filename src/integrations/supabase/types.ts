@@ -1110,6 +1110,213 @@ export type Database = {
         }
         Relationships: []
       }
+      express_labels: {
+        Row: {
+          base64: string
+          created_at: string
+          file_name: string
+          mime_type: string
+          shipment_id: string
+        }
+        Insert: {
+          base64: string
+          created_at?: string
+          file_name: string
+          mime_type: string
+          shipment_id: string
+        }
+        Update: {
+          base64?: string
+          created_at?: string
+          file_name?: string
+          mime_type?: string
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "express_labels_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "express_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      express_quotes: {
+        Row: {
+          account_key: string
+          context_hash: string
+          coverage: string[]
+          created_at: string
+          draft: Json
+          expires_at: string
+          id: string
+          links: string[]
+          owner_id: string | null
+          rates: Json
+          rule: Json
+          source: Json
+          user_id: string
+        }
+        Insert: {
+          account_key: string
+          context_hash: string
+          coverage: string[]
+          created_at?: string
+          draft: Json
+          expires_at: string
+          id?: string
+          links: string[]
+          owner_id?: string | null
+          rates: Json
+          rule: Json
+          source: Json
+          user_id: string
+        }
+        Update: {
+          account_key?: string
+          context_hash?: string
+          coverage?: string[]
+          created_at?: string
+          draft?: Json
+          expires_at?: string
+          id?: string
+          links?: string[]
+          owner_id?: string | null
+          rates?: Json
+          rule?: Json
+          source?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      express_settings: {
+        Row: {
+          id: boolean
+          origin: Json | null
+          rule: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          origin?: Json | null
+          rule?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          origin?: Json | null
+          rule?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      express_shipments: {
+        Row: {
+          account_key: string
+          actual_price: Json | null
+          created_at: string
+          draft: Json
+          id: string
+          last_error: string | null
+          leg: string
+          links: string[]
+          owner_id: string | null
+          provider_id: string | null
+          provider_state: string | null
+          quote_id: string
+          rate: Json
+          reference: string
+          source: Json
+          status: string
+          tracking_numbers: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_key: string
+          actual_price?: Json | null
+          created_at?: string
+          draft: Json
+          id?: string
+          last_error?: string | null
+          leg: string
+          links: string[]
+          owner_id?: string | null
+          provider_id?: string | null
+          provider_state?: string | null
+          quote_id: string
+          rate: Json
+          reference: string
+          source: Json
+          status: string
+          tracking_numbers?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_key?: string
+          actual_price?: Json | null
+          created_at?: string
+          draft?: Json
+          id?: string
+          last_error?: string | null
+          leg?: string
+          links?: string[]
+          owner_id?: string | null
+          provider_id?: string | null
+          provider_state?: string | null
+          quote_id?: string
+          rate?: Json
+          reference?: string
+          source?: Json
+          status?: string
+          tracking_numbers?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "express_shipments_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
+            referencedRelation: "express_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      express_unit_locks: {
+        Row: {
+          account_key: string
+          leg: string
+          shipment_id: string
+          unit_key: string
+        }
+        Insert: {
+          account_key: string
+          leg: string
+          shipment_id: string
+          unit_key: string
+        }
+        Update: {
+          account_key?: string
+          leg?: string
+          shipment_id?: string
+          unit_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "express_unit_locks_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "express_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forwarding_items: {
         Row: {
           anti_dumping_rate: number | null
@@ -5184,6 +5391,14 @@ export type Database = {
       }
       batch_payment_status: { Args: { _batch_id: string }; Returns: string }
       cancel_ai_forwarding_draft: { Args: { _draft_id: string }; Returns: Json }
+      cancel_batch_invoice_v2: {
+        Args: {
+          _batch_id: string
+          _customer_code: string
+          _operator_id: string
+        }
+        Returns: undefined
+      }
       carton_payment_status: { Args: { _carton_id: string }; Returns: string }
       chatgpt_admin_get_audit_log: { Args: { _log_id: string }; Returns: Json }
       chatgpt_admin_get_batch: { Args: { _batch_no: string }; Returns: Json }
@@ -5322,6 +5537,7 @@ export type Database = {
             Args: { _draft_id: string; _expected_version: number }
             Returns: Json
           }
+      confirm_batch_invoice_v2: { Args: { _payload: Json }; Returns: Json }
       current_fx_cny_to_cad: { Args: never; Returns: number }
       find_by_any_no: { Args: { _input: string }; Returns: Json }
       gen_customer_code: { Args: never; Returns: string }
@@ -5401,6 +5617,14 @@ export type Database = {
         Args: { _waybill_id: string }
         Returns: undefined
       }
+      release_voided_express_shipment: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      reserve_express_shipment: {
+        Args: { p_quote: string; p_rate: string; p_user: string }
+        Returns: string
+      }
       resolve_hs_code_rates: {
         Args: {
           p_gst_rate: number
@@ -5414,6 +5638,10 @@ export type Database = {
       }
       resolve_login_email: { Args: { p_identifier: string }; Returns: string }
       settle_batch_customer_txn: { Args: { _payload: Json }; Returns: Json }
+      settle_confirmed_batch_invoice_v2: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
       ship_create_forwarding_order: {
         Args: {
           _address_id: string
@@ -5455,6 +5683,10 @@ export type Database = {
           _warehouse_code: string
         }
         Returns: Json
+      }
+      ship_waybill_snapshot_matches: {
+        Args: { _expected_waybills: Json; _forwarding_id: string }
+        Returns: boolean
       }
       shop_cart_admin_adjust: { Args: { _payload: Json }; Returns: Json }
       shop_cart_get: { Args: never; Returns: Json }

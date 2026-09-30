@@ -40,11 +40,11 @@ export const setBatchItemHs=createServerFn({method:'POST'}).middleware([requireS
     count+=await persistWaybillItemsForParent(admin,{[p.field]:p.id});
     const totals=await checked(admin.from('waybills').select('duty_cad').eq(p.field,p.id));
     const duty=+totals.reduce((n:number,w:any)=>n+Number(w.duty_cad??0),0).toFixed(2);
-    const parent=await checked(admin.from(p.table).select('freight_snapshot').eq('id',p.id).single());
+    const parent=await checked((admin as any).from(p.table).select('freight_snapshot').eq('id',p.id).single());
     const snap=parent.freight_snapshot??{};const previous=Number(snap.duty_cad??0);
     const next={...snap,duty_cad:duty,computed_at:new Date().toISOString()};
     if(Number.isFinite(Number(snap.total_cad)))next.total_cad=+(Number(snap.total_cad)-previous+duty).toFixed(2);
-    await checked(admin.from(p.table).update({freight_snapshot:next}).eq('id',p.id));
+    await checked((admin as any).from(p.table).update({freight_snapshot:next}).eq('id',p.id));
    }
    for(const bid of [...new Set([data.batchId,...batchIds])]){const result=await refreshBatchSettlementsForCustomer(admin,bid,data.customerCode);if(!result.ok)throw new Error(result.error??'批次快照刷新失败');}
   }catch(e:any){throw new Error(`HS编码已保存，但费用更新未完成：${e.message}。修正问题后可再次保存重算。`);}

@@ -369,7 +369,7 @@ async function feeTotalsForCarton(admin: any, row: any) {
       "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
     .eq("carton_id", row.id);
-  const list = await effectiveWaybillInsurance(admin, wbs ?? []);
+  const list: any[] = await effectiveWaybillInsurance(admin, (wbs ?? []) as any[]);
   const wbIds = list.map((w: any) => w.id);
   let cf = 0,
     cc = 0,
