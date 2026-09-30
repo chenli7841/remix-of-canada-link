@@ -1,3 +1,4 @@
+import {partnerRouteCodeSchema} from './partner-number';
 import {
   settingInput,
   emptyGeneral,
@@ -84,6 +85,7 @@ export async function listRoutes(c: Auth, management = false) {
 export async function saveRoute(c: Auth, input: { id?: string; config: unknown }) {
   await admin(c);
   const stored = partnerRouteSchema.parse(input.config);
+  stored.code = partnerRouteCodeSchema.parse(stored.code);
   const d =
     stored.shared && stored.enabled ? resolvePartnerRoute(stored, await readSettings()) : stored;
   if (d.enabled) {

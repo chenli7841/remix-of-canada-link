@@ -1,3 +1,4 @@
+import {partnerRouteCodeSchema} from '@/lib/partner-number';
 import { useEffect, useState, type ReactNode } from "react";
 import { PartnerDeliveryTest, type DeliveryApi } from "./PartnerDeliveryTest";
 import {
@@ -86,6 +87,7 @@ export function PartnerRouteSettings({
   storage?: Storage;
   deliveryApi?: DeliveryApi;
 }) {
+  const [testWarehouseId, setTestWarehouseId] = useState("");
   const [settings, setSettings] = useState<Settings>(initial),
     [records, setRecords] = useState<RecordRow[]>([]),
     [tab, setTab] = useState(0),
@@ -150,8 +152,10 @@ export function PartnerRouteSettings({
     run(async () => {
       if (!row.config.name.trim() || !row.config.code.trim() || !row.config.originId)
         throw Error("请填写线路名称、编号并选择起始仓库");
+      const code = partnerRouteCodeSchema.parse(row.config.code);
       const config = {
         ...row.config,
+        code,
         rounding: row.config.rounding || "0.5",
         shared: true,
         audience: "全部同行客户" as const,
@@ -424,22 +428,6 @@ export function PartnerRouteSettings({
                     <p className="prs-formula">
                       max（实际 m³，实重 kg ÷ 本仓每立方 kg 数）× 目的仓单价。正反向分别设置。
                     </p>
-                    <PartnerDeliveryTest
-                      api={deliveryApi}
-                      origin={{
-                        name: w.name,
-                        company: w.company,
-                        mobile_phone: w.phone,
-                        region_id: "CA",
-                        province: w.province,
-                        city: w.city,
-                        postalcode: w.postal,
-                        address: w.street,
-                        address2: w.unit,
-                        email: "",
-                        type: "commercial",
-                      }}
-                    />
                   </Card>
                 ))}
                 {button("warehouses")}
@@ -481,9 +469,9 @@ export function PartnerRouteSettings({
                           onChange={(v) => update("name", v)}
                         />
                         <Field
-                          label="线路编号"
+                          label="线路编号（四位英文字母，如 SEAT）"
                           value={d.code}
-                          onChange={(v) => update("code", v)}
+                          onChange={(v) => update("code", v.toUpperCase())}
                         />
                         <Field
                           label="运输方式"
@@ -548,6 +536,50 @@ export function PartnerRouteSettings({
                 <Card title="使用权限">
                   <p>后台仅 owner 可设置；客户登录后可查询已启用线路。</p>
                   <p>所有线路使用公共价格。快递服务及附加费由 API 返回。</p>
+                </Card>
+                <Card title="快递报价测试">
+                  <Field
+                    label="发货仓库"
+                    value={testWarehouseId}
+                    options={[
+                      ["", "请选择发货仓库"],
+                      ...settings.warehouses.map((w) => [w.id, w.label]),
+                    ]}
+                    onChange={setTestWarehouseId}
+                  />
+                  {settings.warehouses.length === 0 && (
+                    <p className="prs-note">请先在“仓库地址设置”中添加仓库。</p>
+                  )}
+                  {settings.warehouses
+                    .filter((w) => w.id === testWarehouseId)
+                    .map((w) => (
+                      <div key={w.id}>
+                        <p className="prs-note">
+                          发货地址：
+                          {[w.street, w.unit, w.city, w.province, w.postal]
+                            .filter(Boolean)
+                            .join(", ") || "尚未填写"}
+                          。使用当前仓库资料测试，仅查询价格，不创建面单或扣款。
+                        </p>
+                        <PartnerDeliveryTest
+                          key={JSON.stringify(w)}
+                          api={deliveryApi}
+                          origin={{
+                            name: w.name,
+                            company: w.company,
+                            mobile_phone: w.phone,
+                            region_id: "CA",
+                            province: w.province,
+                            city: w.city,
+                            postalcode: w.postal,
+                            address: w.street,
+                            address2: w.unit,
+                            email: "",
+                            type: "commercial",
+                          }}
+                        />
+                      </div>
+                    ))}
                 </Card>
               </div>
             </fieldset>
