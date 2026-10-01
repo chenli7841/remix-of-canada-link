@@ -40,6 +40,28 @@ export const generalSchema = z.object({
   localLargeFee: num.default(""),
   localOversizeCurrency: currency.default("CAD"),
 });
+
+// Applies only to warehouse-to-warehouse transport, never to provider rate details.
+export function localTransferSurcharges(g: z.infer<typeof generalSchema>, packages: {lengthCm:number;widthCm:number;heightCm:number}[]) {
+  const positive = (value:string, label:string) => {
+    if (!value || !Number.isFinite(Number(value)) || Number(value)<=0) throw Error(`本地长途运输${label}未设置或无效`);
+    return Number(value);
+  };
+  const hl=positive(g.localHandlingLength,'最长边阈值'), hs=positive(g.localHandlingSecondSide,'第二长边阈值'), hg=positive(g.localHandlingGirth,'长加围长阈值');
+  const ll=positive(g.localLargeLength,'大包裹最长边阈值'), lg=positive(g.localLargeGirth,'大包裹长加围长阈值');
+  let handling=0,large=0;
+  for(const p of packages){
+    const [l,w,h]=[p.lengthCm,p.widthCm,p.heightCm].sort((a,b)=>b-a);
+    const girth=l+2*w+2*h;
+    if(l>ll || girth>lg)large++;
+    else if(l>hl || w>hs || girth>hg)handling++;
+  }
+  const fx=g.localOversizeCurrency==='USD'?positive(g.fx,'USD/CAD 汇率'):1;
+  return [{name:'本地转运额外操作费',count:handling,fee:g.localHandlingFee},{name:'本地转运大型包裹附加费',count:large,fee:g.localLargeFee}].filter(r=>r.count>0).map(r=>{
+    if(r.fee==='' || !Number.isFinite(Number(r.fee)) || Number(r.fee)<0)throw Error(`${r.name}未设置，请填写费用；不收费请明确填 0`);
+    return {name:r.name,count:r.count,unitPrice:Number(r.fee),sourceCurrency:g.localOversizeCurrency,amount:Math.round(r.count*Number(r.fee)*fx*100)/100,currency:'CAD'};
+  });
+}
 export const transportSchema = z.object({
   seaRate: num,
   seaCurrency: currency,

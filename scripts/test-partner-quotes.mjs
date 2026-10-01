@@ -47,7 +47,7 @@ test('only province-recommended warehouse is queried; manual switch preserves tr
  const w=(id,label)=>({id,label,name:'Test',phone:'4165550100',street:'Test',unit:'',city:'Toronto',province:'ON',postal:'M5V1A1',density:'200',currency:'CAD',transfers:[]});
  const a=w(id,'Arrival'), b=w('22222222-2222-4222-8222-222222222222','Other'); a.serviceProvinces=['QC']; b.serviceProvinces=['ON']; a.transfers=[{target:b.id,rate:'100'}];
  const shared={...cfg,shared:true,originId:a.id,rounding:'0.5'};
- const rows=[{section:'general',value:{...settingsModel.emptyGeneral,...cfg}},{section:'transport',value:{...settingsModel.emptyTransport,seaRate:'325',seaCurrency:'USD',seaMinKg:'10',seaDivisor:'6000',seaMaxKgPerM3:'300'}},{section:'warehouses',value:[a,b]}];
+ const rows=[{section:'general',value:{...settingsModel.emptyGeneral,...cfg,localHandlingFee:'0',localLargeFee:'0'}},{section:'transport',value:{...settingsModel.emptyTransport,seaRate:'325',seaCurrency:'USD',seaMinKg:'10',seaDivisor:'6000',seaMaxKgPerM3:'300'}},{section:'warehouses',value:[a,b]}];
  let saved, calls=0;
  const db={from(table){const q={select(){return q},eq(){return q},in(){return q},insert(v){saved=v;return q},maybeSingle:async()=>({data:table==='profiles'?{customer_code:'09013'}:{id,config:shared}}),single:async()=>({data:{id}}),then(resolve){return Promise.resolve({data:table==='partner_shipping_settings'?rows:hs}).then(resolve)}};return q;}};
  const api={quotePartnerDelivery:async()=>({rates:[{key:'same',carrier:'Test',service:'Ground',currency:'CAD',price:++calls===1?80:20}],expiresAt:new Date(Date.now()+600000).toISOString()})};
@@ -58,6 +58,10 @@ test('only province-recommended warehouse is queried; manual switch preserves tr
  assert.equal(result.rates[0].transfer.amount,0);assert.equal(saved.result.rates.length,1);
  const switched=await svc.createQuote(auth,{...raw,dispatchWarehouseId:b.id});
  assert.equal(calls,2);assert.equal(switched.rates[0].transfer.amount,110.1);assert.equal(switched.rates[0].dispatchWarehouse.id,b.id);
+ rows[0].value.localHandlingFee='30';rows[0].value.localLargeFee='50';
+ const charged=await svc.createQuote(auth,{...raw,dispatchWarehouseId:b.id});
+ assert.equal(charged.rates[0].price,20);assert.equal(charged.rates[0].transfer.baseAmount,110.1);assert.equal(charged.rates[0].transfer.amount,300.1);assert.equal(charged.rates[0].total,switched.rates[0].total+190);
+ assert.equal(saved.route_snapshot.localTransferRules.localLargeFee,'50');
  a.transfers=[]; calls=0;
  await assert.rejects(()=>svc.createQuote(auth,{...raw,dispatchWarehouseId:b.id}),/转运单价/);assert.equal(calls,0);
  await svc.createQuote(auth,raw);assert.equal(calls,1);
@@ -92,3 +96,5 @@ test('partner prefixes are four letters and preserve full original suffix',()=>{
 test('quote accepts missing recipient contact, creation still requires it',()=>{const {name,mobile_phone,...address}=to;assert.equal(model.quoteInputSchema.parse({...raw,to:address}).to.name,'');assert.equal(model.quoteInputSchema.parse({...raw,to:address}).to.mobile_phone,'');assert.throws(()=>express.addressSchema.parse(address));assert.throws(()=>model.quoteInputSchema.parse({...raw,to:{...address,address:''}}));});
 
 test('Amazon directory validates addresses and rejects duplicate normalized codes',()=>{const row={id,code:' yyz1 ',company:'Amazon',street:'Test Street',city:'Toronto',province:'ON',postal:'m5v 1a1',phone:'',enabled:true};const parsed=settingsModel.settingInput.parse({section:'amazonWarehouses',value:[row]});assert.equal(parsed.value[0].code,'YYZ1');assert.equal(parsed.value[0].postal,'M5V 1A1');assert.throws(()=>settingsModel.settingInput.parse({section:'amazonWarehouses',value:[row,{...row,id:'22222222-2222-4222-8222-222222222222',code:'YYZ1'}]}));for(const patch of [{street:''},{city:''},{province:'Ontario'},{postal:'123'}])assert.throws(()=>settingsModel.settingInput.parse({section:'amazonWarehouses',value:[{...row,...patch}]}));});
+test('local transfer surcharges use backend rules per parcel, large replaces handling',()=>{const g={...settingsModel.emptyGeneral,localHandlingFee:'30',localLargeFee:'50'};const lines=settingsModel.localTransferSurcharges(g,model.baseQuote(cfg,input,hs).packages);assert.equal(lines.find(r=>r.count===3).amount,90);assert.equal(lines.find(r=>r.count===2).amount,100);assert.equal(lines.reduce((n,r)=>n+r.amount,0),190);});
+test('local thresholds are strict, dimensions are sorted, and missing triggered fee is an error',()=>{const g={...settingsModel.emptyGeneral,localHandlingFee:'30',localLargeFee:'50'};assert.equal(settingsModel.localTransferSurcharges(g,[{lengthCm:122,widthCm:10,heightCm:10}]).length,0);assert.equal(settingsModel.localTransferSurcharges(g,[{lengthCm:10,widthCm:123,heightCm:10}])[0].amount,30);assert.throws(()=>settingsModel.localTransferSurcharges({...g,localHandlingFee:''},[{lengthCm:123,widthCm:10,heightCm:10}]),/未设置/);assert.equal(settingsModel.localTransferSurcharges({...g,localOversizeCurrency:'USD',fx:'1.35'},[{lengthCm:123,widthCm:10,heightCm:10}])[0].amount,40.5);});

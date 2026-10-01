@@ -2,6 +2,7 @@ import {partnerRouteCodeSchema} from './partner-number';
 import {
   settingInput,
   selectDispatchWarehouse,
+  localTransferSurcharges,
   emptyGeneral,
   emptyTransport,
   resolvePartnerRoute,
@@ -154,7 +155,8 @@ export async function createQuote(c: Auth, raw: unknown) {
   const arrival = settings?.warehouses.find(w => w.id === config.originId);
   if(!settings && input.dispatchWarehouseId)throw Error('此线路使用固定发货仓库');
   const origins = settings ? [selectDispatchWarehouse(settings.warehouses,input.to.province,input.dispatchWarehouseId)].map(w => {
-    let transferAmount = 0, billableM3 = 0;
+    let transferAmount = 0, billableM3 = 0, baseAmount = 0;
+    let surcharges: ReturnType<typeof localTransferSurcharges> = [];
     if (w.id !== arrival?.id) {
       const transfer = arrival?.transfers.find(t => t.target === w.id);
       if (!transfer || transfer.rate === "" || !(Number(arrival?.density) > 0))
@@ -163,13 +165,15 @@ export async function createQuote(c: Auth, raw: unknown) {
       const fx = arrival!.currency === "USD" ? Number(config.fx) : 1;
       if (!(fx > 0) || !Number.isFinite(fx) || !Number.isFinite(Number(transfer.rate)) || Number(transfer.rate) < 0)
         throw Error("转运单价或汇率无效");
-      transferAmount = Math.round(billableM3 * Number(transfer.rate) * fx * 100) / 100;
+      baseAmount = Math.round(billableM3 * Number(transfer.rate) * fx * 100) / 100;
+      surcharges = localTransferSurcharges(settings.general, base.packages);
+      transferAmount = Math.round((baseAmount + surcharges.reduce((sum,row)=>sum+row.amount,0))*100)/100;
     }
     const from = routeOrigin({...config, originName:w.name, originPhone:w.phone,
       originStreet:[w.street,w.unit].filter(Boolean).join(", "), originCity:w.city,
       originProvince:w.province, originPostal:w.postal});
-    return {id:w.id, label:w.label, from, transferAmount, billableM3};
-  }) : [{id:"route", label:config.originCity, from:routeOrigin(config), transferAmount:0, billableM3:0}];
+    return {id:w.id, label:w.label, from, transferAmount, billableM3, baseAmount, surcharges};
+  }) : [{id:"route", label:config.originCity, from:routeOrigin(config), transferAmount:0, billableM3:0, baseAmount:0, surcharges:[]}];
   const rates = [];
   const expiries: number[] = [];
   // Sequential requests avoid a burst against the provider's shared account quota.
@@ -183,7 +187,7 @@ export async function createQuote(c: Auth, raw: unknown) {
     expiries.push(Date.parse(delivery.expiresAt));
     rates.push(...delivery.rates.filter(r => r.currency === "CAD").map(r => ({...r,
       providerKey:r.key, key:`${origin.id}:${r.key}`, dispatchWarehouse:{id:origin.id,label:origin.label,address:origin.from},
-      transfer:{from:arrival?.label || config.originCity,to:origin.label,amount:origin.transferAmount,billableM3:origin.billableM3,currency:"CAD"}})));
+      transfer:{from:arrival?.label || config.originCity,to:origin.label,amount:origin.transferAmount,baseAmount:origin.baseAmount,surcharges:origin.surcharges,billableM3:origin.billableM3,currency:"CAD"}})));
   }
   if (!rates.length) throw Error("未返回可用 CAD 派送服务，请核对地址、尺寸和重量");
   const subtotal = base.fees.reduce((s, r) => s + Math.round(r.amount * 100), 0);
@@ -191,7 +195,7 @@ export async function createQuote(c: Auth, raw: unknown) {
     ...base,
     rates: rates.map((r) => ({ ...r, total: Math.round(subtotal + r.price * 100 + r.transfer.amount * 100) / 100 })).sort((a,b) => a.total-b.total || a.key.localeCompare(b.key)),
     expiresAt: new Date(Math.min(...expiries)).toISOString(),
-    localOversizePending: true,
+    localOversizePending: false,
     currency: "CAD",
     routeName: config.name,
   };
@@ -202,7 +206,7 @@ export async function createQuote(c: Auth, raw: unknown) {
         user_id: c.userId,
         route_id: route.id,
         input,
-        route_snapshot: { ...route, config, warehouses:settings?.warehouses },
+        route_snapshot: { ...route, config, warehouses:settings?.warehouses, localTransferRules:settings?.general },
         result,
         expires_at: result.expiresAt,
       })
