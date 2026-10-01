@@ -4,3 +4,13 @@
 .partner-weight-details{padding:16px 20px;border-top:1px solid #e1e9ec}.partner-weight-details h3{font-size:14px;margin:0}.partner-weight-details small{display:block;font-size:10px;color:#71848d}.partner-weight-details p{font-size:11px;color:#71848d}.partner-weight-scroll{max-height:320px;overflow:auto}.partner-weight-details table{width:100%;font-size:11px;border-collapse:collapse}.partner-weight-details th,.partner-weight-details td{padding:8px 3px;text-align:right;border-bottom:1px solid #e1e9ec}.partner-weight-details th:first-child,.partner-weight-details td:first-child{text-align:left}.partner-weight-details tfoot{font-weight:bold;color:#167b70}
 .partner-domestic-detail{padding:0 20px 12px;color:#71848d;font-size:11px;line-height:1.7}
 .partner-city-picker{position:relative}.partner-city-options{position:absolute;z-index:30;top:100%;left:0;right:0;max-height:240px;overflow:auto;border:1px solid #cddeda;background:#fff;border-radius:7px;box-shadow:0 5px 18px #183c4620;margin-top:4px}.partner-city-options [role=option]{padding:10px 12px;cursor:pointer;font-size:13px;color:#243e48}.partner-city-options [role=option]:hover,.partner-city-options [aria-selected=true]{background:#eaf5f0;color:#176959}.partner-city-options p{padding:10px 12px;font-size:12px;color:#718880}
+
+/* Hide the hosting badge on the partner quotation page, including late injection. */
+body:has(.partner-page) #lovable-badge{display:none!important}
+.partner-fee-summary{margin:12px 0 18px;font-size:12px}
+.partner-fee-summary>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0}
+.partner-fee-summary dt{min-width:0}
+.partner-fee-summary dd{margin:0;text-align:right;white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums}
+.partner-fee-summary>.partner-fee-total{border-top:1px solid #cddeda;margin-top:8px;padding-top:12px;color:#173d43;font-size:15px;font-weight:700}
+
+.partner-recipient .partner-hint{margin:12px 0 18px}
