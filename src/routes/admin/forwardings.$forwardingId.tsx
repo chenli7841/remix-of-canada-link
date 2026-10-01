@@ -173,6 +173,10 @@ function FwDetail() {
               <div className="text-xs font-mono text-slate-500">客户号 {user.customer_code ?? "—"}</div>
             </div>
           ) : "—"}
+          <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-xs text-slate-400">
+            <div>创建人：{fo.creator_name || fo.created_by || (fo.creation_source === "system_api" ? "系统／接口（无用户身份）" : "未记录（历史订单）")}</div>
+            <div>创建来源：{{ customer: "客户创建", staff: "员工创建", system_api: "系统／接口" }[fo.creation_source as string] || "未记录"}</div>
+          </div>
           {notes}
         </Card>
         <Card title="基础信息">
