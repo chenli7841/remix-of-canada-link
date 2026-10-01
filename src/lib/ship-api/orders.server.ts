@@ -4,6 +4,7 @@ import { ShipApiError, sha256Hex } from "./auth.server";
 import { buildItemFields, computeSchemaVersion, isBoxCountKnownRoute, isRouteVisibleToShip } from "./routes.server";
 import { findOrCreateShipCustomer } from "./customers.server";
 import { computeOrderEditToken } from "./concurrency.server";
+import { throwShipCreateError } from "./order-errors.server";
 
 type FieldError = { path: string; message: string };
 
@@ -287,11 +288,7 @@ export async function createShipOrder(admin: any, partnerKey: string, body: any)
     _request_fingerprint: fingerprint,
   });
   if (rpcErr) {
-    const code = (rpcErr as any).code as string | undefined;
-    if (code === "PT404") fail("ROUTE_NOT_FOUND", "线路不存在");
-    if (code === "PT409") fail("DOMESTIC_NUMBER_CONFLICT", "该国内单号已存在且内容不同，请使用修改接口");
-    if (code === "PT422") fail("VALIDATION_FAILED", rpcErr.message ?? "请求校验失败");
-    throw rpcErr;
+    throwShipCreateError(rpcErr);
   }
 
   const forwardingId = rpcResult.forwarding_id as string;

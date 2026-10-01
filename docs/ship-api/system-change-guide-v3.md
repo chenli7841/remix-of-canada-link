@@ -94,7 +94,7 @@ API 建议路径统一 /api/partners/v1。具体 HTTP、字段、错误结构见
 
 查询以已鉴权 ship 范围关联到的 forwarding_orders.domestic_tracking_no 精确匹配。不能使用现有后台 ilike 多字段搜索，也不能用 request_no、tracking_no、waybill_no、aliases 回退。现有微信入口会去空格并大写，新 ship 接口不能无说明继承该号码转换。数据库字符串规则必须与文档精确匹配约定一致。
 
-同一国内单号的新建去重应在 ship 范围内完成，不对所有历史客户的国内单号强加全局唯一。若发现历史同归属多主单重复，返回可诊断冲突，不能随意 first/maybeSingle 后选一单。
+新增国内单号全局唯一校验（迁移 20261001020000_domestic_tracking_identity），跨客户、跨集运单与电商订单，比较忽略大小写及首尾空格。历史重复保留，不自动改号或归属，禁止新增重复。Ship 范围内精确号码的幂等重放保持不变；全局号码冲突返回 HTTP 409 DOMESTIC_NUMBER_CONFLICT，不泄露占用方，不将无关唯一键错误一律归类为国内单号冲突。若发现历史同归属多主单重复，返回可诊断冲突，不能随意 first/maybeSingle 后选一单。
 
 客户更新仅更新该映射对应 profile，订单地址不能引用可被这次更新改变的对象。若复用 addresses，创建订单专用地址记录或现有可靠快照机制，不直接覆盖用户全局默认地址。
 
