@@ -8,12 +8,14 @@ export function PartnerQuoteResult({quote}:{quote:any}){
  return <section className="partner-domestic-detail" aria-label="后台报价结果">
   <h3>{quote.routeName} · 报价结果</h3>
   <p>实重 {quote.actual.toFixed(3)} kg · 计费重 {quote.chargeable.toFixed(3)} kg<br/>体积 {quote.volume.toFixed(6)} m³</p>
+  <h4 className="partner-clearance-title">正清</h4>
   <dl className="partner-fee-summary">
    {quote.fees.map((f:any)=><div key={f.name}><dt>{f.name}</dt><dd>{money(f.amount)}</dd></div>)}
    <div><dt>本地长途运输</dt><dd>{rate?money(rate.transfer?.amount ?? 0):'待选择服务'}</dd></div>
    <div><dt>派送费合计</dt><dd>{rate?money(rate.price):'待选择服务'}</dd></div>
    <div className="partner-fee-total"><dt>预计总费用</dt><dd>{rate?money(rate.total):'待选择服务'}</dd></div>
   </dl>
+  {quote.taxIncludedDuty && <div className="partner-tax-included" aria-label="清灰关包税报价"><h4 className="partner-clearance-title">清灰关（包税）</h4><dl className="partner-fee-summary"><div className="partner-fee-total"><dt>预计总费用</dt><dd>{rate?.taxIncludedTotal!=null?money(rate.taxIncludedTotal):'待选择服务'}</dd></div></dl></div>}
   <label>选择派送服务<select value={key} disabled={expired} onChange={e=>setKey(e.target.value)}><option value="">请选择承运商和服务</option>{quote.rates.map((r:any)=><option key={r.key} value={r.key}>{r.dispatchWarehouse?.label} · {r.carrier} · {r.service} · 总费用 {money(r.total)}</option>)}</select></label>
   {rate&&<>
    <p>快递发货仓库：{rate.dispatchWarehouse?.label}</p>

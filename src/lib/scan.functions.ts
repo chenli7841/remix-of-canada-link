@@ -63,6 +63,11 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { code: data.code };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'scanAddToContainer', data, returnTargets);
+    }
     const code = data.code.trim();
     if (!code) throw new Error("空扫描");
     const kind = await resolveScanCode(supabaseAdmin, code, detectScanKind(code));
@@ -638,6 +643,11 @@ export const intakeScanReceiveOrder = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { orderIds: [data.orderId] };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'intakeScanReceiveOrder', data, returnTargets);
+    }
     const { data: order } = await supabaseAdmin
       .from("orders")
       .select("id, order_no, shipping_method, warehouse, pickup_warehouse, domestic_tracking_no")
@@ -767,6 +777,11 @@ export const intakeScanReceiveWaybill = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { waybillIds: [data.waybillId] };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'intakeScanReceiveWaybill', data, returnTargets);
+    }
     const { data: wb } = await supabaseAdmin
       .from("waybills")
       .select("id, waybill_no, status, order_id, forwarding_id, shipping_method")
@@ -813,6 +828,11 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { forwardingIds: data.parentKind === 'forwarding' ? [data.parentId] : [], orderIds: data.parentKind === 'order' ? [data.parentId] : [] };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'intakeScanCommit', data, returnTargets);
+    }
     const n = Math.max(1, Math.min(200, Math.floor(data.boxCount || 1)));
     const table = data.parentKind === "order" ? "orders" : "forwarding_orders";
     const fk = data.parentKind === "order" ? "order_id" : "forwarding_id";
@@ -2005,6 +2025,11 @@ export const measureCreatePalletAssign = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { waybillIds: data.waybillIds };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'measureCreatePalletAssign', data, returnTargets);
+    }
     if (!data.waybillIds?.length) throw new Error("至少选择 1 个运单 / 输入箱数");
     const operatorName = await getOperatorName(supabaseAdmin, context.userId);
     const pal = await insertPallet(supabaseAdmin, context.userId, data, data);
@@ -2034,6 +2059,11 @@ export const measureCreatePalletsBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { waybillIds: data.pallets.flatMap(p => p.waybillIds ?? []) };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'measureCreatePalletsBatch', data, returnTargets);
+    }
     if (!data.pallets?.length) throw new Error("至少创建 1 个托盘");
     const requestedIds = data.pallets.flatMap(p => p.waybillIds ?? []);
     if (data.pallets.some(p => !p.waybillIds?.length)) throw new Error("每个托盘必须分配运单");

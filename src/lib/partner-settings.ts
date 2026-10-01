@@ -30,6 +30,7 @@ export const generalSchema = z.object({
   portRate: num,
   portCurrency: currency,
   fx: num,
+  taxIncludedRateUsd: num.default("30"),
   localOversizeNotes: z.string().trim().max(2000).default(""),
   localHandlingLength: num.default("122"),
   localHandlingSecondSide: num.default("76"),
@@ -40,6 +41,14 @@ export const generalSchema = z.object({
   localLargeFee: num.default(""),
   localOversizeCurrency: currency.default("CAD"),
 });
+
+export function taxIncludedDuty(volume: number, rateUsd: string, fxText: string) {
+  const rate=Number(rateUsd),fx=Number(fxText);
+  if (!rateUsd.trim() || !Number.isFinite(rate) || rate<0) throw Error('包税每立方关税单价未设置或无效');
+  if (!fxText.trim() || !Number.isFinite(fx) || fx<=0) throw Error('包税 USD/CAD 汇率未设置或无效');
+  if (!Number.isFinite(volume) || volume<0) throw Error('包税计费体积无效');
+  return {volume,rateUsd:rate,fx,amount:Math.round(volume*rate*fx*100)/100,currency:'CAD'};
+}
 
 // Applies only to warehouse-to-warehouse transport, never to provider rate details.
 export function localTransferSurcharges(g: z.infer<typeof generalSchema>, packages: {lengthCm:number;widthCm:number;heightCm:number}[]) {
@@ -171,6 +180,7 @@ export const emptyGeneral: General = {
   portRate: "",
   portCurrency: "CAD",
   fx: "",
+  taxIncludedRateUsd: "30",
   localOversizeNotes: "",
   localHandlingLength: "122",
   localHandlingSecondSide: "76",

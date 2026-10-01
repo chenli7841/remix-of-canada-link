@@ -837,7 +837,7 @@ export const listForwardings = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("forwarding_orders")
       .select(
-        "id, request_no, tracking_no, domestic_tracking_no, customer_code, warehouse, shipping_method, status, payment_status, fee_cny, freight_snapshot, batch_no, intake_at, created_at, box_count, route_code, route_id, destination_code, note, intake_reminder, shipping_routes:route_id(code, name_zh)",
+        "id, request_no, tracking_no, domestic_tracking_no, customer_code, warehouse, shipping_method, status, payment_status, fee_cny, freight_snapshot, batch_no, intake_at, created_at, box_count, route_code, route_id, destination_code, note, intake_reminder, return_reminder, shipping_routes:route_id(code, name_zh)",
         { count: "exact" },
       )
       .order("created_at", { ascending: false });
@@ -987,6 +987,11 @@ export const intakeForwarding = createServerFn({ method: "POST" })
     const { isStaff } = await getLevel(context.supabase, context.userId);
     if (!isStaff) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { forwardingIds: [data.id] };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'intakeForwarding', data, returnTargets);
+    }
     const { data: before } = await supabaseAdmin.from("forwarding_orders").select("*").eq("id", data.id).maybeSingle();
     if (!before) throw new Error("Not found");
     // Aggregate weight/volume from child waybills
@@ -1317,6 +1322,11 @@ export const setWaybillStatus = createServerFn({ method: "POST" })
     await assertManager(context.supabase, context.userId);
     if (!data.waybillIds.length) return { ok: true, count: 0 };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = ['received','storage'].includes(data.status) ? { waybillIds: data.waybillIds } : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'setWaybillStatus', data, returnTargets);
+    }
     const operator = await getOperatorName(supabaseAdmin, context.userId);
     const { data: before } = await supabaseAdmin
       .from("waybills")
@@ -4094,6 +4104,11 @@ export const createBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertManager(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { waybillIds: data.waybill_ids };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'createBatch', data, returnTargets);
+    }
     const { data: ins, error } = await supabaseAdmin
       .from("batches")
       .insert({
@@ -4132,6 +4147,11 @@ export const assignWaybillsToBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertManager(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.remove ? null : { waybillIds: data.waybillIds };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'assignWaybillsToBatch', data, returnTargets);
+    }
     // 运单进出批次会改变各自计入哪个批次的费用汇总——先记下改动前所属批次，成功后统一打脏。
     const oldBatchIds = await resolveWaybillBatchIds(supabaseAdmin, data.waybillIds);
     if (data.remove) {
@@ -4355,6 +4375,11 @@ export const batchUpdateWaybillsByBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertManager(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.status && ['received','storage'].includes(data.status) ? { batchIds: [data.batchId] } : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'batchUpdateWaybillsByBatch', data, returnTargets);
+    }
     const { data: wbs } = await supabaseAdmin
       .from("waybills")
       .select("id, waybill_no, status")
@@ -4436,6 +4461,11 @@ export const addWaybillsToForwarding = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { forwardingIds: [data.forwardingId] };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'addWaybillsToForwarding', data, returnTargets);
+    }
     const { data: fo } = await supabaseAdmin
       .from("forwarding_orders")
       .select("*")

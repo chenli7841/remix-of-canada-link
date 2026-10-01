@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {readIntakeReminder} from '@/lib/intake-reminder.functions';
 import { useServerFn } from "@tanstack/react-start";
@@ -13,9 +14,9 @@ type Candidate = any;
 
 function IntakeScanPage() {
   const search = useServerFn(intakeScanSearch);
-  const commit = useServerFn(intakeScanCommit);
-  const receiveWb = useServerFn(intakeScanReceiveWaybill);
-  const receiveOrder = useServerFn(intakeScanReceiveOrder);
+  const commit = useReturnReminder(intakeScanCommit);
+  const receiveWb = useReturnReminder(intakeScanReceiveWaybill);
+  const receiveOrder = useReturnReminder(intakeScanReceiveOrder);
   const detain = useServerFn(markDetained);
   const readReminder = useServerFn(readIntakeReminder);
   const [reminder,setReminder]=useState<{note:string;number:string}|null>(null);

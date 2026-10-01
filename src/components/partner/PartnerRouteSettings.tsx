@@ -264,6 +264,10 @@ export function PartnerRouteSettings({
                   ])}
                   <p>实际总体积 × 单价</p>
                 </Card>
+                <Card title="包税关税">
+                  {fields("general", [["taxIncludedRateUsd", "每立方关税单价", "USD/m³"]])}
+                  <p>按包裹实际总体积计算，使用公共 USD/CAD 汇率换算。替换正清关税，其他费用不变。</p>
+                </Card>
                 <Card title="汇率">
                   {fields("general", [["fx", "1 USD 折合 CAD", "CAD"]])}
                   <p>报价统一换算为 CAD。</p>

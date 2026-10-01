@@ -862,6 +862,11 @@ export const updateCarton = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.patch?.batch_id || data.patch?.pallet_id ? { cartonIds: [data.id] } : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'updateCarton', data, returnTargets);
+    }
     const { data: before } = await supabaseAdmin.from("cartons").select("*").eq("id", data.id).maybeSingle();
     await assertContainerEditable(supabaseAdmin, "cartons", before);
     const patch = await applySelfDerivations(supabaseAdmin, "cartons", data.id, data.patch ?? {});
@@ -1002,6 +1007,11 @@ export const assignToCarton = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.cartonId ? data : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'assignToCarton', data, returnTargets);
+    }
     let carton: any = null;
     if (data.cartonId) {
       const { data: c } = await supabaseAdmin.from("cartons").select("*").eq("id", data.cartonId).maybeSingle();
@@ -1405,6 +1415,11 @@ export const updatePallet = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.patch?.batch_id ? { palletIds: [data.id] } : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'updatePallet', data, returnTargets);
+    }
     const { data: before } = await supabaseAdmin.from("pallets").select("*").eq("id", data.id).maybeSingle();
     await assertContainerEditable(supabaseAdmin, "pallets", before);
     const patch = await applySelfDerivations(supabaseAdmin, "pallets", data.id, data.patch ?? {});
@@ -1516,6 +1531,11 @@ export const assignToPallet = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = data.palletId ? data : null;
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'assignToPallet', data, returnTargets);
+    }
     let pallet: any = null;
     if (data.palletId) {
       const { data: p } = await supabaseAdmin.from("pallets").select("*").eq("id", data.palletId).maybeSingle();

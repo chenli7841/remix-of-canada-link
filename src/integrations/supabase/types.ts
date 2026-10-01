@@ -1427,6 +1427,7 @@ export type Database = {
           items_desc: string | null
           length_cm: number | null
           intake_reminder: boolean
+          return_reminder: boolean
           note: string | null
           pallet_id: string | null
           pallet_no: string | null
@@ -1473,6 +1474,7 @@ export type Database = {
           items_desc?: string | null
           length_cm?: number | null
           intake_reminder?: boolean
+          return_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null
@@ -1519,6 +1521,7 @@ export type Database = {
           items_desc?: string | null
           length_cm?: number | null
           intake_reminder?: boolean
+          return_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null

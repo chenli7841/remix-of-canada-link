@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -69,7 +70,7 @@ export function InventoryIntakePanel({beforeReceive}:{beforeReceive?:(id:string,
 
 function OrderCard({ order, onDone, beforeReceive }: { order: any; onDone: () => void; beforeReceive?:(id:string,number:string)=>Promise<boolean> }) {
   const check = useServerFn(inventoryIntakeCheckWaybill);
-  const commit = useServerFn(inventoryIntakeCommit);
+  const commit = useReturnReminder(inventoryIntakeCommit);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [scanned, setScanned] = useState<Scanned[]>([]);

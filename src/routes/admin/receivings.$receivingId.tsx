@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,9 +52,9 @@ function ReceivingDetail() {
   const { receivingId } = Route.useParams();
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getReceivingDetail);
-  const scan = useServerFn(scanReceive);
+  const scan = useReturnReminder(scanReceive);
   const removeScan = useServerFn(removeReceivingScan);
-  const confirm = useServerFn(confirmReceiving);
+  const confirm = useReturnReminder(confirmReceiving);
   const match = useServerFn(matchReceivingBatch);
   const update = useServerFn(updateReceiving);
   const prepare = useServerFn(prepareDelivery);

@@ -2,6 +2,12 @@ import {createServerFn} from '@tanstack/react-start';
 import {z} from 'zod';
 import {requireSupabaseAuth} from '@/integrations/supabase/auth-middleware';
 const target = z.object({kind:z.enum(['order','forwarding']),id:z.string().uuid()});
+export const saveReturnReminder=createServerFn({method:'POST'}).middleware([requireSupabaseAuth]).inputValidator(z.object({id:z.string().uuid(),enabled:z.boolean()})).handler(async({data,context})=>{
+ const db=await access(context);
+ const r=await db.from('forwarding_orders').update({return_reminder:data.enabled}).eq('id',data.id).select('id').single();
+ if(r.error)throw Error('退运提醒保存失败，请检查数据库迁移或重试');
+ return {ok:true};
+});
 async function access(context:any){
  const r=await context.supabase.rpc('is_staff',{_user_id:context.userId});
  if(r.error || !r.data) throw Error('仅工作人员可查看或修改入库备注');

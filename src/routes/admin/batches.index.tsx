@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,7 +34,7 @@ function BatchesPage() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listBatches);
   const fetchRoles = useServerFn(getMyRoles);
-  const create = useServerFn(createBatch);
+  const create = useReturnReminder(createBatch);
   const setBatchStatus = useServerFn(updateBatchStatus);
   const fetchCargoTypes = useServerFn(listCargoTypes);
   const fetchDests = useServerFn(listDestinations);

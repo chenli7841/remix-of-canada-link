@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ function WaybillsPage() {
   const fetchList = useServerFn(listWaybills);
   const fetchPresets = useServerFn(listTrackingPresets);
   const fetchRoles = useServerFn(getMyRoles);
-  const setStatusFn = useServerFn(setWaybillStatus);
+  const setStatusFn = useReturnReminder(setWaybillStatus);
   const addEvent = useServerFn(addTrackingEvents);
   const delWaybill = useServerFn(deleteWaybill);
   const canDelete = useCanDelete();

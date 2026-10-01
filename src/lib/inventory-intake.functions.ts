@@ -132,6 +132,11 @@ export const inventoryIntakeCommit = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const returnTargets = { forwardingIds: [data.forwardingId], waybillIds: data.waybillIds };
+    if (returnTargets) {
+      const { assertReturnReminder } = await import('./return-reminder.server');
+      await assertReturnReminder(supabaseAdmin, 'inventoryIntakeCommit', data, returnTargets);
+    }
     const { order, items } = await loadOrder(supabaseAdmin, data.forwardingId);
     const ids = Array.from(new Set(data.waybillIds ?? []));
     if (!ids.length) throw new Error("请先扫描运单");

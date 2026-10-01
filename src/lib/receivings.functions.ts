@@ -96,6 +96,8 @@ export const scanReceive = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { assertReturnReminder } = await import('./return-reminder.server');
+    await assertReturnReminder(supabaseAdmin, 'scanReceive', data, { code: data.code });
     const code = data.code.trim();
     if (!code) throw new Error("空扫描");
     const kind = detectScanKind(code);
@@ -350,6 +352,9 @@ export const confirmReceiving = createServerFn({ method: "POST" })
     if (!recv) throw new Error("收货单不存在");
     if (!recv.batch_id) throw new Error("请先匹配批次");
     if (recv.status === "confirmed" || recv.status === "closed") throw new Error("收货单已确认");
+
+    const { assertReturnReminder } = await import('./return-reminder.server');
+    await assertReturnReminder(supabaseAdmin, 'confirmReceiving', data, { batchIds: [recv.batch_id] });
 
     // 1. Batch → arrived
     await supabaseAdmin.from("batches").update({ status: "arrived" }).eq("id", recv.batch_id);

@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,12 +24,12 @@ function PalletDetail() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getPalletDetail);
-  const assign = useServerFn(assignToPallet);
+  const assign = useReturnReminder(assignToPallet);
   const del = useServerFn(deletePallet);
   const fetchCartons = useServerFn(listCartons);
   const fetchWaybills = useServerFn(listWaybills);
   const fetchLabel = useServerFn(getContainerLabelData);
-  const updP = useServerFn(updatePallet);
+  const updP = useReturnReminder(updatePallet);
   const setUnlock = useServerFn(setContainerUnlock);
   const fetchLogs = useServerFn(listAdminLogs);
   

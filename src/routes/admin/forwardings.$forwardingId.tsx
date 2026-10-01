@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
 import { SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
@@ -30,9 +31,9 @@ function FwDetail() {
   const fetchDetail = useServerFn(getForwardingDetail);
   const fetchRoutes = useServerFn(listRoutes);
   const fetchRoles = useServerFn(getMyRoles);
-  const intake = useServerFn(intakeForwarding);
+  const intake = useReturnReminder(intakeForwarding);
   const preview = useServerFn(previewForwardingFreight);
-  const addWaybills = useServerFn(addWaybillsToForwarding);
+  const addWaybills = useReturnReminder(addWaybillsToForwarding);
   const fetchLabel = useServerFn(getLabelData);
   const changeRoute = useServerFn(adminChangeRoute);
   const updateDims = useServerFn(adminUpdateWaybillDims);

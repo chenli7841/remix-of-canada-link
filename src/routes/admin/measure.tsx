@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState, useEffect } from "react";
@@ -37,7 +38,7 @@ const emptyPallet = (): PalletForm => ({
 function MeasurePage() {
   const lookup = useServerFn(measureLookup);
   const save = useServerFn(measureSaveDims);
-  const createPallets = useServerFn(measureCreatePalletsBatch);
+  const createPallets = useReturnReminder(measureCreatePalletsBatch);
   const fetchLabels = useServerFn(getWaybillsLabelData);
 
   const [code, setCode] = useState("");

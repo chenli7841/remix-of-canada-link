@@ -3,6 +3,7 @@ import {
   settingInput,
   selectDispatchWarehouse,
   localTransferSurcharges,
+  taxIncludedDuty,
   emptyGeneral,
   emptyTransport,
   resolvePartnerRoute,
@@ -152,6 +153,8 @@ export async function createQuote(c: Auth, raw: unknown) {
     "税率读取失败",
   );
   const base = baseQuote(config, input, hs);
+  const includedDuty = settings ? taxIncludedDuty(base.volume, settings.general.taxIncludedRateUsd, settings.general.fx) : null;
+  const standardDuty = base.fees.find(f=>f.name==='关税')!.amount;
   const arrival = settings?.warehouses.find(w => w.id === config.originId);
   if(!settings && input.dispatchWarehouseId)throw Error('此线路使用固定发货仓库');
   const origins = settings ? [selectDispatchWarehouse(settings.warehouses,input.to.province,input.dispatchWarehouseId)].map(w => {
@@ -193,7 +196,11 @@ export async function createQuote(c: Auth, raw: unknown) {
   const subtotal = base.fees.reduce((s, r) => s + Math.round(r.amount * 100), 0);
   const result = {
     ...base,
-    rates: rates.map((r) => ({ ...r, total: Math.round(subtotal + r.price * 100 + r.transfer.amount * 100) / 100 })).sort((a,b) => a.total-b.total || a.key.localeCompare(b.key)),
+    taxIncludedDuty: includedDuty,
+    rates: rates.map((r) => {
+      const total = Math.round(subtotal + r.price * 100 + r.transfer.amount * 100) / 100;
+      return { ...r, total, taxIncludedTotal: includedDuty ? Math.round(total*100 - Math.round(standardDuty*100) + Math.round(includedDuty.amount*100))/100 : null };
+    }).sort((a,b) => a.total-b.total || a.key.localeCompare(b.key)),
     expiresAt: new Date(Math.min(...expiries)).toISOString(),
     localOversizePending: false,
     currency: "CAD",

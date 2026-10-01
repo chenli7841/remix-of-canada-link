@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, useEffect } from "react";
 import { scanAddToContainer } from "@/lib/scan.functions";
@@ -14,7 +15,7 @@ export function ScanAddDialog({
   containerId: string;
   onChanged?: () => void;
 }) {
-  const scan = useServerFn(scanAddToContainer);
+  const scan = useReturnReminder(scanAddToContainer);
   const [code, setCode] = useState("");
   const [log, setLog] = useState<LogItem[]>([]);
   const [busy, setBusy] = useState(false);

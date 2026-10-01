@@ -1,3 +1,4 @@
+import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -84,13 +85,13 @@ function BatchDetail() {
   const fetchRoles = useServerFn(getMyRoles);
   const fetchWaybills = useServerFn(listWaybills);
   const setBatchStatus = useServerFn(updateBatchStatus);
-  const assign = useServerFn(assignWaybillsToBatch);
+  const assign = useReturnReminder(assignWaybillsToBatch);
   const updBatch = useServerFn(updateBatch);
-  const bulkOp = useServerFn(batchUpdateWaybillsByBatch);
+  const bulkOp = useReturnReminder(batchUpdateWaybillsByBatch);
   const fetchCartons = useServerFn(listCartons);
   const fetchPallets = useServerFn(listPallets);
-  const updCarton = useServerFn(updateCarton);
-  const updPallet = useServerFn(updatePallet);
+  const updCarton = useReturnReminder(updateCarton);
+  const updPallet = useReturnReminder(updatePallet);
   const fetchLabel = useServerFn(getContainerLabelData);
   const deduct = useServerFn(deductWalletForBatch);
   const deductOffline = useServerFn(deductBatchOffline);
