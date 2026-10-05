@@ -1,5 +1,7 @@
 import { groupDeliveriesByCity } from '@/lib/delivery-city-groups';
 import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
+import { DeliverySheetBuilder } from '@/components/admin/DeliverySheetBuilder';
+import { deliveryStops, type DeliverySheetRow } from '@/lib/delivery-sheet';
 import { DeliveryExtraFeeEditor } from '@/components/admin/DeliveryExtraFeeEditor';
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -30,6 +32,8 @@ function DeliveryQueuePage() {
   const toggleBatches = (keys:string[],checked:boolean) => setSelectedBatches(previous=>{const next=new Set(previous);keys.forEach(key=>checked?next.add(key):next.delete(key));return next;});
   const [feeEdit, setFeeEdit] = useState<any>(null);
   const [addressEdit, setAddressEdit] = useState<any>(null);
+  const [sheetRows,setSheetRows] = useState<DeliverySheetRow[] | null>(null);
+  const [sheetBusy,setSheetBusy] = useState(false);
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
 
@@ -42,6 +46,19 @@ function DeliveryQueuePage() {
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-groups"] });
+  const openSheet = async () => {
+    if (sheetBusy) return;
+    setSheetBusy(true);
+    try {
+      const result = await q.refetch();
+      if (result.error || !result.data) throw new Error('读取最新派送信息失败，请重试');
+      const selected = result.data.groups.filter(g=>selectedBatches.has(g.key));
+      if (selected.length !== selectedBatches.size) throw new Error('部分勾选批次的状态已改变，请刷新后重新勾选');
+      deliveryStops(selected);
+      setSheetRows(selected);
+    } catch (e:any) { alert(e.message || '派送单生成失败'); }
+    finally { setSheetBusy(false); }
+  };
 
   const groups = (q.data?.groups ?? []).filter((g: any) => {
     if (!search) return true;
@@ -152,7 +169,7 @@ function DeliveryQueuePage() {
         />
       </div>
 
-      {selectedBatches.size > 0 && <div className="mb-3 flex items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
+      {selectedBatches.size > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button disabled={sheetBusy} className="rounded bg-brand px-3 py-2 text-white disabled:opacity-50" onClick={()=>void openSheet()}>{sheetBusy?'正在读取最新数据…':'生成派送单'}</button><button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
       <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <table className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
@@ -255,6 +272,7 @@ function DeliveryQueuePage() {
       </div>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
       {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}
+      {sheetRows && <DeliverySheetBuilder rows={sheetRows} onClose={()=>setSheetRows(null)}/>}
     </Page>
   );
 }

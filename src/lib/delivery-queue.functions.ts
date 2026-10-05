@@ -325,11 +325,13 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
       readDeliveryRows(supabaseAdmin, 'batch_settlements', '*', 'batch_id', batchIds),
     ]);
     const extraFeeMap = new Map<string, number>();
+    const settlementNoteMap = new Map<string, string>();
     for (const batchId of batchIds) for (let offset = 0; ; offset += 500) {
-      const result = await (supabaseAdmin as any).from('batch_customer_notes').select('customer_code,extra_fee_cny')
+      const result = await (supabaseAdmin as any).from('batch_customer_notes').select('customer_code,extra_fee_cny,note')
         .eq('batch_id', batchId).order('customer_code').range(offset, offset + 499);
       if (result.error) throw new Error('额外费用读取失败，请确认已执行额外费用迁移');
       for (const row of result.data ?? []) if (row.extra_fee_cny != null) extraFeeMap.set(batchId + ':' + row.customer_code, Number(row.extra_fee_cny));
+      for (const row of result.data ?? []) settlementNoteMap.set(batchId + ':' + row.customer_code, row.note || '');
       if ((result.data ?? []).length < 500) break;
     }
     const batchMap = new Map(batches.map(b=>[b.id,b]));
@@ -379,6 +381,7 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
           ...deliverySettlementSummary(settlementMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)), batchMap.get(g.batch_id)),
           extra_fee_paid: paidFees.has('delivery-extra:' + g.batch_id + ':' + (g.customer_code || p?.customer_code)),
           fee_cny: feeCny,
+          settlement_note: settlementNoteMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) || '',
           fee_cad: +(feeCny * fx).toFixed(2),
           customer_code: g.customer_code || p?.customer_code || null,
           full_name: p?.full_name || (a?.recipient ?? null),

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { DriverOriginSettings } from '@/components/admin/DriverOriginSettings';
 import {
   listWarehouses, upsertWarehouse, deleteWarehouse, type Warehouse,
 } from "@/lib/settings.functions";
@@ -102,6 +103,7 @@ function WarehousesPage() {
         </table>
       </div>
 
+      <DriverOriginSettings canEdit={canEdit}/>
       {editing && canEdit && (
         <WarehouseEditor
           initial={editing}

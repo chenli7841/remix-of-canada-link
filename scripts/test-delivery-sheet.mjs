@@ -1,0 +1,43 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+const exports = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/delivery-sheet.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Map,Set,URLSearchParams});
+const row={key:'a',address:'10 Main St Toronto ON CA',customer_code:'00001',count:3,fee_cny:25,total_cad:null,chargeable_weight_kg:null,settlement_note:'现金 <script>alert(1)</script> & "paid"'};
+const stops=exports.deliveryStops([row,{...row,key:'b',address:' 10 MAIN St  Toronto ON CA ',count:2},{...row,key:'c',address:'11 Main St Toronto ON CA'}]);
+assert.equal(stops.length,2);assert.equal(stops[0].rows.length,2);
+assert.equal(stops.flatMap(s=>s.rows).reduce((n,r)=>n+r.count,0),8);
+const thirty=exports.deliveryStops(Array.from({length:30},(_,i)=>({...row,key:String(i),address:`Stop ${i+1}`})));
+const split=exports.splitDeliveryStops(thirty);
+assert.equal(split.map(s=>s.length).join(','),'21,9');
+assert.equal(split[0].at(-1).address,'Stop 21');assert.equal(split[1][0].address,'Stop 22');
+assert.equal(new Set(split.flat().flatMap(s=>s.rows.map(r=>r.key))).size,30);
+const secondLinks=exports.navigationLinks(split[1].map(s=>s.address),'Stop 21',true,'Warehouse');
+assert.equal(new URL(secondLinks[0].url).searchParams.get('origin'),'Stop 21');
+assert.equal(new URL(secondLinks[0].url).searchParams.get('waypoints').split('|')[0],'Stop 22');
+assert.equal(new URL(secondLinks.at(-1).url).searchParams.get('destination'),'Warehouse');
+assert.throws(()=>exports.deliveryStops([{...row,address:''}]),/缺少地址/);
+for(const bad of [[0,0],[1],[0,2],[0,1.5],null])assert.throws(()=>exports.orderedIndexes(bad,2));
+assert.equal(exports.orderedIndexes([1,0],2).join(','),'1,0');
+const addresses=Array.from({length:12},(_,i)=>`${i} Main St Toronto ON CA`);
+const links=exports.navigationLinks(addresses,'Warehouse Toronto',true);
+const destinations=links.flatMap(({url},i)=>{
+ assert.ok(url.length<=2048);const q=new URL(url).searchParams;
+ const stops=[...(q.get('waypoints')?.split('|') || []),q.get('destination')];
+ assert.ok(stops.length<=4);
+ assert.equal(q.get('origin'),i===0?'Warehouse Toronto':addresses[i*4-1]);
+ return stops;
+});
+assert.equal(destinations.join(';'),[...addresses,'Warehouse Toronto'].join(';'));
+const html=exports.deliverySheetHtml(stops,'Warehouse',false,null,false);
+assert.equal((html.match(/<section class="page">/g)||[]).length,2);
+assert.ok(html.includes('待确认'));assert.ok(html.includes('CN¥25.00'));
+assert.ok(!html.includes('<script>alert(1)</script>'));assert.ok(html.includes('&lt;script&gt;'));
+assert.ok(html.includes('00001'));assert.equal((html.match(/<tr><td>/g)||[]).length,3);
+assert.ok(!exports.deliverySheetHtml(stops,'Warehouse',false,'javascript:alert(1)',false).includes('src="javascript:'));
+console.log('派送单测试通过：同地址合并不丢批次、缺失地址拦截、路线顺序校验、手机导航分段全覆盖、两页结构、币种/待确认显示、备注转义。');
+if(process.argv.includes('--fixture')) {
+ const sample=exports.deliveryStops(Array.from({length:21},(_,i)=>({...row,key:String(i),address:`${100+i} Sample Street, Toronto ON CA M1A 1A1`,customer_code:String(i+1).padStart(5,'0'),batch_no:'MSEA20261005001',total_cad:125.5,chargeable_weight_kg:20.25,settlement_note:'现金结算，派送前电话联系。'})));
+ fs.writeFileSync('outputs/delivery-sheet-preview.html',exports.deliverySheetHtml(sample,'1 Sample Warehouse, Toronto ON CA',true,null,false));
+}
