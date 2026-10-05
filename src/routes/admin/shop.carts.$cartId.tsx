@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -197,7 +198,7 @@ function CartDetail() {
                 {logs.map((l: any) => (
                   <li key={l.id} className="flex flex-wrap items-baseline gap-x-2 text-slate-400">
                     <span className="text-slate-500">{fmtDate(l.created_at)}</span>
-                    <span className="font-mono text-slate-300">{l.action}</span>
+                    <span className="font-mono text-slate-300">{logActionLabel(l.action)}</span>
                     <span>{l.operator_name ?? l.operator_id?.slice(0, 8)}</span>
                     {l.note && <span className="text-amber-300">「{l.note}」</span>}
                   </li>

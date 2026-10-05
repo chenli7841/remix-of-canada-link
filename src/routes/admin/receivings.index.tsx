@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { listReceivings, createReceiving } from "@/lib/receivings.functions";
 import { listBatches } from "@/lib/orders.functions";
+import { listWarehouses } from "@/lib/settings.functions";
+import { receivingBatchLabel, receivingWarehouseLabel } from "@/lib/receiving-labels";
 import { BATCH_STATUS_LABEL, BATCH_STATUS_COLOR, METHOD_LABEL, StatusBadge, Page, fmtDate } from "@/lib/admin-shared";
 import { Plus, Loader2, X, ArrowRight, PackageCheck } from "lucide-react";
 
@@ -22,6 +24,8 @@ function ReceivingsPage() {
   const fetchList = useServerFn(listReceivings);
   const create = useServerFn(createReceiving);
   const fetchBatches = useServerFn(listBatches);
+  const fetchWarehouses = useServerFn(listWarehouses);
+  const warehousesQ = useQuery({ queryKey: ["receiving-warehouses"], queryFn: () => fetchWarehouses(), staleTime: 60_000 });
 
   const q = useQuery({ queryKey: ["admin-receivings"], queryFn: () => fetchList() });
   const batchesQ = useQuery({ queryKey: ["batches-for-recv"], queryFn: () => fetchBatches(), staleTime: 30_000 });
@@ -68,9 +72,9 @@ function ReceivingsPage() {
             {q.data?.receivings.map((r: any) => (
               <tr key={r.id} className="hover:bg-white/[0.03]">
                 <td className="px-4 py-3 font-mono text-xs text-slate-200">{r.receiving_no}</td>
-                <td className="px-4 py-3 text-xs font-mono">{r.batches?.batch_no ?? <span className="text-slate-500">— 未匹配 —</span>}</td>
+                <td className="px-4 py-3 text-xs font-mono">{r.batches ? receivingBatchLabel(r.batches) : <span className="text-slate-500">— 未匹配 —</span>}</td>
                 <td className="px-4 py-3 text-xs">{r.batches?.shipping_method ? METHOD_LABEL[r.batches.shipping_method] : "—"}</td>
-                <td className="px-4 py-3 text-xs text-slate-400">{r.warehouse_code ?? "—"}</td>
+                <td className="px-4 py-3 text-xs text-slate-400">{receivingWarehouseLabel(r.warehouse_code, warehousesQ.data?.warehouses)}</td>
                 <td className="px-4 py-3"><StatusBadge map={RECV_LABEL} color={RECV_COLOR} value={r.status}/></td>
                 <td className="px-4 py-3">
                   {r.batches?.status ? <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={r.batches.status}/> : <span className="text-slate-500 text-xs">—</span>}
@@ -105,7 +109,7 @@ function ReceivingsPage() {
                   {batchesQ.data?.batches
                     .filter((b: any) => b.status === "shipped")
                     .map((b: any) => (
-                      <option key={b.id} value={b.id}>{b.batch_no} · {METHOD_LABEL[b.shipping_method] ?? b.shipping_method} · {BATCH_STATUS_LABEL[b.status]}</option>
+                      <option key={b.id} value={b.id}>{receivingBatchLabel(b)} · {METHOD_LABEL[b.shipping_method] ?? b.shipping_method} · {BATCH_STATUS_LABEL[b.status]}</option>
                     ))}
                 </select>
               </div>

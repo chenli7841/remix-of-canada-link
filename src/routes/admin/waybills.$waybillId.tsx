@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -328,13 +329,13 @@ function WaybillDetail() {
           {logs.map((l: any) => (
             <div key={l.id} className="rounded-md border border-white/5 bg-white/[0.02] p-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-200">{l.action}</span>
+                <span className="font-semibold text-slate-200">{logActionLabel(l.action)}</span>
                 <span className="text-slate-500">{fmtDate(l.created_at)}</span>
               </div>
               <div className="text-slate-400">操作人：{l.operator_name ?? "—"}{l.note ? ` · ${l.note}` : ""}</div>
               {(l.before || l.after) && (
                 <details className="mt-1"><summary className="cursor-pointer text-slate-500">详情</summary>
-                  <pre className="mt-1 max-h-40 overflow-auto text-[10px] text-slate-500">{JSON.stringify({ before: l.before, after: l.after }, null, 2)}</pre>
+                  <pre className="mt-1 max-h-40 overflow-auto text-[10px] text-slate-500">{logDetailsText({ before: l.before, after: l.after })}</pre>
                 </details>
               )}
             </div>

@@ -18,7 +18,7 @@ export const listReceivings = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("receivings")
       .select(
-        "id, receiving_no, batch_id, warehouse_code, status, notes, confirmed_at, created_at, batches:batch_id(batch_no, planned_ship_date, shipping_method, status)",
+        "id, receiving_no, batch_id, warehouse_code, status, notes, confirmed_at, created_at, batches:batch_id(batch_no, display_name, planned_ship_date, shipping_method, status)",
       )
       .order("created_at", { ascending: false })
       .limit(200);
@@ -229,6 +229,29 @@ export const scanReceive = createServerFn({ method: "POST" })
     };
   });
 
+// ===== Record all expected items as received, without finalizing the receiving =====
+export const matchAllReceiving = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { receivingId: string; batchId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const recv = await supabaseAdmin.from('receivings').select('batch_id,status').eq('id', data.receivingId).single();
+    if (recv.error || !recv.data) throw new Error('收货单读取失败');
+    if (!recv.data.batch_id || recv.data.batch_id !== data.batchId) throw new Error('请先匹配批次，或刷新后重试');
+    if (!['open', 'matched'].includes(recv.data.status)) throw new Error('收货单已确认，不能一键匹配');
+    const { assertReturnReminder } = await import('./return-reminder.server');
+    await assertReturnReminder(supabaseAdmin, 'matchAllReceiving', data, { batchIds: [data.batchId] });
+    const { recordAllReceivingScans } = await import('./receiving-bulk.server');
+    const counts = await recordAllReceivingScans(supabaseAdmin, data.receivingId, data.batchId, context.userId);
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: 'receiving', entity_id: data.receivingId, action: 'match_all_receiving',
+      after: { batch_id: data.batchId, ...counts }, operator_id: context.userId,
+      note: '一键匹配全部到货（含内部运单、箱号及托盘），已有扫描记录保留',
+    });
+    return { ok: true, counts };
+  });
+
 // ===== Remove a scan =====
 export const removeReceivingScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -262,30 +285,27 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: recv, error } = await supabaseAdmin
       .from("receivings")
-      .select("*, batches:batch_id(id, batch_no, planned_ship_date, shipping_method, status, destination_code)")
+      .select("*, batches:batch_id(id, batch_no, display_name, planned_ship_date, shipping_method, status, destination_code)")
       .eq("id", data.receivingId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!recv) throw new Error("收货单不存在");
 
-    const { data: scans } = await supabaseAdmin
-      .from("receiving_scans")
-      .select("*")
-      .eq("receiving_id", data.receivingId)
-      .order("scanned_at", { ascending: false });
+    const scans: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const result = await supabaseAdmin.from('receiving_scans').select('*')
+        .eq('receiving_id', data.receivingId).order('scanned_at', { ascending: false }).order('id')
+        .range(offset, offset + 499);
+      if (result.error) throw new Error('收货记录读取失败，请重试');
+      scans.push(...(result.data ?? []));
+      if ((result.data ?? []).length < 500) break;
+    }
 
     // batch expected contents
     let expected = { waybills: [] as any[], cartons: [] as any[], pallets: [] as any[] };
     if (recv.batch_id) {
-      const [{ data: wbs }, { data: cs }, { data: ps }] = await Promise.all([
-        supabaseAdmin
-          .from("waybills")
-          .select("id, waybill_no, status, customer_code, carton_id, pallet_id")
-          .eq("assigned_batch_id", recv.batch_id),
-        supabaseAdmin.from("cartons").select("id, carton_no, pallet_id").eq("batch_id", recv.batch_id),
-        supabaseAdmin.from("pallets").select("id, pallet_no").eq("batch_id", recv.batch_id),
-      ]);
-      expected = { waybills: wbs ?? [], cartons: cs ?? [], pallets: ps ?? [] };
+      const { loadReceivingContents } = await import('./receiving-bulk.server');
+      expected = await loadReceivingContents(supabaseAdmin, recv.batch_id);
     }
 
     const scanned = {

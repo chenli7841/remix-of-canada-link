@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -115,8 +116,8 @@ function CartonDetail() {
             {logsQ.data.items.map((l: any) => (
               <li key={l.id} className="flex items-start justify-between gap-3 py-2 text-xs">
                 <div className="min-w-0 flex-1">
-                  <div className="text-slate-200">{l.note ?? l.action}</div>
-                  <div className="mt-0.5 text-[10px] text-slate-500">{l.operator_name ?? "系统"} · <span className="font-mono">{l.action}</span></div>
+                  <div className="text-slate-200">{l.note ?? logActionLabel(l.action)}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">{l.operator_name ?? "系统"} · <span className="font-mono">{logActionLabel(l.action)}</span></div>
                 </div>
                 <div className="whitespace-nowrap text-[10px] text-slate-500">{fmtDate(l.created_at)}</div>
               </li>

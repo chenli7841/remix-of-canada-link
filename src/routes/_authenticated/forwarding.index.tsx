@@ -234,6 +234,7 @@ function ForwardingPage() {
   const [note, setNote] = useState("");
 
   const [busy, setBusy] = useState(false);
+  const [submitResults, setSubmitResults] = useState<{ tracking: string; ok: boolean; message: string }[]>([]);
   const [done, setDone] = useState<{ count: number; waybills: number } | null>(null);
 
   // Whether the customer has any rows at all in their own "My Items" library —
@@ -449,7 +450,11 @@ function ForwardingPage() {
       }
     }
 
+    if (busy) return;
     setBusy(true);
+    setSubmitResults([]);
+    const results: { tracking: string; ok: boolean; message: string }[] = [];
+    const failed: ParcelDraft[] = [];
     let created = 0;
     let totalWaybills = 0;
     for (const parcel of parcels) {
@@ -490,6 +495,7 @@ function ForwardingPage() {
             },
           })),
       };
+      try {
       let { data, error } = await sb.rpc("place_forwarding", { _payload: payload });
       const isStatementTimeout = error?.code === "57014" || /statement timeout/i.test(error?.message ?? "");
       // PostgreSQL statement_timeout aborts and rolls back the whole RPC, so one
@@ -503,25 +509,35 @@ function ForwardingPage() {
         error = retry.error;
       }
       if (error) {
-        toast.error(`${t}: ${error.message}`);
-        continue;
+        throw new Error(error.message);
       }
       if (!data?.ok) {
-        toast.error(`${t}: ${data?.reason ?? "failed"}`);
-        continue;
+        throw new Error(data?.reason ?? "提交未完成，请重试");
       }
       created++;
       totalWaybills += Number(data?.waybills ?? 0);
+      results.push({ tracking: t || "库存发货", ok: true, message: `已创建 ${data.request_no ?? "集运订单"}` });
+      } catch (error: any) {
+        failed.push(parcel);
+        results.push({ tracking: t || "库存发货", ok: false, message: error?.message || "网络异常，请先查询订单确认是否已创建，再重试" });
+      }
     }
     setBusy(false);
-    if (created > 0) setDone({ count: created, waybills: totalWaybills });
+    setSubmitResults(results);
+    if (failed.length) {
+      setParcels(failed);
+      toast.error(`成功 ${created} 票，失败 ${failed.length} 票。失败内容已保留，请查看逐票结果。`);
+    } else if (created > 0) setDone({ count: created, waybills: totalWaybills });
   };
 
   const resetForm = () => {
     setParcels([{ tracking_no: "", items: [newItem()] }]);
     setNote("");
     setDone(null);
+    setSubmitResults([]);
   };
+
+  const submissionSummary = submitResults.length > 0 && (<div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-slate-800"><p className="font-semibold">提交结果：成功 {submitResults.filter(r => r.ok).length} 票，失败 {submitResults.filter(r => !r.ok).length} 票</p>{submitResults.map((r,i) => <p key={i} className="mt-2">{r.tracking}：{r.ok ? "成功" : "失败"} — {r.message}</p>)}</div>);
 
   if (loading)
     return (
@@ -536,6 +552,7 @@ function ForwardingPage() {
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-success/10 text-success">
           <CheckCircle2 className="h-8 w-8" />
         </div>
+        {submissionSummary}
         <h1 className="mt-6 font-display text-3xl font-bold">{tr("提交成功", "Request submitted")}</h1>
         <p className="mt-2 text-ink-soft">
           {tr(
@@ -595,6 +612,7 @@ function ForwardingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
+      {submissionSummary}
       <header className="mb-8">
         <div className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-medium text-ink-soft">
           <Package className="h-3.5 w-3.5" />

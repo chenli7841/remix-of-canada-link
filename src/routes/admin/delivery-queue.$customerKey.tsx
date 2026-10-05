@@ -1,3 +1,4 @@
+import { logActionLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -316,13 +317,13 @@ function CustomerDeliveryDetail() {
             {logs.map((lg) => (
               <div key={lg.id} className="rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-slate-200">{lg.action}</span>
+                  <span className="font-mono text-slate-200">{logActionLabel(lg.action)}</span>
                   <span className="text-slate-500">{fmtDate(lg.created_at)}</span>
                 </div>
                 {lg.note && <div className="mt-1 text-slate-400">{lg.note}</div>}
                 {lg.after && (
                   <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
-                    {typeof lg.after === "string" ? lg.after : JSON.stringify(lg.after)}
+                    {logDetailsText(lg.after)}
                   </pre>
                 )}
               </div>

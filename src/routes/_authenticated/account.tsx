@@ -2659,6 +2659,8 @@ const STATUS_RANK: Record<string, number> = {
 function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } = {}) {
   const { lang, cnyToCad } = useApp();
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [items, setItems] = useState<MyOrderItem[] | null>(null);
   const [filter, setFilter] = useState<OrderFilter>(initialFilter);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -2667,6 +2669,9 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
   const [busyDel, setBusyDel] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    setLoadError(false);
+    setItems(null);
     Promise.all([
       sb
         .from("orders")
@@ -2687,6 +2692,8 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
       sb.from("order_items").select("order_id,name_zh,name_en,quantity").order("created_at"),
       sb.from("forwarding_items").select("forwarding_id,name,quantity").order("created_at"),
     ]).then(([o, f, w, oi, fi]: any) => {
+      if (!active) return;
+      if ([o, f, w, oi, fi].some(r => r.error)) throw new Error("订单加载失败");
       const byOrder = new Map<string, MyWaybill[]>();
       const byFwd = new Map<string, MyWaybill[]>();
       // 内件明细（品名 / 数量）
@@ -2768,8 +2775,9 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
       ];
       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setItems(combined);
-    });
-  }, []);
+    }).catch(() => { if (active) setLoadError(true); });
+    return () => { active = false; };
+  }, [reloadKey]);
 
   // A forwarding request can be deleted by the customer only while it is still
   // "未入库" (status === "pending"); the DB policy fo_delete_own enforces the
@@ -2805,6 +2813,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
     }
   };
 
+  if (loadError) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-center"><p>{tr("订单加载失败，请重新加载；这不代表您的订单不存在。", "Unable to load orders. Please retry.")}</p><button className="mt-3 rounded-lg bg-brand px-4 py-2 text-white" onClick={() => setReloadKey(k => k + 1)}>{tr("重新加载", "Retry")}</button></div>;
   if (items === null) return <Spinner />;
 
   // 电商订单 = 集运状态 + 前置「代采购 procurement」；`pending` 在电商语义下表示「已发货等待入库」

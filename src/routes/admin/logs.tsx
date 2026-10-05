@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -35,7 +36,7 @@ function LogsPage() {
     const rows = [["时间", "操作人", "类型", "动作", "实体ID", "备注"]];
     for (const l of items) rows.push([
       new Date(l.created_at).toLocaleString("zh-CN"),
-      l.operator_name ?? "", l.entity_type, l.action, l.entity_id, l.note ?? "",
+      l.operator_name ?? "", logEntityLabel(l.entity_type), logActionLabel(l.action), l.entity_id, l.note ?? "",
     ]);
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -64,12 +65,12 @@ function LogsPage() {
         <select value={entity_type} onChange={(e) => { setEntity(e.target.value); setPage(1); }}
           className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 [&>option]:bg-[#0E1626]">
           <option value="">全部类型</option>
-          {(facetsQ.data?.types ?? []).map(t => <option key={t} value={t}>{t}</option>)}
+          {(facetsQ.data?.types ?? []).map(t => <option key={t} value={t}>{logEntityLabel(t)}</option>)}
         </select>
         <select value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}
           className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 [&>option]:bg-[#0E1626]">
           <option value="">全部动作</option>
-          {(facetsQ.data?.actions ?? []).map(a => <option key={a} value={a}>{a}</option>)}
+          {(facetsQ.data?.actions ?? []).map(a => <option key={a} value={a}>{logActionLabel(a)}</option>)}
         </select>
         <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
           className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5"/>
@@ -100,15 +101,15 @@ function LogsPage() {
               <tr key={l.id} className="hover:bg-white/[0.03] align-top">
                 <td className="px-3 py-2 text-xs text-slate-400">{new Date(l.created_at).toLocaleString("zh-CN")}</td>
                 <td className="px-3 py-2 text-xs">{l.operator_name ?? "—"}</td>
-                <td className="px-3 py-2 text-xs font-mono">{l.entity_type}</td>
-                <td className="px-3 py-2 text-xs"><span className="rounded bg-white/5 px-1.5 py-0.5">{l.action}</span></td>
+                <td className="px-3 py-2 text-xs font-mono">{logEntityLabel(l.entity_type)}</td>
+                <td className="px-3 py-2 text-xs"><span className="rounded bg-white/5 px-1.5 py-0.5">{logActionLabel(l.action)}</span></td>
                 <td className="px-3 py-2 font-mono text-[10px] text-slate-400">{l.entity_id?.slice(0, 8)}</td>
                 <td className="px-3 py-2 text-xs text-slate-300">{l.note ?? "—"}</td>
                 <td className="px-3 py-2">
                   {(l.before || l.after) && (
                     <details>
                       <summary className="cursor-pointer text-[10px] text-brand">展开</summary>
-                      <pre className="mt-1 max-w-xs overflow-auto rounded bg-black/30 p-1 text-[10px] text-slate-300">{JSON.stringify({ before: l.before, after: l.after }, null, 2)}</pre>
+                      <pre className="mt-1 max-w-xs overflow-auto rounded bg-black/30 p-1 text-[10px] text-slate-300">{logDetailsText({ before: l.before, after: l.after })}</pre>
                     </details>
                   )}
                 </td>

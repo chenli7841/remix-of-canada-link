@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -1203,7 +1204,7 @@ function BatchDetail() {
           {logs.map((l: any) => (
             <div key={l.id} className="rounded-md border border-white/5 bg-white/[0.02] p-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-200">{l.action}</span>
+                <span className="font-semibold text-slate-200">{logActionLabel(l.action)}</span>
                 <span className="text-slate-500">{fmtDate(l.created_at)}</span>
               </div>
               <div className="text-slate-400">操作人：{l.operator_name ?? "—"}</div>

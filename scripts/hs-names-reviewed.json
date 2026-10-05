@@ -16476,5 +16476,173 @@
     "code": "2936.28.00.90",
     "zh": "维生素E及其衍生物（未混合，其他用途）",
     "en": "Vitamin E and derivatives (unmixed, other uses)"
+  },
+  {
+    "code": "3101.00.00.00",
+    "zh": "动物或植物肥料（包括混合或化学处理产品）",
+    "en": "Animal or vegetable fertilizers, whether or not mixed together or chemically treated; fertilizers produced by the mixing or chemical treatment of animal or vegetable products.",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.10.00.00",
+    "zh": "尿素（矿物或化学氮肥，包括水溶液）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Urea, whether or not in aqueous solution",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.21.00.00",
+    "zh": "硫酸铵（矿物或化学氮肥）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Ammonium sulphate; double salts and mixtures of ammonium sulphate and ammonium nitrate: - Ammonium sulphate",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.29.00.00",
+    "zh": "硫酸铵与硝酸铵的复盐及混合物（其他矿物或化学氮肥）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Ammonium sulphate; double salts and mixtures of ammonium sulphate and ammonium nitrate: - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.30.00.00",
+    "zh": "硝酸铵（矿物或化学氮肥，包括水溶液）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Ammonium nitrate, whether or not in aqueous solution",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.40.00.00",
+    "zh": "硝酸铵混合肥料（与碳酸钙或其他无肥效无机物混合）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Mixtures of ammonium nitrate with calcium carbonate or other inorganic non-fertilizing substances",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.50.00.00",
+    "zh": "硝酸钠（矿物或化学氮肥）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Sodium nitrate",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.60.00.00",
+    "zh": "硝酸钙与硝酸铵的复盐及混合物（矿物或化学氮肥）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Double salts and mixtures of calcium nitrate and ammonium nitrate",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.80.00.00",
+    "zh": "尿素与硝酸铵混合物（矿物或化学氮肥，水溶液或氨溶液）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Mixtures of urea and ammonium nitrate in aqueous or ammoniacal solution",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3102.90.00.00",
+    "zh": "其他矿物或化学氮肥（包括前列子目未列明的混合物）",
+    "en": "Mineral or chemical fertilizers, nitrogenous. - Other, including mixtures not specified in the foregoing subheadings",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3103.11.00.00",
+    "zh": "过磷酸钙（矿物或化学磷肥，五氧化二磷重量含量不低于35%）",
+    "en": "Mineral or chemical fertilizers, phosphatic. - Superphosphates: - Containing by weight 35% or more of diphosphorus pentaoxide (P2O5)",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3103.19.00.00",
+    "zh": "其他过磷酸钙（矿物或化学磷肥，五氧化二磷重量含量低于35%）",
+    "en": "Mineral or chemical fertilizers, phosphatic. - Superphosphates: - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3103.90.00.00",
+    "zh": "其他矿物或化学磷肥",
+    "en": "Mineral or chemical fertilizers, phosphatic. - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3104.20.00.00",
+    "zh": "氯化钾（矿物或化学钾肥）",
+    "en": "Mineral or chemical fertilizers, potassic. - Potassium chloride",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3104.30.00.00",
+    "zh": "硫酸钾（矿物或化学钾肥）",
+    "en": "Mineral or chemical fertilizers, potassic. - Potassium sulphate",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3104.90.00.00",
+    "zh": "其他矿物或化学钾肥",
+    "en": "Mineral or chemical fertilizers, potassic. - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.10.00.00",
+    "zh": "肥料（本章货品，片状或类似形状，或每包毛重不超过10公斤）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.20.00.00",
+    "zh": "氮磷钾复合肥（含氮、磷、钾三种肥效元素的矿物或化学肥料）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Mineral or chemical fertilizers containing the three fertilizing elements nitrogen, phosphorus and potassium",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.30.00.00",
+    "zh": "磷酸氢二铵（磷酸二铵肥料）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Diammonium hydrogenorthophosphate (diammonium phosphate)",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.40.00.00",
+    "zh": "磷酸二氢铵（磷酸一铵肥料，包括与磷酸二铵的混合物）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Ammonium dihydrogenorthophosphate (monoammonium phosphate) and mixtures thereof with diammonium hydrogenorthophosphate (diammonium phosphate)",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.51.00.00",
+    "zh": "其他氮磷复合肥（矿物或化学肥料，含硝酸盐及磷酸盐）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Other mineral or chemical fertilizers containing the two fertilizing elements nitrogen and phosphorus: - Containing nitrates and phosphates",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.59.00.00",
+    "zh": "其他氮磷复合肥（矿物或化学肥料，不属于含硝酸盐及磷酸盐的前列子目）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Other mineral or chemical fertilizers containing the two fertilizing elements nitrogen and phosphorus: - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.60.00.00",
+    "zh": "磷钾复合肥（含磷、钾两种肥效元素的矿物或化学肥料）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Mineral or chemical fertilizers containing the two fertilizing elements phosphorus and potassium",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
+  },
+  {
+    "code": "3105.90.00.00",
+    "zh": "其他肥料（品目31.05项下其他类别）",
+    "en": "Mineral or chemical fertilizers containing two or three of the fertilizing elements nitrogen, phosphorus and potassium; other fertilizers; goods of this Chapter in tablets or similar forms or in packages of a gross weight not exceeding 10 kg. - Other",
+    "detail": "第31章中文补全；按完整英文分类保留限定条件。",
+    "reviewedAt": "2026-10-01"
   }
 ]

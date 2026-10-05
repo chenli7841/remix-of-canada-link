@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
 import { SENSITIVE_INSURANCE_NOTICE } from "@/lib/insurance";
@@ -408,13 +409,12 @@ function FwDetail() {
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {logs.length === 0 && <div className="text-xs text-slate-500">暂无</div>}
           {logs.map((l: any) => {
-            const ACTION_LABEL: Record<string,string> = { change_route: "变更线路 / 目的地", update_dims: "编辑运单尺寸/重量", intake: "入库", add_waybills: "新增运单", set_insured: "保险状态变更" };
             const isRoute = l.action === "change_route";
             const isDims = l.action === "update_dims";
             return (
               <div key={l.id} className="rounded-md border border-white/5 bg-white/[0.02] p-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200">{ACTION_LABEL[l.action] ?? l.action}</span>
+                  <span className="font-semibold text-slate-200">{logActionLabel(l.action)}</span>
                   <span className="text-slate-500">{fmtDate(l.created_at)}</span>
                 </div>
                 <div className="text-slate-400">操作人：{l.operator_name ?? "—"}{l.note ? ` · ${l.note}` : ""}</div>

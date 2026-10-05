@@ -5,10 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import {
   getReceivingDetail, scanReceive, removeReceivingScan,
-  confirmReceiving, matchReceivingBatch, updateReceiving,
+  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving,
 } from "@/lib/receivings.functions";
 import { prepareDelivery } from "@/lib/delivery-queue.functions";
 import { listBatches } from "@/lib/orders.functions";
+import { listWarehouses } from "@/lib/settings.functions";
+import { receivingBatchLabel, receivingWarehouseLabel } from "@/lib/receiving-labels";
 import {
   BATCH_STATUS_LABEL, BATCH_STATUS_COLOR, METHOD_LABEL, StatusBadge, BackLink, Card, fmtDate,
 } from "@/lib/admin-shared";
@@ -53,12 +55,15 @@ function ReceivingDetail() {
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getReceivingDetail);
   const scan = useReturnReminder(scanReceive);
+  const matchAll = useReturnReminder(matchAllReceiving);
   const removeScan = useServerFn(removeReceivingScan);
   const confirm = useReturnReminder(confirmReceiving);
   const match = useServerFn(matchReceivingBatch);
   const update = useServerFn(updateReceiving);
   const prepare = useServerFn(prepareDelivery);
   const fetchBatches = useServerFn(listBatches);
+  const fetchWarehouses = useServerFn(listWarehouses);
+  const warehousesQ = useQuery({ queryKey: ["receiving-warehouses"], queryFn: () => fetchWarehouses(), staleTime: 60_000 });
 
   const q = useQuery({ queryKey: ["receiving", receivingId], queryFn: () => fetchDetail({ data: { receivingId } }) });
   const batchesQ = useQuery({ queryKey: ["batches-for-recv-detail"], queryFn: () => fetchBatches(), staleTime: 30_000 });
@@ -102,6 +107,20 @@ function ReceivingDetail() {
     } finally {
       setCode(""); setBusy(false); inputRef.current?.focus();
     }
+  };
+
+  const onMatchAll = async () => {
+    if (busy || isFinal || !r.batch_id) return;
+    const label = r.batches ? receivingBatchLabel(r.batches) : '当前批次';
+    if (!window.confirm('第一次确认：将“' + label + '”的全部运单、箱号和托盘视为到货，包括箱内及托盘内明细。是否继续？')) return;
+    if (!window.confirm('第二次确认：请确认整批货物确实全部到齐。执行后将自动补齐收货匹配记录，无需逐件扫描。确定执行一键匹配？')) return;
+    setBusy(true);
+    try {
+      const res = await matchAll({ data: { receivingId, batchId: r.batch_id } });
+      const info = '全部到货已匹配：' + res.counts.waybills + ' 单 / ' + res.counts.cartons + ' 箱 / ' + res.counts.pallets + ' 托；已有记录保留。';
+      setLog(l => [{ time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), code: '一键匹配', ok: true, info }, ...l].slice(0, 50));
+      await refresh();
+    } catch (e: any) { alert(e.message); } finally { setBusy(false); }
   };
 
   const onConfirm = async () => {
@@ -167,13 +186,13 @@ function ReceivingDetail() {
           <h1 className="font-display text-2xl font-bold font-mono">{r.receiving_no}</h1>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
             <StatusBadge map={RECV_LABEL} color={RECV_COLOR} value={r.status} />
-            {r.warehouse_code && <span>· 仓库 {r.warehouse_code}</span>}
+            {r.warehouse_code && <span>· 仓库 {receivingWarehouseLabel(r.warehouse_code, warehousesQ.data?.warehouses)}</span>}
             {r.confirmed_at && <span>· 确认 {fmtDate(r.confirmed_at)}</span>}
           </div>
         </div>
         <div className="flex gap-2">
           {!isFinal && (
-            <button onClick={() => { setPickBatchId(r.batch_id ?? ""); setShowMatch(true); }}
+            <button disabled={busy} onClick={() => { setPickBatchId(r.batch_id ?? ""); setShowMatch(true); }}
               className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10">
               {r.batch_id ? "更换批次" : "匹配批次"}
             </button>
@@ -198,7 +217,7 @@ function ReceivingDetail() {
       <Card title="匹配批次">
         {r.batches ? (
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Link to="/admin/batches/$batchId" params={{ batchId: r.batches.id }} className="font-mono text-brand hover:underline">{r.batches.batch_no}</Link>
+            <Link to="/admin/batches/$batchId" params={{ batchId: r.batches.id }} className="font-mono text-brand hover:underline">{receivingBatchLabel(r.batches)}</Link>
             <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={r.batches.status} />
             <span className="text-xs text-slate-400">{METHOD_LABEL[r.batches.shipping_method] ?? r.batches.shipping_method} · 发货 {r.batches.planned_ship_date} · 目的地 {r.batches.destination_code ?? "—"}</span>
           </div>
@@ -225,6 +244,13 @@ function ReceivingDetail() {
                 </button>
               </form>
               <p className="mt-1.5 text-[11px] text-slate-500">扫描箱号/托盘号仅确认外层；内部明细需进入下方「待二次扫描确认」逐件再次扫描。</p>
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                <button type="button" onClick={onMatchAll} disabled={busy || !r.batch_id}
+                  className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-40">
+                  一键匹配全部到货
+                </button>
+                <p className="mt-2 text-[11px] text-slate-400">整批全部到齐时使用，包含内部明细，需连续确认两次。匹配后请点击上方「确认到件」完成收货。</p>
+              </div>
             </>
           )}
           <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-white/5 bg-white/[0.02] p-2">
@@ -331,7 +357,7 @@ function ReceivingDetail() {
               {batchesQ.data?.batches
                 .filter((b: any) => b.status === "shipped")
                 .map((b: any) => (
-                  <option key={b.id} value={b.id}>{b.batch_no} · {METHOD_LABEL[b.shipping_method] ?? b.shipping_method} · {BATCH_STATUS_LABEL[b.status]}</option>
+                  <option key={b.id} value={b.id}>{receivingBatchLabel(b)} · {METHOD_LABEL[b.shipping_method] ?? b.shipping_method} · {BATCH_STATUS_LABEL[b.status]}</option>
                 ))}
             </select>
             <button onClick={onMatch} className="mt-3 w-full rounded-md bg-brand py-2 text-sm font-semibold text-white hover:bg-brand/90">保存</button>

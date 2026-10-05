@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -127,8 +128,8 @@ function AdminIndex() {
                 <tr key={l.id}>
                   <td className="py-1.5 pr-3 text-slate-500">{new Date(l.created_at).toLocaleString("zh-CN")}</td>
                   <td className="py-1.5 pr-3">{l.operator_name ?? "—"}</td>
-                  <td className="py-1.5 pr-3 font-mono text-[10px]">{l.entity_type}</td>
-                  <td className="py-1.5 pr-3">{l.action}</td>
+                  <td className="py-1.5 pr-3 font-mono text-[10px]">{logEntityLabel(l.entity_type)}</td>
+                  <td className="py-1.5 pr-3">{logActionLabel(l.action)}</td>
                   <td className="py-1.5 text-slate-400">{l.note ?? "—"}</td>
                 </tr>
               ))}

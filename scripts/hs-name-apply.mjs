@@ -20,7 +20,7 @@ const plan = reviewed.map(r => {
   return { id: old.id, code: r.code, before: old, after: {
     name_zh: r.zh, name_en: r.en,
     aliases: [...new Set([...(old.aliases ?? []), old.name_zh, old.name_en].filter(Boolean))],
-    note: [old.note, '[中英文名称整理：2026-09-25]', r.detail,
+    note: [old.note, `[中英文名称整理：${r.reviewedAt ?? '2026-09-25'}]`, r.detail,
       `原中文栏：${old.name_zh ?? ''}`, `原英文栏：${old.name_en ?? ''}`,
       `完整分类（T2025）：${source.description}`, `来源：${source.url}`].filter(Boolean).join('\n'),
   } };

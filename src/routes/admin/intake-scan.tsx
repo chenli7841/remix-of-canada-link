@@ -1,3 +1,4 @@
+import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {readIntakeReminder} from '@/lib/intake-reminder.functions';
@@ -321,7 +322,7 @@ function IntakeScanPage() {
                   <Check className="h-3 w-3 text-emerald-400"/>
                   <span className="font-mono text-[10px] text-slate-500">{l.time}</span>
                   <span className="font-mono text-slate-300">{l.code}</span>
-                  <span className="text-slate-400">— {l.action}</span>
+                  <span className="text-slate-400">— {logActionLabel(l.action)}</span>
                 </li>
               ))}
             </ul>}
