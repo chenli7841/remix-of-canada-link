@@ -1,9 +1,10 @@
+import { groupDeliveriesByCity } from '@/lib/delivery-city-groups';
 import { DeliveryExtraFeeEditor } from '@/components/admin/DeliveryExtraFeeEditor';
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   listDeliveryByCustomer,
   bulkUpdateCustomerDelivery,
@@ -40,9 +41,11 @@ function DeliveryQueuePage() {
     return (
       (g.customer_code ?? "").toLowerCase().includes(s) ||
       (g.full_name ?? "").toLowerCase().includes(s) ||
-      (g.phone ?? "").toLowerCase().includes(s) || (g.batch_name ?? "").toLowerCase().includes(s) || (g.batch_no ?? "").toLowerCase().includes(s)
+      (g.city ?? "").toLowerCase().includes(s) || (g.province ?? "").toLowerCase().includes(s) || (g.phone ?? "").toLowerCase().includes(s) || (g.batch_name ?? "").toLowerCase().includes(s) || (g.batch_no ?? "").toLowerCase().includes(s)
     );
   });
+
+  const cityGroups = groupDeliveriesByCity(groups);
 
   const totals = groups.reduce(
     (acc: any, g: any) => ({
@@ -133,8 +136,8 @@ function DeliveryQueuePage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索客户号 / 姓名 / 电话 / 批次"
-          className="ml-3 w-64 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs placeholder:text-slate-500 focus:border-brand focus:outline-none"
+          placeholder="搜索城市 / 客户号 / 姓名 / 电话 / 批次"
+          className="ml-3 w-80 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs placeholder:text-slate-500 focus:border-brand focus:outline-none"
         />
       </div>
 
@@ -171,7 +174,13 @@ function DeliveryQueuePage() {
                 </td>
               </tr>
             )}
-            {groups.map((g: any) => (
+            {cityGroups.map(cityGroup => <Fragment key={cityGroup.key}>
+              <tr className="bg-sky-950/50"><th colSpan={10} scope="rowgroup" className="px-4 py-3 text-left">
+                <span className="text-sm font-semibold text-sky-200">{cityGroup.city}</span>
+                <span className="ml-2 text-xs font-normal text-slate-400">{[cityGroup.province, cityGroup.country].filter(Boolean).join(' · ')}</span>
+                <span className="ml-4 text-xs font-normal text-slate-300">{cityGroup.customers.size} 个客户 · {cityGroup.rows.length} 个客户批次 · {cityGroup.count} 个派送单位</span>
+              </th></tr>
+            {cityGroup.rows.map((g: any) => (
               <tr key={g.key} className="hover:bg-white/[0.03] align-top">
                 <td className="px-4 py-3 text-xs">
                   <div className="font-mono text-slate-100">{g.customer_code ?? "—"}</div>
@@ -227,6 +236,7 @@ function DeliveryQueuePage() {
                 </td>
               </tr>
             ))}
+            </Fragment>)}
           </tbody>
         </table>
       </div>

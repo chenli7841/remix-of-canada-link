@@ -352,6 +352,9 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
           full_name: p?.full_name || (a?.recipient ?? null),
           phone,
           address,
+          city: (a ? a.city : p?.reg_city) || null,
+          province: (a ? a.province : p?.reg_province) || null,
+          country: (a ? a.country : p?.reg_country) || null,
           wallet_balance_cad: w ? Number(w.balance_cad) : null,
         };
       })
