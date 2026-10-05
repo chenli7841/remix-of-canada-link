@@ -1,4 +1,4 @@
-import { listBatchCustomerNotes, saveBatchCustomerNote, saveDeliveryExtraFee } from '@/lib/batch-customer-notes.functions';
+import { DeliveryExtraFeeEditor } from '@/components/admin/DeliveryExtraFeeEditor';
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,8 +9,8 @@ import {
   bulkUpdateCustomerDelivery,
   deductCustomerWallet,
 } from "@/lib/delivery-queue.functions";
-import { Page, fmtDate, fmtCNY } from "@/lib/admin-shared";
-import { Loader2, ArrowRight, Truck, Wallet, Check, X } from "lucide-react";
+import { Page, fmtCNY } from "@/lib/admin-shared";
+import { Loader2, ArrowRight, Truck, Wallet, Check } from "lucide-react";
 
 export const Route = createFileRoute("/admin/delivery-queue/")({ component: DeliveryQueuePage });
 
@@ -21,11 +21,9 @@ function DeliveryQueuePage() {
   const fetchList = useServerFn(listDeliveryByCustomer);
   const bulkUpdate = useServerFn(bulkUpdateCustomerDelivery);
   const deduct = useServerFn(deductCustomerWallet);
-  const readNotes = useServerFn(listBatchCustomerNotes);
-  const saveNote = useServerFn(saveBatchCustomerNote);
-  const saveExtraFee = useServerFn(saveDeliveryExtraFee);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
+  const [feeEdit, setFeeEdit] = useState<any>(null);
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
 
@@ -101,7 +99,7 @@ function DeliveryQueuePage() {
       return;
     }
     const note = window.prompt("备注（可空）", "派送费用扣款") ?? undefined;
-    await deduct({ data: { customerUserId: g.customer_user_id, amountCad: amt, note } });
+    await deduct({ data: { customerUserId: g.customer_user_id, amountCad: amt, note, batchId: g.batch_id, customerCode: g.customer_code } });
     await refresh();
     alert("扣款成功");
   };
@@ -112,20 +110,6 @@ function DeliveryQueuePage() {
     try {
       if (action === 'cancel') await onCancelAll(g);
       if (action === 'deduct') await onDeduct(g);
-      if (action === 'fee') {
-        const input = window.prompt('修改此客户在当前批次的额外费用（人民币 CNY）。保存金额，不执行扣款。', Number(g.fee_cny || 0).toFixed(2));
-        if (input === null) return;
-        if (!/^\d+(\.\d{1,2})?$/.test(input.trim())) throw new Error('请输入非负金额，最多两位小数');
-        await saveExtraFee({data:{batchId:g.batch_id,customerCode:g.customer_code,amountCny:Number(input)}});
-        await refresh();
-      }
-      if (action === 'note') {
-        const notes = await readNotes({data:{batchId:g.batch_id}});
-        const input = window.prompt('结算备注（与批次扣款列表共用）', notes.find(n=>n.customer_code===g.customer_code)?.note || '');
-        if (input === null) return;
-        await saveNote({data:{batchId:g.batch_id,customerCode:g.customer_code,note:input}});
-        await qc.invalidateQueries({queryKey:['batch-customer-notes',g.batch_id]});
-      }
     } catch (e: any) { alert(e.message || '操作失败，请重试'); }
     finally { setBusyKey(null); }
   };
@@ -154,7 +138,7 @@ function DeliveryQueuePage() {
         />
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
+      <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <table className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
@@ -167,22 +151,22 @@ function DeliveryQueuePage() {
               <th className="px-4 py-2.5 text-right">批次总费用 (CAD)</th>
               <th className="px-4 py-2.5 text-right">额外费用</th>
               <th className="px-4 py-2.5">结算备注</th>
-              <th className="px-4 py-2.5 whitespace-nowrap">加入时间</th>
-              <th className="px-4 py-2.5 text-right">操作</th>
+
+              <th className="sticky right-0 z-10 min-w-36 bg-slate-900 px-4 py-2.5 text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {q.isLoading && (
               <tr>
-                <td colSpan={11} className="py-10 text-center">
+                <td colSpan={10} className="py-10 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500" />
                 </td>
               </tr>
             )}
-            {q.isError && <tr><td colSpan={11} className="p-4 text-rose-300">{q.error.message}</td></tr>}
+            {q.isError && <tr><td colSpan={10} className="p-4 text-rose-300">{q.error.message}</td></tr>}
             {!q.isLoading && !q.isError && groups.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-10 text-center text-slate-500">
+                <td colSpan={10} className="py-10 text-center text-slate-500">
                   暂无
                 </td>
               </tr>
@@ -210,10 +194,13 @@ function DeliveryQueuePage() {
                 <td className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.total_cad == null ? '待确认' : 'CAD ' + Number(g.total_cad).toFixed(2)}</td>
-                <td className="px-4 py-3 text-right text-xs">{fmtCNY(g.fee_cny)}</td>
-                <td className="px-4 py-3">{g.batch_id && g.customer_code ? <BatchCustomerNote batchId={g.batch_id} customerCode={g.customer_code} readOnly/> : '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-300 min-w-32">{fmtDate(g.earliest_at)}</td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right text-xs whitespace-nowrap">
+<button disabled={!g.batch_id || !g.customer_code || !!busyKey || g.extra_fee_paid} title="点击修改额外费用" className="text-brand underline decoration-dotted underline-offset-4 disabled:no-underline disabled:text-slate-300" onClick={()=>setFeeEdit(g)}>{fmtCNY(g.fee_cny)}</button>
+{g.extra_fee_paid ? <div className="mt-2 text-emerald-300">已付款</div> : <button disabled={!!busyKey || !g.batch_id || !g.customer_user_id || !(g.fee_cny > 0)} className="mt-2 block ml-auto text-amber-300 disabled:opacity-40" onClick={()=>void onMore('deduct',g)}>{busyKey === g.key ? '处理中…' : '扣款'}</button>}
+</td>
+                <td className="px-4 py-3">{g.batch_id && g.customer_code ? <BatchCustomerNote batchId={g.batch_id} customerCode={g.customer_code}/> : '—'}</td>
+
+                <td className="sticky right-0 z-10 min-w-36 bg-slate-900 px-4 py-3 text-right shadow-lg">
                   <div className="inline-flex flex-wrap justify-end gap-1">
                     {status === "pending" && (
                       <>
@@ -235,15 +222,7 @@ function DeliveryQueuePage() {
                     >
                       <Truck className="h-3 w-3" /> 详情 <ArrowRight className="h-3 w-3" />
                     </Link>
-                    <select aria-label="其他操作" value="" disabled={busyKey !== null}
-                      onChange={e=>{const action=e.target.value;void onMore(action,g);}}
-                      className="rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 disabled:opacity-50">
-                      <option value="">{busyKey === g.key ? '处理中…' : '更多操作'}</option>
-                      <option value="fee" disabled={!g.batch_id || !g.customer_code}>编辑额外费用</option>
-                      <option value="note" disabled={!g.batch_id || !g.customer_code}>编辑结算备注</option>
-                      <option value="deduct" disabled={!g.customer_user_id}>额外费用扣款</option>
-                      {status === 'pending' && <option value="cancel">取消派送</option>}
-                    </select>
+
                   </div>
                 </td>
               </tr>
@@ -251,6 +230,7 @@ function DeliveryQueuePage() {
           </tbody>
         </table>
       </div>
+      {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
     </Page>
   );
 }

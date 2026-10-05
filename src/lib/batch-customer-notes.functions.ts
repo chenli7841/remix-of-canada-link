@@ -33,6 +33,9 @@ export const saveDeliveryExtraFee = createServerFn({ method: 'POST' }).middlewar
  }).handler(async ({ data, context }) => {
   await staff(context);
   const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+  const {data: payment,error: paymentError} = await supabaseAdmin.from('wallet_transactions').select('id').eq('ref_no','delivery-extra:' + data.batchId + ':' + data.customerCode.trim()).limit(1);
+  if (paymentError) throw new Error('付款状态读取失败');
+  if (payment?.length) throw new Error('此额外费用已有扣款记录，不能修改金额');
   const { error } = await (supabaseAdmin as any).from('batch_customer_notes').upsert({ batch_id: data.batchId,
     customer_code: data.customerCode.trim(), extra_fee_cny: data.amountCny, updated_at: new Date().toISOString(), updated_by: context.userId });
   if (error) throw new Error('额外费用保存失败，请确认已执行额外费用迁移');

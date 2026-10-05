@@ -63,6 +63,14 @@ function CustomerDeliveryDetail() {
   const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-customer", customerKey, batchId] });
 
   const items: any[] = q.data?.items ?? [];
+  const dispatchBatches = new Map<string, {number: string; people: Set<string>; times: string[]}>();
+  for (const item of items.filter(it=>it.dispatched_at)) {
+    const key = item.source_batch_id || 'unassigned';
+    const group = dispatchBatches.get(key) || {number:item.batches?.batch_no || '未关联批次',people:new Set<string>(),times:[] as string[]};
+    group.people.add(item.dispatched_by_name || '历史记录未记录人员');
+    group.times.push(item.dispatched_at);
+    dispatchBatches.set(key,group);
+  }
   const profile = q.data?.profile;
   const address = q.data?.address;
   const wallet = q.data?.wallet;
@@ -172,10 +180,12 @@ function CustomerDeliveryDetail() {
       <section className="mb-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <h2 className="mb-3 text-sm font-semibold">派送司机信息</h2>
         <p className="mb-3 text-xs text-slate-400">派送人员为点击确认派送的工作人员。</p>
-        {items.filter(it=>it.dispatched_at).length === 0 ? <p className="text-xs text-slate-400">尚未确认派送</p> :
-          <div className="max-h-64 space-y-2 overflow-auto">{items.filter(it=>it.dispatched_at).map(it=><div key={it.id} className="flex flex-wrap gap-x-5 text-xs">
-            <span>{KIND_LABEL[it.kind]} {it.code}</span><span>派送人员：{it.dispatched_by_name || '历史记录未记录人员'}</span><span>派送时间：{fmtDate(it.dispatched_at)}</span>
-          </div>)}</div>}
+        {dispatchBatches.size === 0 ? <p className="text-xs text-slate-400">尚未确认派送</p> :
+          <div className="space-y-2">{Array.from(dispatchBatches.entries()).map(([id,group])=>{
+            const times = group.times.sort();
+            return <div key={id} className="flex flex-wrap gap-x-5 text-xs"><span>批次：{group.number}</span><span>派送人员：{Array.from(group.people).join('、')}</span><span>派送时间：{fmtDate(times[0])}{times[0] !== times[times.length-1] ? ' 至 ' + fmtDate(times[times.length-1]) : ''}</span></div>;
+          })}</div>}
+
       </section>
       <DeliveryPhotoViewer items={items}/>
       <details className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">

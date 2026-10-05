@@ -325,6 +325,9 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
       walletMap = new Map((wals ?? []).map((w: any) => [w.user_id, w]));
     }
 
+    const feeRefs = Array.from(groups.values()).filter(g=>g.batch_id && g.customer_code).map(g=>'delivery-extra:' + g.batch_id + ':' + g.customer_code);
+    const feeTransactions = await readDeliveryRows(supabaseAdmin, 'wallet_transactions', 'id,ref_no,status', 'ref_no', feeRefs);
+    const paidFees = new Set(feeTransactions.filter(t=>t.status === 'completed').map(t=>t.ref_no));
     const list = Array.from(groups.values())
       .map((g) => {
         const p = g.customer_user_id ? profileMap.get(g.customer_user_id) : null;
@@ -342,6 +345,7 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
           batch_name: batchMap.get(g.batch_id)?.display_name || batchMap.get(g.batch_id)?.batch_no || '未关联批次',
           batch_no: batchMap.get(g.batch_id)?.batch_no ?? '',
           ...deliverySettlementSummary(settlementMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)), batchMap.get(g.batch_id)),
+          extra_fee_paid: paidFees.has('delivery-extra:' + g.batch_id + ':' + (g.customer_code || p?.customer_code)),
           fee_cny: feeCny,
           fee_cad: +(feeCny * fx).toFixed(2),
           customer_code: g.customer_code || p?.customer_code || null,
@@ -427,11 +431,15 @@ export const getCustomerDelivery = createServerFn({ method: "GET" })
 // ============================================================
 export const deductCustomerWallet = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { customerUserId: string; amountCad: number; note?: string }) => d)
+  .inputValidator((d: { customerUserId: string; amountCad: number; note?: string; batchId: string; customerCode: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
-    if (!(data.amountCad > 0)) throw new Error("金额必须大于 0");
+    if (!data.batchId || !data.customerCode || !Number.isFinite(data.amountCad) || !(data.amountCad > 0) || Math.abs(data.amountCad * 100 - Math.round(data.amountCad * 100)) > 0.0001) throw new Error("请指定批次、客户和有效扣款金额（最多两位小数）");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const {data: profile,error: profileError} = await supabaseAdmin.from('profiles').select('customer_code').eq('id',data.customerUserId).single();
+    if (profileError || profile.customer_code !== data.customerCode) throw new Error('客户号与扣款账户不一致');
+    const feeRef = 'delivery-extra:' + data.batchId + ':' + data.customerCode;
 
     const { data: w } = await supabaseAdmin
       .from("wallets")
@@ -449,8 +457,10 @@ export const deductCustomerWallet = createServerFn({ method: "POST" })
       amount_cad: Number(data.amountCad),
       status: "completed",
       channel: "admin",
-      note: data.note ?? "派送费用扣款",
+      ref_no: feeRef,
+      note: `批次 ${data.batchId} 客户 ${data.customerCode} 额外费用：${data.note || "派送费用扣款"}`,
     } as any);
+    if (terr?.code === '23505') throw new Error('该客户在此批次的额外费用已有扣款记录，请刷新查看，未重复扣款');
     if (terr) throw new Error(terr.message);
 
     await logAction(
