@@ -136,7 +136,8 @@ export function SurchargePanel({ scope, id, canEdit = true, showCustomerField, t
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[120px_1fr]">
                 <input type="number" step="0.01" value={form.amount_cny}
                   onChange={(e) => setForm({ ...form, amount_cny: e.target.value })}
-                  placeholder="金额（¥，可负）"
+                  aria-label="附加费金额（CAD）"
+                  placeholder="金额（CAD，可负）"
                   className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-slate-100"/>
                 <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
                   placeholder="说明（必填，例如：仓库重新打包费）"
@@ -165,7 +166,7 @@ export function SurchargePanel({ scope, id, canEdit = true, showCustomerField, t
             <table className="w-full text-sm">
               <thead className="text-left text-[10px] uppercase text-slate-500">
                 <tr>
-                  <th className="py-1.5 w-24">金额 ¥</th>
+                  <th className="py-1.5 w-28">金额（CAD）</th>
                   <th>说明</th>
                   {showCustomerField && <th className="w-28">归属客户</th>}
                   <th className="w-32">操作人 / 时间</th>
@@ -180,11 +181,12 @@ export function SurchargePanel({ scope, id, canEdit = true, showCustomerField, t
                       <td className="py-1.5">
                         {isEditing ? (
                           <input type="number" step="0.01" value={editForm.amount_cny}
+                            aria-label="修改附加费金额（CAD）"
                             onChange={(e) => setEditForm({ ...editForm, amount_cny: e.target.value })}
                             className="w-full rounded border border-white/10 bg-white/5 px-1 py-0.5 text-xs"/>
                         ) : (
                           <span className={`font-mono text-xs ${Number(r.amount_cny) < 0 ? "text-rose-300" : "text-emerald-300"}`}>
-                            {Number(r.amount_cny).toFixed(2)}
+                            CA${Number(r.amount_cny).toFixed(2)}
                           </span>
                         )}
                       </td>
@@ -233,7 +235,7 @@ export function SurchargePanel({ scope, id, canEdit = true, showCustomerField, t
                   );
                 })}
                 <tr className="bg-white/[0.02]">
-                  <td className="py-1.5 font-mono text-xs font-bold text-amber-300">{q.data.total_cny.toFixed(2)}</td>
+                  <td className="py-1.5 font-mono text-xs font-bold text-amber-300">CA${q.data.total_cny.toFixed(2)}</td>
                   <td className="text-[10px] text-slate-500" colSpan={showCustomerField ? 4 : 3}>合计</td>
                 </tr>
               </tbody>

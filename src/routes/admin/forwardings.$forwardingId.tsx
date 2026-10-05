@@ -616,7 +616,7 @@ function SurchargeCell({ w, onOpen }: { w: any; onOpen: () => void }) {
       className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] hover:border-brand/40 hover:bg-brand/10">
       {count > 0 ? (
         <>
-          <span className={`font-mono ${total < 0 ? "text-rose-300" : "text-emerald-300"}`}>¥{total.toFixed(2)}</span>
+          <span className={`font-mono ${total < 0 ? "text-rose-300" : "text-emerald-300"}`}>CA${total.toFixed(2)}</span>
           <span className="text-slate-400">· {count}项</span>
         </>
       ) : <span className="text-slate-400">+ 添加</span>}

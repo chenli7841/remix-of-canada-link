@@ -466,7 +466,8 @@ function ForwardingPage() {
         route_code: selectedRoute.code,
         address_id: addressId,
         domestic_tracking_no: t || null,
-        note: [insuranceAllowed && insured ? (lang === "zh" ? "[已购买保险]" : "[Insured]") : null, note].filter(Boolean).join(" ") || null,
+        note: [insuranceAllowed && insured ? (lang === "zh" ? "[已购买保险]" : "[Insured]") : null, note.trim()].filter(Boolean).join(" ") || null,
+        intake_reminder: note.trim().length > 0,
         insured: insuranceAllowed && insured,
         items: parcel.items
           .filter((i) => i.name.trim())
@@ -1151,6 +1152,9 @@ function ForwardingPage() {
             placeholder={tr("备注（可选）", "Note (optional)")}
             className="mt-3 w-full resize-none rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-brand"
           />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {tr("填写备注后，将自动开启入库提醒，提醒工作人员查看备注。", "Adding a note automatically enables a warehouse intake reminder for staff.")}
+          </p>
         </Step>
 
         <button

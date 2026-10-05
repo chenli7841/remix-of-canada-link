@@ -32,9 +32,9 @@ async function logSurcharge(admin: any, opts: { action: "add" | "update" | "dele
   const operator_name = prof?.full_name || prof?.email || operatorId;
   const amt = Number(row?.amount_cny ?? before?.amount_cny ?? 0);
   const noteBits: string[] = [];
-  if (action === "add") noteBits.push(`新增附加费 ¥${amt.toFixed(2)} · ${row.note ?? ""}`);
-  if (action === "update") noteBits.push(`修改附加费 ¥${Number(before?.amount_cny ?? 0).toFixed(2)} → ¥${amt.toFixed(2)} · ${row.note ?? ""}`);
-  if (action === "delete") noteBits.push(`删除附加费 ¥${Number(before?.amount_cny ?? 0).toFixed(2)} · ${before?.note ?? ""}`);
+  if (action === "add") noteBits.push(`新增附加费 CA$${amt.toFixed(2)} · ${row.note ?? ""}`);
+  if (action === "update") noteBits.push(`修改附加费 CA$${Number(before?.amount_cny ?? 0).toFixed(2)} → CA$${amt.toFixed(2)} · ${row.note ?? ""}`);
+  if (action === "delete") noteBits.push(`删除附加费 CA$${Number(before?.amount_cny ?? 0).toFixed(2)} · ${before?.note ?? ""}`);
   const inserts: any[] = [{
     entity_type, entity_id,
     action: `surcharge_${action}`,

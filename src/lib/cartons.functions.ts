@@ -1,4 +1,5 @@
 import { uniqueWaybills } from "./insurance";
+import { sumSurchargesCad } from "./surcharge-currency";
 import { effectiveWaybillInsurance } from "./insurance.server";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -248,23 +249,13 @@ async function sumSurcharges(
 ): Promise<number> {
   const col = `${scope}_id`;
   const { data } = await admin.from("surcharges").select("amount_cny").eq("scope", scope).eq(col, id);
-  const fx = await getFxCadPerCny(admin);
-  return (data ?? []).reduce((s: number, r: any) => {
-    const cad = Number(r.amount_cad ?? 0);
-    if (cad > 0) return s + cad;
-    return s + Number(r.amount_cny ?? 0) * fx;
-  }, 0);
+  return sumSurchargesCad(data ?? []);
 }
 
 async function sumSurchargesForWaybills(admin: any, wbIds: string[]): Promise<number> {
   if (!wbIds.length) return 0;
   const { data } = await admin.from("surcharges").select("amount_cny").eq("scope", "waybill").in("waybill_id", wbIds);
-  const fx = await getFxCadPerCny(admin);
-  return (data ?? []).reduce((s: number, r: any) => {
-    const cad = Number(r.amount_cad ?? 0);
-    if (cad > 0) return s + cad;
-    return s + Number(r.amount_cny ?? 0) * fx;
-  }, 0);
+  return sumSurchargesCad(data ?? []);
 }
 
 async function computeChargeable(admin: any, routeId: string | null | undefined, weightKg: number, volumeM3: number) {
@@ -491,14 +482,10 @@ async function feeTotalsForPallet(admin: any, row: any) {
   if (cartonIds.length) {
     const { data: ss } = await admin
       .from("surcharges")
-      .select("amount_cny, amount_cad")
+      .select("amount_cny")
       .eq("scope", "carton")
       .in("carton_id", cartonIds);
-    const fx0 = await getFxCadPerCny(admin);
-    cartonSurcharge = (ss ?? []).reduce((s: number, r: any) => {
-      const cad = Number(r.amount_cad ?? 0);
-      return s + (cad > 0 ? cad : Number(r.amount_cny ?? 0) * fx0);
-    }, 0);
+    cartonSurcharge = sumSurchargesCad(ss ?? []);
   }
   const childSurcharge = Math.max(childSurWb, wbSurchargeExtra) + cartonSurcharge;
 
@@ -764,14 +751,13 @@ export const getCartonDetail = createServerFn({ method: "POST" })
       for (const s of (ss ?? []) as any[])
         surchargeMap.set(s.waybill_id, (surchargeMap.get(s.waybill_id) ?? 0) + Number(s.amount_cny ?? 0));
     }
-    const fx = (fees as any).fx_rate ?? 1;
     const waybillsEnriched = wbList.map((x) => {
       const L = Number(x.length_cm ?? 0),
         W = Number(x.width_cm ?? 0),
         H = Number(x.height_cm ?? 0);
       const volume_m3 = L && W && H ? +((L * W * H) / 1_000_000).toFixed(4) : 0;
       const surcharge_cny = surchargeMap.get(x.id) ?? 0;
-      return { ...x, volume_m3, surcharge_cny, surcharge_cad: +(surcharge_cny * fx).toFixed(2) };
+      return { ...x, volume_m3, surcharge_cny, surcharge_cad: +surcharge_cny.toFixed(2) };
     });
     return {
       carton: {
@@ -1321,14 +1307,13 @@ export const getPalletDetail = createServerFn({ method: "POST" })
       for (const s of (ss ?? []) as any[])
         surchargeMap.set(s.waybill_id, (surchargeMap.get(s.waybill_id) ?? 0) + Number(s.amount_cny ?? 0));
     }
-    const fx = (fees as any).fx_rate ?? 1;
     const waybillsEnriched = wbList.map((x) => {
       const L = Number(x.length_cm ?? 0),
         W = Number(x.width_cm ?? 0),
         H = Number(x.height_cm ?? 0);
       const volume_m3 = L && W && H ? +((L * W * H) / 1_000_000).toFixed(4) : 0;
       const surcharge_cny = surchargeMap.get(x.id) ?? 0;
-      return { ...x, volume_m3, surcharge_cny, surcharge_cad: +(surcharge_cny * fx).toFixed(2) };
+      return { ...x, volume_m3, surcharge_cny, surcharge_cad: +surcharge_cny.toFixed(2) };
     });
     // 计算每个下属箱号的费用（供 CartonCompactList 使用）
     const cartonRows = (c.data ?? []) as any[];

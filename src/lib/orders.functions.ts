@@ -1,6 +1,8 @@
 import { buildConfirmedBatchInvoice, assertConfirmedInvoice } from "./confirmed-batch-invoice";
 import { assertSnapshotNumbers, assertBatchWeightSnapshot } from "./snapshot-validation";
 import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal } from "./batch-weight-snapshot";
+import { deliveryWeightsByCustomer } from "./bulk-delivery-weight";
+import { sumSurchargesCad } from "./surcharge-currency";
 import { loadBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
@@ -430,12 +432,11 @@ export async function recomputeForwardingTotal(admin: any, forwardingId: string)
       ? admin.from("surcharges").select("amount_cny").eq("scope", "pallet").in("pallet_id", palletIds)
       : Promise.resolve({ data: [] as any[] }),
   ]);
-  const sumCny = [
+  const surcharges_cad = sumSurchargesCad([
     ...((foScR as any).data ?? []),
     ...((wbScR as any).data ?? []),
     ...((plScR as any).data ?? []),
-  ].reduce((s: number, r: any) => s + Number(r.amount_cny ?? 0), 0);
-  const surcharges_cad = +(sumCny * fx).toFixed(2);
+  ]);
 
   freight_cad = +freight_cad.toFixed(2);
   duty_cad = +duty_cad.toFixed(2);
@@ -456,7 +457,7 @@ export async function recomputeForwardingTotal(admin: any, forwardingId: string)
     insurance_cad,
     clearance_cad,
     min_charge_waybill_cad,
-    surcharges_cny: +sumCny.toFixed(2),
+    surcharges_cny: fx > 0 ? +(surcharges_cad / fx).toFixed(2) : 0,
     surcharges_cad,
     total_cad,
     insured: !!fo.insured,
@@ -3948,13 +3949,6 @@ export const refreshBatchAllSnapshots = createServerFn({ method: "POST" })
     return { ok: true, customers: r.customers };
   });
 
-// 计费重量 = max(实重, 体积重)，体积重按 ÷6000 估算（与 ContainerChildList 客户端展示口径一致）。
-function chargeableWeightOf(c: { weight_kg?: number; volume_m3?: number }): number {
-  const wt = Number(c.weight_kg ?? 0);
-  const volKg = (Number(c.volume_m3 ?? 0) * 1_000_000) / 6000;
-  return Math.max(wt, volKg);
-}
-
 const BULK_DELIVERY_NOTE_PREFIX = "[delivery] 批量派送费";
 const BULK_DISCOUNT_NOTE_PREFIX = "[discount] 派送费冲抵";
 
@@ -3975,8 +3969,8 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const fee = +Number(data.feeCad || 0).toFixed(2);
     const trigger = Number(data.triggerWeightKg || 0);
-    if (!(fee > 0)) throw new Error("请填写有效的派送费金额");
-    if (!(trigger > 0)) throw new Error("请填写有效的触发重量");
+    if (!Number.isFinite(fee) || !(fee > 0)) throw new Error("请填写有效的派送费金额");
+    if (!Number.isFinite(trigger) || !(trigger > 0)) throw new Error("请填写有效的触发重量");
     if (data.compareBatchId && data.compareBatchId === data.batchId) throw new Error("对比批次不能与本批次相同");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -3990,7 +3984,9 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
       .select("customer_code")
       .eq("batch_id", data.batchId)
       .eq("confirmed", true);
-    const confirmedCodes = new Set((confirmedRows ?? []).map((r: any) => r.customer_code));
+    const confirmedCodes = new Set<string>((confirmedRows ?? []).map((r: any) => r.customer_code));
+    // Validate saved totals before deleting any existing delivery fees.
+    const currentByCode = deliveryWeightsByCustomer(perCustomer, confirmedCodes);
 
     const compareByCode = new Map<string, { weight: number; hadDelivery: boolean }>();
     let compareBatchNo: string | null = null;
@@ -4000,12 +3996,10 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
         computeBatchFeeSummary(supabaseAdmin, data.compareBatchId),
       ]);
       compareBatchNo = (cmpBatch as any)?.batch_no ?? null;
-      for (const c of (cmpSummary.per_customer ?? []) as any[]) {
-        if (!c.customer_code) continue;
-        compareByCode.set(c.customer_code, {
-          weight: chargeableWeightOf(c),
-          hadDelivery: Number(c.fee_delivery_cad ?? 0) > 0,
-        });
+      for (const [code, value] of deliveryWeightsByCustomer(
+        cmpSummary.per_customer ?? [], new Set(), new Set(currentByCode.keys()),
+      )) {
+        compareByCode.set(code, value);
       }
     }
 
@@ -4024,16 +4018,10 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
 
     const charged: string[] = [];
     const discounted: string[] = [];
-    const skipped: string[] = [];
+    const skipped: string[] = [...new Set(perCustomer.filter(c => confirmedCodes.has(c.customer_code)).map(c => c.customer_code as string))];
     const rows: any[] = [];
-    for (const c of perCustomer) {
-      const code = c.customer_code as string | null;
-      if (!code) continue;
-      if (confirmedCodes.has(code)) {
-        skipped.push(code);
-        continue;
-      }
-      const curWeight = chargeableWeightOf(c);
+    for (const [code, current] of currentByCode) {
+      const curWeight = current.weight;
       const cmp = compareByCode.get(code);
       const combined = curWeight + (cmp?.weight ?? 0);
       if (combined < trigger) {

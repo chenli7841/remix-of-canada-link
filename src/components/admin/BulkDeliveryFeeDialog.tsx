@@ -67,9 +67,10 @@ export function BulkDeliveryFeeDialog({ batchId, onClose, onApplied }: Props) {
           </button>
         </div>
         <p className="mb-3 text-xs leading-snug text-slate-400">
-          按客户号计费重量（实重与体积重取大者，体积重 ÷6000 估算）自动筛选：计费重量低于触发重量的客户自动加入派送费。
+          直接读取客户账单的总计费重量：低于触发重量的客户自动加入派送费。同一客户多条线路的计费重量合计判断。
           若选择了对比批次，则用「本批次 + 对比批次」合并后的计费重量判断——合并后仍低于触发重量则加入派送费；
           若合并后已达到触发重量，且对比批次已为该客户收取过派送费，则在本批次为该客户加入等额折扣冲抵，避免重复收取。
+          缺少计费重量时会提示补全，不会按实重或尺寸估算。
         </p>
 
         <div className="space-y-2">
