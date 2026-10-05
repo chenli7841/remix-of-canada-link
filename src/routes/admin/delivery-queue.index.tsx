@@ -1,4 +1,5 @@
 import { groupDeliveriesByCity } from '@/lib/delivery-city-groups';
+import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
 import { DeliveryExtraFeeEditor } from '@/components/admin/DeliveryExtraFeeEditor';
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -24,13 +25,20 @@ function DeliveryQueuePage() {
   const deduct = useServerFn(deductCustomerWallet);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
+  const [collapsedCities,setCollapsedCities] = useState<Set<string>>(new Set());
+  const [selectedBatches,setSelectedBatches] = useState<Set<string>>(new Set());
+  const toggleBatches = (keys:string[],checked:boolean) => setSelectedBatches(previous=>{const next=new Set(previous);keys.forEach(key=>checked?next.add(key):next.delete(key));return next;});
   const [feeEdit, setFeeEdit] = useState<any>(null);
+  const [addressEdit, setAddressEdit] = useState<any>(null);
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
 
   const q = useQuery({
     queryKey: ["delivery-queue-groups", status],
     queryFn: () => fetchList({ data: { status } }),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-groups"] });
@@ -127,12 +135,15 @@ function DeliveryQueuePage() {
         {["pending", "dispatched", "cancelled"].map((s) => (
           <button
             key={s}
-            onClick={() => setStatus(s)}
+            onClick={() => {setStatus(s);setSelectedBatches(new Set());}}
             className={`rounded-md border px-2.5 py-1 text-xs ${status === s ? "border-brand bg-brand/20 text-brand" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
           >
             {STATUS_LABEL[s]}
           </button>
         ))}
+        <button type="button" disabled={q.isFetching} onClick={()=>{setSelectedBatches(new Set());void refresh();}} className="rounded-md border border-white/10 px-3 py-1 text-xs text-sky-200 disabled:opacity-50">
+          {q.isFetching ? '更新中…' : '刷新地址与列表'}
+        </button>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -141,6 +152,7 @@ function DeliveryQueuePage() {
         />
       </div>
 
+      {selectedBatches.size > 0 && <div className="mb-3 flex items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
       <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <table className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
@@ -176,11 +188,12 @@ function DeliveryQueuePage() {
             )}
             {cityGroups.map(cityGroup => <Fragment key={cityGroup.key}>
               <tr className="bg-sky-950/50"><th colSpan={10} scope="rowgroup" className="px-4 py-3 text-left">
-                <span className="text-sm font-semibold text-sky-200">{cityGroup.city}</span>
+                <input type="checkbox" aria-label={`勾选${cityGroup.city}全部批次`} className="mr-3 accent-brand" checked={cityGroup.rows.every(g=>selectedBatches.has(g.key))} ref={node=>{if(node)node.indeterminate=cityGroup.rows.some(g=>selectedBatches.has(g.key))&&!cityGroup.rows.every(g=>selectedBatches.has(g.key));}} onChange={e=>toggleBatches(cityGroup.rows.map(g=>g.key),e.target.checked)}/>
+                <button type="button" aria-expanded={!collapsedCities.has(cityGroup.key)} onClick={()=>setCollapsedCities(previous=>{const next=new Set(previous);next.has(cityGroup.key)?next.delete(cityGroup.key):next.add(cityGroup.key);return next;})} className="text-sm font-semibold text-sky-200">{collapsedCities.has(cityGroup.key)?'▶':'▼'} {cityGroup.city}</button>
                 <span className="ml-2 text-xs font-normal text-slate-400">{[cityGroup.province, cityGroup.country].filter(Boolean).join(' · ')}</span>
                 <span className="ml-4 text-xs font-normal text-slate-300">{cityGroup.customers.size} 个客户 · {cityGroup.rows.length} 个客户批次 · {cityGroup.count} 个派送单位</span>
               </th></tr>
-            {cityGroup.rows.map((g: any) => (
+            {!collapsedCities.has(cityGroup.key) && cityGroup.rows.map((g: any) => (
               <tr key={g.key} className="hover:bg-white/[0.03] align-top">
                 <td className="px-4 py-3 text-xs">
                   <div className="font-mono text-slate-100">{g.customer_code ?? "—"}</div>
@@ -193,12 +206,12 @@ function DeliveryQueuePage() {
                 </td>
                 <td className="px-4 py-3 text-xs min-w-40">
                   {g.batch_id ? <Link to="/admin/batches/$batchId" params={{batchId:g.batch_id}} className="text-brand">{g.batch_name}</Link> : '未关联批次'}
-                  <div className="text-[10px] text-slate-500">{g.batch_no}</div>
+                  <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-slate-300"><input type="checkbox" className="accent-brand" checked={selectedBatches.has(g.key)} onChange={e=>toggleBatches([g.key],e.target.checked)}/>{g.batch_no || '未关联批次'}</label>
                   <div className={g.payment_label === '已付款' ? 'mt-1 text-emerald-300' : 'mt-1 text-amber-300'}>{g.payment_label}</div>
                 </td>
                 <td className="px-4 py-3 text-center text-xs whitespace-nowrap"><strong className="text-brand">{g.count}</strong><div className="mt-1 text-slate-400">独立运单 {g.waybill_count}<br/>客户箱 {g.carton_count} · 客户托盘 {g.pallet_count}</div></td>
                 <td className="px-4 py-3 text-xs text-slate-300 max-w-xs">
-                  {g.address || <span className="text-slate-500">—</span>}
+                  <button type="button" disabled={!g.editable_address} onClick={()=>setAddressEdit(g)} title="点击修改收货地址" className="text-left underline decoration-dotted underline-offset-4 hover:text-brand disabled:no-underline">{g.address || '点击填写地址'}</button>
                 </td>
                 <td className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
@@ -241,6 +254,7 @@ function DeliveryQueuePage() {
         </table>
       </div>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
+      {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}
     </Page>
   );
 }

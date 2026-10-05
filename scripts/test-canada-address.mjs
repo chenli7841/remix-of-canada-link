@@ -1,0 +1,16 @@
+import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';import assert from 'node:assert/strict';
+const locations=JSON.parse(fs.readFileSync('src/components/partner/canada-locations.json','utf8'));const exports={};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/canada-address.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{exports,require:()=>locations});
+const n=exports.normalizeCanadaAddress;
+assert.equal(n({country:'Canada',province:'Ontario',city:' oakville '}).city,'Oakville');
+assert.equal(n({country:'加拿大',province:'安大略省',city:'Richmond hill'}).province,'ON');
+assert.equal(n({country:'CA',province:'QC',city:'montreal'}).city,'Montréal');
+assert.equal(n({country:'CA',province:'BAD',city:'Toronto'}).matched,false);
+assert.equal(n({country:'CA',province:'ON',city:'Torontooo'}).city,'Torontooo');
+assert.equal(n({country:'US',province:'CA',city:'Toronto'}).country,'US');
+assert.equal(n({country:'CA',city:'Toronto'}).province,'ON');
+assert.equal(n({country:'CA',province:'ON',city:''}).matched,false);
+for (const city of ['Whitby','Bradford','Wainfleet','Whitchurch-Stouffville','LaSalle']) assert.equal(n({country:'CA',province:'ON',city}).matched,true);
+assert.equal(n({country:'CA',province:'NS',city:'North Chegoggin'}).matched,true);
+assert.equal(n({country:'CA',province:'AB',city:'Markham'}).matched,false);
+console.log('地址规范化测试通过：省份中英文、代码、城市重音/大小写、缺省唯一匹配、错误城市与非加拿大地址保护。');

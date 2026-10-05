@@ -1,3 +1,5 @@
+import { AddressLocationPicker } from '@/components/AddressLocationPicker';
+import { canadaLocations, provinceOptions, normalizeCanadaAddress } from '@/lib/canada-address';
 import React from "react";
 // WeChat login/binding is hidden until the WeChat Open Platform app is approved.
 const WECHAT_BIND_ENABLED = false;
@@ -1181,12 +1183,14 @@ function AccountSecurityCard({ profile, setProfile }: { profile: Profile; setPro
 
 // ===================== Addresses =====================
 function AddressTab() {
+  const addressQueryClient = useQueryClient();
   const { lang } = useApp();
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
   const [list, setList] = useState<Address[]>([]);
   const [editing, setEditing] = useState<Partial<Address> | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const isNew = editing && !editing.id;
+  const isCanadian = !editing?.country || ['CA','CANADA','加拿大'].includes(editing.country.trim().toUpperCase());
 
   const load = () =>
     sb
@@ -1209,13 +1213,16 @@ function AddressTab() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+    const normalized = normalizeCanadaAddress(editing);
+    if (isCanadian && !normalized.matched) return toast.error(tr('请从列表选择正确的省份和城市', 'Please select a valid province and city'));
     if (editing.is_default) await sb.from("addresses").update({ is_default: false }).eq("user_id", user.id);
-    const payload = { ...editing, user_id: user.id };
+    const payload = { ...editing, country:normalized.country,province:normalized.province,city:normalized.city,user_id: user.id };
     const { error } = editing.id
       ? await sb.from("addresses").update(payload).eq("id", editing.id)
       : await sb.from("addresses").insert(payload);
     if (error) return toast.error(error.message);
     toast.success(tr("地址已保存", "Address saved"));
+    await addressQueryClient.invalidateQueries({ queryKey: ['delivery-queue-groups'] });
     setEditing(null);
     load();
   };
@@ -1272,20 +1279,12 @@ function AddressTab() {
                 onChange={(e) => setEditing({ ...editing, line2: e.target.value })}
               />
             </Field>
-            <Field label={tr("城市", "City")}>
-              <input
-                className={inputCls}
-                value={editing.city ?? ""}
-                onChange={(e) => setEditing({ ...editing, city: e.target.value })}
-              />
-            </Field>
             <Field label={tr("省份", "Province")}>
-              <input
-                className={inputCls}
-                value={editing.province ?? ""}
-                onChange={(e) => setEditing({ ...editing, province: e.target.value })}
-                placeholder="ON / BC / AB"
-              />
+              {isCanadian ? <AddressLocationPicker label={tr("省份", "Province")} value={editing.province || ''} options={provinceOptions} onChange={province=>setEditing({...editing,province,city:'',country:'CA'})}/> : <input className={inputCls} value={editing.province || ''} onChange={e=>setEditing({...editing,province:e.target.value})}/>}
+            </Field>
+            <Field label={tr("城市", "City")}>
+              {isCanadian ? <AddressLocationPicker label={tr("城市", "City")} value={editing.city || ''} disabled={!canadaLocations.some(p=>p.code===editing.province)} options={(canadaLocations.find(p=>p.code===editing.province)?.cities || []).map(city=>({value:city,label:city}))} onChange={city=>setEditing({...editing,city})}/> : <input className={inputCls} value={editing.city || ''} onChange={e=>setEditing({...editing,city:e.target.value})}/>}
+              {isCanadian && editing.city && !normalizeCanadaAddress(editing).matched && <p className="mt-1 text-xs text-amber-600">原城市：{editing.city}，请核对后重新选择。</p>}
             </Field>
             <Field label={tr("邮编", "Postal code")}>
               <input
@@ -1373,7 +1372,7 @@ function AddressTab() {
                 })()}
               <div className="absolute right-3 top-3 flex gap-1">
                 <button
-                  onClick={() => setEditing(a)}
+                  onClick={() => {const n=normalizeCanadaAddress(a);setEditing({...a,country:n.country,province:n.province,city:n.city});}}
                   className="rounded-full px-2 py-1 text-xs text-ink-soft hover:bg-accent"
                 >
                   {tr("编辑", "Edit")}
