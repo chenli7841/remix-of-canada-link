@@ -19,13 +19,20 @@ export async function loadReceivingContents(db: any, batchId: string) {
     ...await read('cartons', cartonFields, 'batch_id', [batchId]),
     ...await read('cartons', cartonFields, 'pallet_id', pallets.map(p => p.id)),
   ].map(c => [c.id, c])).values()];
-  const wbFields = 'id,waybill_no,status,customer_code,carton_id,pallet_id';
+  // Customer numbers belong to parent orders, not the waybills table.
+  const wbFields = 'id,waybill_no,status,carton_id,pallet_id,forwarding_orders:forwarding_id(customer_code),orders:order_id(customer_code)';
   const waybills = [...new Map([
     ...await read('waybills', wbFields, 'assigned_batch_id', [batchId]),
     ...await read('waybills', wbFields, 'carton_id', cartons.map(c => c.id)),
     ...await read('waybills', wbFields, 'pallet_id', pallets.map(p => p.id)),
   ].map(w => [w.id, w])).values()];
-  return { waybills, cartons, pallets };
+  return {
+    waybills: waybills.map(w => ({
+      ...w,
+      customer_code: w.forwarding_orders?.customer_code ?? w.orders?.customer_code ?? null,
+    })),
+    cartons, pallets,
+  };
 }
 
 export async function recordAllReceivingScans(db: any, receivingId: string, batchId: string, operatorId: string) {

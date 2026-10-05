@@ -18,7 +18,22 @@ function database({ status = 'matched', failRead = false, failWrite = false, bat
   return { tables, get writes(){ return writes; }, from(table) {
     let filtered = tables[table];
     const query = {
-      select(){ return this; }, order(){ return this; },
+      select(fields){
+        // Check selected columns against the generated database schema, including joins.
+        const schema=fs.readFileSync('src/integrations/supabase/types.ts','utf8');
+        for(const field of fields.split(/,(?![^()]*\))/)) {
+          const relation=field.match(/^([^:]+):([^()]+)\(([^)]+)\)$/);
+          const tableName=relation?.[1] || table;
+          const tableStart=schema.indexOf('      '+tableName+': {');
+          assert.ok(tableStart>=0, 'Unknown table '+tableName);
+          const rowStart=schema.indexOf('Row: {',tableStart);
+          const rowEnd=schema.indexOf('        Insert:',rowStart);
+          const row=schema.slice(rowStart,rowEnd);
+          const column=relation?.[3] || field;
+          assert.match(row, new RegExp('\\b'+column+':'), 'Unknown column '+tableName+'.'+column);
+        }
+        return this;
+      }, order(){ return this; },
       in(col, ids){ filtered = filtered.filter(r => ids.includes(r[col])); return this; },
       eq(col, value){ filtered = filtered.filter(r => r[col] === value); return this; },
       single(){ return Promise.resolve({data: filtered[0]}); },
@@ -52,4 +67,14 @@ test('either confirmation can cancel without making a request',async()=>{
   await vm.runInNewContext(code,{busy:false,isFinal:false,r:{batch_id:'b'},receivingId:'r',window:{confirm:()=>answers[confirms++]},setBusy(){},matchAll:async()=>{calls++;return{counts:{waybills:1,cartons:0,pallets:0}}},setLog(){},refresh:async()=>{},alert(){},Date});
   assert.equal(calls,answers.every(Boolean)?1:0);assert.equal(confirms,answers.length);
  }
+});
+
+test('customer numbers come from forwarding/order parents; unlinked waybills remain visible',async()=>{
+ const db=database();
+ db.tables.waybills[0].forwarding_orders={customer_code:'05342'};
+ db.tables.waybills[1].orders={customer_code:'00123'};
+ const result=await exports.loadReceivingContents(db,'b');
+ assert.equal(result.waybills.find(w=>w.id==='0000').customer_code,'05342');
+ assert.equal(result.waybills.find(w=>w.id==='0001').customer_code,'00123');
+ assert.equal(result.waybills.find(w=>w.id==='0002').customer_code,null);
 });
