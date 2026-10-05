@@ -1,3 +1,4 @@
+import { DeliveryPhotoViewer } from '@/components/admin/DeliveryPhotoViewer';
 import { logActionLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -6,7 +7,6 @@ import { useState } from "react";
 import {
   getCustomerDelivery,
   bulkUpdateCustomerDelivery,
-  deductCustomerWallet,
   updateDeliveryQueueItem,
   addDeliveryTrackingEvent,
 } from "@/lib/delivery-queue.functions";
@@ -46,13 +46,13 @@ function CustomerDeliveryDetail() {
   const fetchDetail = useServerFn(getCustomerDelivery);
   const bulkUpdate = useServerFn(bulkUpdateCustomerDelivery);
   const updateItem = useServerFn(updateDeliveryQueueItem);
-  const deduct = useServerFn(deductCustomerWallet);
   const addTrack = useServerFn(addDeliveryTrackingEvent);
 
   const isCode = customerKey.startsWith("code:");
   const customerUserId = isCode ? null : customerKey;
   const customerCode = isCode ? customerKey.slice(5) : null;
 
+  const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const q = useQuery({
@@ -95,32 +95,17 @@ function CustomerDeliveryDetail() {
     const ids = Array.from(selected).filter(id=>items.some(i=>i.id===id && i.status === "pending"));
     if (!ids.length) return alert("请先选择项");
     if (!window.confirm(`确认将 ${ids.length} 项标记为 ${STATUS_LABEL[status]}？`)) return;
-    await bulkUpdate({ data: { customerUserId, customerCode, status, ids, ...(batchId ? {batchId: batchId === "unassigned" ? null : batchId} : {}) } });
-    setSelected(new Set());
-    await refresh();
+    if (busy) return;
+    setBusy(true);
+    try { await bulkUpdate({ data: { customerUserId, customerCode, status, ids, ...(batchId ? {batchId: batchId === "unassigned" ? null : batchId} : {}) } }); setSelected(new Set()); await refresh(); }
+    catch (e: any) { alert(e.message || '派送操作失败'); } finally { setBusy(false); }
   };
 
   const onItemAction = async (id: string, status: "dispatched" | "cancelled") => {
-    await updateItem({ data: { id, status } });
-    await refresh();
-  };
-
-  const onDeduct = async () => {
-    if (!customerUserId) return alert("该客户未注册账号，无法扣款");
-    const ids = Array.from(selected).filter(id=>items.some(i=>i.id===id && i.status === "pending"));
-    const selectedFee = items.filter((i) => ids.includes(i.id)).reduce((s, i) => s + Number(i.fee_cny || 0), 0);
-    const suggestedCad = (selectedFee > 0 ? selectedFee : totals.fee) * fx;
-    const input = window.prompt(
-      `扣款金额 (CAD)，当前余额 ${wallet ? "CA$" + Number(wallet.balance_cad).toFixed(2) : "—"}`,
-      suggestedCad.toFixed(2),
-    );
-    if (!input) return;
-    const amt = Number(input);
-    if (!(amt > 0)) return alert("金额无效");
-    const note = window.prompt("备注（可空）", "派送费用扣款") ?? undefined;
-    await deduct({ data: { customerUserId, amountCad: amt, note } });
-    await refresh();
-    alert("扣款成功");
+    if (busy) return;
+    if (!window.confirm('确认将此项标记为' + STATUS_LABEL[status] + '？')) return;
+    setBusy(true);
+    try { await updateItem({ data: { id, status } }); await refresh(); } catch (e:any) { alert(e.message || '操作失败'); } finally { setBusy(false); }
   };
 
   const onTracking = async (id: string) => {
@@ -157,6 +142,8 @@ function CustomerDeliveryDetail() {
         </Link>
       }
     >
+{q.isError && <p className="mb-4 text-rose-300">{q.error.message}</p>}
+      {busy && <p role="status" className="mb-3 text-brand">正在处理派送记录，请稍候…</p>}
       {/* customer card */}
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
@@ -178,27 +165,33 @@ function CustomerDeliveryDetail() {
           <div className="text-lg font-semibold text-emerald-300">
             {wallet ? `CA$${Number(wallet.balance_cad).toFixed(2)}` : "—"}
           </div>
-          <button
-            onClick={onDeduct}
-            className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/20"
-          >
-            扣款
-          </button>
+
         </div>
       </div>
 
+      <section className="mb-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+        <h2 className="mb-3 text-sm font-semibold">派送司机信息</h2>
+        <p className="mb-3 text-xs text-slate-400">派送人员为点击确认派送的工作人员。</p>
+        {items.filter(it=>it.dispatched_at).length === 0 ? <p className="text-xs text-slate-400">尚未确认派送</p> :
+          <div className="max-h-64 space-y-2 overflow-auto">{items.filter(it=>it.dispatched_at).map(it=><div key={it.id} className="flex flex-wrap gap-x-5 text-xs">
+            <span>{KIND_LABEL[it.kind]} {it.code}</span><span>派送人员：{it.dispatched_by_name || '历史记录未记录人员'}</span><span>派送时间：{fmtDate(it.dispatched_at)}</span>
+          </div>)}</div>}
+      </section>
+      <DeliveryPhotoViewer items={items}/>
+      <details className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+        <summary className="cursor-pointer text-sm font-semibold">运单列表（{items.length} 项，点击展开）</summary>
       {/* bulk actions */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           onClick={() => onBulk("dispatched")}
-          disabled={!selected.size}
+          disabled={busy || !selected.size}
           className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
         >
           <Check className="mr-1 inline h-3 w-3" /> 批量派送 ({selected.size})
         </button>
         <button
           onClick={() => onBulk("cancelled")}
-          disabled={!selected.size}
+          disabled={busy || !selected.size}
           className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
         >
           <X className="mr-1 inline h-3 w-3" /> 批量取消
@@ -276,14 +269,14 @@ function CustomerDeliveryDetail() {
                       {it.status === "pending" && (
                         <>
                           <button
-                            onClick={() => onItemAction(it.id, "dispatched")}
+                            disabled={busy} onClick={() => onItemAction(it.id, "dispatched")}
                             title="标记派送"
                             className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-500/20"
                           >
                             <Check className="h-3 w-3" />
                           </button>
                           <button
-                            onClick={() => onItemAction(it.id, "cancelled")}
+                            disabled={busy} onClick={() => onItemAction(it.id, "cancelled")}
                             title="取消"
                             className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10"
                           >
@@ -307,6 +300,8 @@ function CustomerDeliveryDetail() {
         </table>
       </div>
 
+      </details>
+
       {/* Operation logs */}
       <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
@@ -322,6 +317,7 @@ function CustomerDeliveryDetail() {
                   <span className="font-mono text-slate-200">{logActionLabel(lg.action)}</span>
                   <span className="text-slate-500">{fmtDate(lg.created_at)}</span>
                 </div>
+                {lg.operator_name && <div className="mt-1 text-slate-300">操作人员：{lg.operator_name}</div>}
                 {lg.note && <div className="mt-1 text-slate-400">{lg.note}</div>}
                 {lg.after && (
                   <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">

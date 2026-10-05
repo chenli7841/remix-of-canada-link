@@ -144,6 +144,7 @@ function WaybillDetail() {
             </div>
             <div>目的地：{(detailQ.data as any)?.address_destination_code ?? "—"}<span className="ml-1 text-slate-500">（收件地址）</span></div>
             <div>重量：{wb.weight_kg ?? "—"} kg</div>
+            {(wb as any).dispatched_at && <div>派送人员：{(wb as any).dispatched_by_name || "历史记录未记录人员"} · 派送时间：{fmtDate((wb as any).dispatched_at)}</div>}
 
 
             <div>尺寸：{wb.length_cm ?? "—"} × {wb.width_cm ?? "—"} × {wb.height_cm ?? "—"} cm</div>

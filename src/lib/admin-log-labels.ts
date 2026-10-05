@@ -1,4 +1,6 @@
 const actions: Record<string, string> = {
+  "delivery_queue.dispatched": "确认派送",
+  update_delivery_extra_fee: "修改派送额外费用",
   create: "创建", update: "修改", delete: "删除", save: "保存", set: "设置", add: "添加", cancel: "取消",
   confirm: "确认", lock: "锁定", unlock: "解锁", split: "拆分", merge: "合并", refund: "退款",
   create_forwarding: "创建集运单", admin_create_forwarding: "代客户创建集运单", create_from_forwarding: "从集运单创建运单",
@@ -37,7 +39,7 @@ export function logEntityLabel(entity: string): string {
   return entities[entity] || (/[\u4e00-\u9fff]/.test(entity) ? entity : "其他记录");
 }
 
-const fields: Record<string,string> = { before: "修改前", after: "修改后", status: "状态", note: "备注", request_no: "集运单号", waybill_no: "运单号", order_no: "订单号", domestic_tracking_no: "国内单号", weight_kg: "重量（公斤）", length_cm: "长度（厘米）", width_cm: "宽度（厘米）", height_cm: "高度（厘米）", amount_cny: "金额（人民币）", amount_cad: "金额（加元）", total_cad: "合计（加元）", fee_cny: "费用（人民币）", insured: "购买保险", creation_source: "创建来源", created_by: "创建人", owner_user_id: "归属客户", count: "数量", quantity: "数量", route_code: "线路编号", warehouse: "仓库", payment_status: "付款状态", id: "记录编号", forwarding_id: "集运单编号", waybill_id: "运单编号", batch_id: "批次编号", carton_id: "箱号编号", pallet_id: "托盘编号" };
+const fields: Record<string,string> = { dispatched_by_name: "派送人员", dispatched_at: "派送时间", code: "编号", extra_fee_cny: "额外费用（人民币）", before: "修改前", after: "修改后", status: "状态", note: "备注", request_no: "集运单号", waybill_no: "运单号", order_no: "订单号", domestic_tracking_no: "国内单号", weight_kg: "重量（公斤）", length_cm: "长度（厘米）", width_cm: "宽度（厘米）", height_cm: "高度（厘米）", amount_cny: "金额（人民币）", amount_cad: "金额（加元）", total_cad: "合计（加元）", fee_cny: "费用（人民币）", insured: "购买保险", creation_source: "创建来源", created_by: "创建人", owner_user_id: "归属客户", count: "数量", quantity: "数量", route_code: "线路编号", warehouse: "仓库", payment_status: "付款状态", id: "记录编号", forwarding_id: "集运单编号", waybill_id: "运单编号", batch_id: "批次编号", carton_id: "箱号编号", pallet_id: "托盘编号" };
 const values: Record<string,string> = { pending: "待处理", received: "已入库", packed: "已打包", shipped: "已发出", delivered: "已送达", cancelled: "已取消", paid: "已付款", unpaid: "未付款", customer: "客户", staff: "工作人员", system_api: "系统接口" };
 export function logDetailsText(value: unknown): string {
   if (value == null) return "未设置";

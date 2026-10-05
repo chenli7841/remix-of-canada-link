@@ -209,10 +209,10 @@ export const updateDeliveryQueueItem = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch: any = { status: data.status };
     if (data.notes !== undefined) patch.notes = data.notes;
-    if (data.status === "dispatched") patch.dispatched_at = new Date().toISOString();
+    if (data.status === "dispatched") patch.dispatched_by = context.userId;
     const { error } = await supabaseAdmin.from("delivery_queue").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
-    await logAction(supabaseAdmin, context.userId, `delivery_queue.${data.status}`, data.id, patch);
+    if (data.status !== "dispatched") await logAction(supabaseAdmin, context.userId, `delivery_queue.${data.status}`, data.id, patch);
     return { ok: true };
   });
 
@@ -292,6 +292,14 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
       readDeliveryRows(supabaseAdmin, 'batches', 'id,batch_no,display_name,fees_dirty_at', 'id', batchIds),
       readDeliveryRows(supabaseAdmin, 'batch_settlements', '*', 'batch_id', batchIds),
     ]);
+    const extraFeeMap = new Map<string, number>();
+    for (const batchId of batchIds) for (let offset = 0; ; offset += 500) {
+      const result = await (supabaseAdmin as any).from('batch_customer_notes').select('customer_code,extra_fee_cny')
+        .eq('batch_id', batchId).order('customer_code').range(offset, offset + 499);
+      if (result.error) throw new Error('额外费用读取失败，请确认已执行额外费用迁移');
+      for (const row of result.data ?? []) if (row.extra_fee_cny != null) extraFeeMap.set(batchId + ':' + row.customer_code, Number(row.extra_fee_cny));
+      if ((result.data ?? []).length < 500) break;
+    }
     const batchMap = new Map(batches.map(b=>[b.id,b]));
     const settlementMap = new Map(settlements.map(st=>[st.batch_id + ':' + st.customer_code,st]));
 
@@ -328,12 +336,14 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
             ? [p.reg_address, p.reg_city, p.reg_province, p.reg_country, p.reg_postal_code].filter(Boolean).join(" ")
             : "";
         const phone = a?.phone || p?.phone || p?.reg_phone || null;
+        const feeCny = extraFeeMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) ?? g.fee_cny;
         return {
           ...g,
           batch_name: batchMap.get(g.batch_id)?.display_name || batchMap.get(g.batch_id)?.batch_no || '未关联批次',
           batch_no: batchMap.get(g.batch_id)?.batch_no ?? '',
           ...deliverySettlementSummary(settlementMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)), batchMap.get(g.batch_id)),
-          fee_cad: +(g.fee_cny * fx).toFixed(2),
+          fee_cny: feeCny,
+          fee_cad: +(feeCny * fx).toFixed(2),
           customer_code: g.customer_code || p?.customer_code || null,
           full_name: p?.full_name || (a?.recipient ?? null),
           phone,
@@ -402,7 +412,7 @@ export const getCustomerDelivery = createServerFn({ method: "GET" })
     if (idsList.length) {
       const { data: lg } = await supabaseAdmin
         .from("admin_action_logs")
-        .select("id, action, entity_type, entity_id, note, after, created_at, operator_id")
+        .select("id, action, entity_type, entity_id, note, after, created_at, operator_id, operator_name")
         .in("entity_id", idsList)
         .order("created_at", { ascending: false })
         .limit(200);
@@ -477,7 +487,7 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch: any = { status: data.status };
-    if (data.status === "dispatched") patch.dispatched_at = new Date().toISOString();
+    if (data.status === "dispatched") patch.dispatched_by = context.userId;
 
     let q = supabaseAdmin.from("delivery_queue").update(patch);
     if (data.ids && data.ids.length) q = q.in("id", data.ids);
@@ -491,7 +501,7 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
     const { error } = await q;
     if (error) throw new Error(error.message);
 
-    await logAction(
+    if (data.status !== "dispatched") await logAction(
       supabaseAdmin,
       context.userId,
       `delivery_queue.bulk_${data.status}`,

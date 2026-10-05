@@ -25,3 +25,18 @@ export const saveBatchCustomerNote = createServerFn({ method: 'POST' }).middlewa
     operator_id: context.userId, note: '修改客户结算备注', after: { customer_code: data.customerCode, note: data.note.trim() } });
   return { ok: true };
  });
+
+export const saveDeliveryExtraFee = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+ .inputValidator((d: { batchId: string; customerCode: string; amountCny: number }) => {
+  if (!d.batchId || !d.customerCode?.trim() || typeof d.amountCny !== 'number' || !Number.isFinite(d.amountCny) || d.amountCny < 0 || d.amountCny > 9999999999.99 || Math.abs(d.amountCny * 100 - Math.round(d.amountCny * 100)) > 0.0001) throw new Error('请输入有效金额，不能为负数，最多两位小数');
+  return d;
+ }).handler(async ({ data, context }) => {
+  await staff(context);
+  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+  const { error } = await (supabaseAdmin as any).from('batch_customer_notes').upsert({ batch_id: data.batchId,
+    customer_code: data.customerCode.trim(), extra_fee_cny: data.amountCny, updated_at: new Date().toISOString(), updated_by: context.userId });
+  if (error) throw new Error('额外费用保存失败，请确认已执行额外费用迁移');
+  await recordAdminLog(supabaseAdmin, {entity_type:'batch',entity_id:data.batchId,action:'update_delivery_extra_fee',operator_id:context.userId,
+    note:'修改客户批次的派送额外费用（人民币）',after:{customer_code:data.customerCode,extra_fee_cny:data.amountCny}});
+  return {ok:true};
+ });

@@ -1,3 +1,4 @@
+import { listBatchCustomerNotes, saveBatchCustomerNote, saveDeliveryExtraFee } from '@/lib/batch-customer-notes.functions';
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -20,6 +21,10 @@ function DeliveryQueuePage() {
   const fetchList = useServerFn(listDeliveryByCustomer);
   const bulkUpdate = useServerFn(bulkUpdateCustomerDelivery);
   const deduct = useServerFn(deductCustomerWallet);
+  const readNotes = useServerFn(listBatchCustomerNotes);
+  const saveNote = useServerFn(saveBatchCustomerNote);
+  const saveExtraFee = useServerFn(saveDeliveryExtraFee);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
@@ -101,6 +106,30 @@ function DeliveryQueuePage() {
     alert("扣款成功");
   };
 
+  const onMore = async (action: string, g: any) => {
+    if (!action || busyKey) return;
+    setBusyKey(g.key);
+    try {
+      if (action === 'cancel') await onCancelAll(g);
+      if (action === 'deduct') await onDeduct(g);
+      if (action === 'fee') {
+        const input = window.prompt('修改此客户在当前批次的额外费用（人民币 CNY）。保存金额，不执行扣款。', Number(g.fee_cny || 0).toFixed(2));
+        if (input === null) return;
+        if (!/^\d+(\.\d{1,2})?$/.test(input.trim())) throw new Error('请输入非负金额，最多两位小数');
+        await saveExtraFee({data:{batchId:g.batch_id,customerCode:g.customer_code,amountCny:Number(input)}});
+        await refresh();
+      }
+      if (action === 'note') {
+        const notes = await readNotes({data:{batchId:g.batch_id}});
+        const input = window.prompt('结算备注（与批次扣款列表共用）', notes.find(n=>n.customer_code===g.customer_code)?.note || '');
+        if (input === null) return;
+        await saveNote({data:{batchId:g.batch_id,customerCode:g.customer_code,note:input}});
+        await qc.invalidateQueries({queryKey:['batch-customer-notes',g.batch_id]});
+      }
+    } catch (e: any) { alert(e.message || '操作失败，请重试'); }
+    finally { setBusyKey(null); }
+  };
+
   return (
     <Page
       title="待派送列表"
@@ -138,7 +167,7 @@ function DeliveryQueuePage() {
               <th className="px-4 py-2.5 text-right">批次总费用 (CAD)</th>
               <th className="px-4 py-2.5 text-right">额外费用</th>
               <th className="px-4 py-2.5">结算备注</th>
-              <th className="px-4 py-2.5">加入时间</th>
+              <th className="px-4 py-2.5 whitespace-nowrap">加入时间</th>
               <th className="px-4 py-2.5 text-right">操作</th>
             </tr>
           </thead>
@@ -164,7 +193,7 @@ function DeliveryQueuePage() {
                   <div className="font-mono text-slate-100">{g.customer_code ?? "—"}</div>
                   {g.full_name && <div className="text-[11px] text-slate-500">{g.full_name}</div>}
                   {g.wallet_balance_cad != null && (
-                    <div className="mt-1 inline-flex items-center gap-1 text-[10px] text-slate-500">
+                    <div className="mt-2 inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs font-bold text-amber-200">
                       <Wallet className="h-3 w-3" /> 余额 CA${Number(g.wallet_balance_cad).toFixed(2)}
                     </div>
                   )}
@@ -182,35 +211,22 @@ function DeliveryQueuePage() {
                 <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.total_cad == null ? '待确认' : 'CAD ' + Number(g.total_cad).toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-xs">{fmtCNY(g.fee_cny)}</td>
-                <td className="px-4 py-3">{g.batch_id && g.customer_code ? <BatchCustomerNote batchId={g.batch_id} customerCode={g.customer_code}/> : '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-400">{fmtDate(g.earliest_at)}</td>
+                <td className="px-4 py-3">{g.batch_id && g.customer_code ? <BatchCustomerNote batchId={g.batch_id} customerCode={g.customer_code} readOnly/> : '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-300 min-w-32">{fmtDate(g.earliest_at)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex flex-wrap justify-end gap-1">
                     {status === "pending" && (
                       <>
                         <button
-                          onClick={() => onDispatchAll(g)}
+                          disabled={busyKey !== null}
+                          onClick={async () => { if (busyKey) return; setBusyKey(g.key); try { await onDispatchAll(g); } catch (e: any) { alert(e.message); } finally { setBusyKey(null); } }}
                           title="全部标记派送"
                           className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-500/20"
                         >
                           <Check className="inline h-3 w-3" /> 派送
                         </button>
-                        <button
-                          onClick={() => onCancelAll(g)}
-                          title="全部取消"
-                          className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10"
-                        >
-                          <X className="inline h-3 w-3" /> 取消
-                        </button>
                       </>
                     )}
-                    <button
-                      onClick={() => onDeduct(g)}
-                      title="额外费用扣款"
-                      className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/20"
-                    >
-                      <Wallet className="inline h-3 w-3" /> 额外扣款
-                    </button>
                     <Link
                       to="/admin/delivery-queue/$customerKey"
                       params={{ customerKey: g.customer_user_id || `code:${g.customer_code ?? "unknown"}` }}
@@ -219,6 +235,15 @@ function DeliveryQueuePage() {
                     >
                       <Truck className="h-3 w-3" /> 详情 <ArrowRight className="h-3 w-3" />
                     </Link>
+                    <select aria-label="其他操作" value="" disabled={busyKey !== null}
+                      onChange={e=>{const action=e.target.value;void onMore(action,g);}}
+                      className="rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 disabled:opacity-50">
+                      <option value="">{busyKey === g.key ? '处理中…' : '更多操作'}</option>
+                      <option value="fee" disabled={!g.batch_id || !g.customer_code}>编辑额外费用</option>
+                      <option value="note" disabled={!g.batch_id || !g.customer_code}>编辑结算备注</option>
+                      <option value="deduct" disabled={!g.customer_user_id}>额外费用扣款</option>
+                      {status === 'pending' && <option value="cancel">取消派送</option>}
+                    </select>
                   </div>
                 </td>
               </tr>
