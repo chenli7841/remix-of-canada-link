@@ -1,3 +1,4 @@
+import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,7 +37,7 @@ function DeliveryQueuePage() {
     return (
       (g.customer_code ?? "").toLowerCase().includes(s) ||
       (g.full_name ?? "").toLowerCase().includes(s) ||
-      (g.phone ?? "").toLowerCase().includes(s)
+      (g.phone ?? "").toLowerCase().includes(s) || (g.batch_name ?? "").toLowerCase().includes(s) || (g.batch_no ?? "").toLowerCase().includes(s)
     );
   });
 
@@ -51,10 +52,12 @@ function DeliveryQueuePage() {
 
   const onDispatchAll = async (g: any) => {
     if (!g.customer_user_id && !g.customer_code) return;
-    if (!window.confirm(`将客户 ${g.customer_code ?? ""} 的 ${g.count} 项标记为已派送？`)) return;
+    if (!window.confirm(`将客户 ${g.customer_code ?? ""} 在批次 ${g.batch_name} 的 ${g.count} 项标记为已派送？`)) return;
     await bulkUpdate({
       data: {
         customerUserId: g.customer_user_id,
+        ids: g.ids,
+        batchId: g.batch_id,
         customerCode: g.customer_user_id ? null : g.customer_code,
         status: "dispatched",
       },
@@ -63,10 +66,12 @@ function DeliveryQueuePage() {
   };
 
   const onCancelAll = async (g: any) => {
-    if (!window.confirm(`取消客户 ${g.customer_code ?? ""} 全部 ${g.count} 项待派送？`)) return;
+    if (!window.confirm(`取消客户 ${g.customer_code ?? ""} 在批次 ${g.batch_name} 的 ${g.count} 项待派送？`)) return;
     await bulkUpdate({
       data: {
         customerUserId: g.customer_user_id,
+        ids: g.ids,
+        batchId: g.batch_id,
         customerCode: g.customer_user_id ? null : g.customer_code,
         status: "cancelled",
       },
@@ -99,7 +104,7 @@ function DeliveryQueuePage() {
   return (
     <Page
       title="待派送列表"
-      subtitle={`${groups.length} 个客户 · 共 ${totals.count} 项 · 总重 ${totals.weight.toFixed(2)} kg · 总费用 ${fmtCNY(totals.fee)}`}
+      subtitle={`${new Set(groups.map((g: any) => g.customer_user_id || g.customer_code)).size} 个客户 · ${groups.length} 个客户批次 · 共 ${totals.count} 个派送单位`}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-400">状态：</span>
@@ -115,21 +120,24 @@ function DeliveryQueuePage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索客户号 / 姓名 / 电话"
+          placeholder="搜索客户号 / 姓名 / 电话 / 批次"
           className="ml-3 w-64 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs placeholder:text-slate-500 focus:border-brand focus:outline-none"
         />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
+      <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <table className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-2.5">客户号</th>
-              <th className="px-4 py-2.5 text-center">待派送单数</th>
+              <th className="px-4 py-2.5">批次 / 付款</th>
+              <th className="px-4 py-2.5 text-center">派送单位</th>
               <th className="px-4 py-2.5">地址</th>
               <th className="px-4 py-2.5">电话</th>
-              <th className="px-4 py-2.5 text-right">重量 (kg)</th>
-              <th className="px-4 py-2.5 text-right">费用</th>
+              <th className="px-4 py-2.5 text-right">批次计费重量 (kg)</th>
+              <th className="px-4 py-2.5 text-right">批次总费用 (CAD)</th>
+              <th className="px-4 py-2.5 text-right">额外费用</th>
+              <th className="px-4 py-2.5">结算备注</th>
               <th className="px-4 py-2.5">加入时间</th>
               <th className="px-4 py-2.5 text-right">操作</th>
             </tr>
@@ -137,14 +145,15 @@ function DeliveryQueuePage() {
           <tbody className="divide-y divide-white/5">
             {q.isLoading && (
               <tr>
-                <td colSpan={8} className="py-10 text-center">
+                <td colSpan={11} className="py-10 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500" />
                 </td>
               </tr>
             )}
-            {!q.isLoading && groups.length === 0 && (
+            {q.isError && <tr><td colSpan={11} className="p-4 text-rose-300">{q.error.message}</td></tr>}
+            {!q.isLoading && !q.isError && groups.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-10 text-center text-slate-500">
+                <td colSpan={11} className="py-10 text-center text-slate-500">
                   暂无
                 </td>
               </tr>
@@ -160,13 +169,20 @@ function DeliveryQueuePage() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-center text-sm font-semibold text-brand">{g.count}</td>
+                <td className="px-4 py-3 text-xs min-w-40">
+                  {g.batch_id ? <Link to="/admin/batches/$batchId" params={{batchId:g.batch_id}} className="text-brand">{g.batch_name}</Link> : '未关联批次'}
+                  <div className="text-[10px] text-slate-500">{g.batch_no}</div>
+                  <div className={g.payment_label === '已付款' ? 'mt-1 text-emerald-300' : 'mt-1 text-amber-300'}>{g.payment_label}</div>
+                </td>
+                <td className="px-4 py-3 text-center text-xs whitespace-nowrap"><strong className="text-brand">{g.count}</strong><div className="mt-1 text-slate-400">独立运单 {g.waybill_count}<br/>客户箱 {g.carton_count} · 客户托盘 {g.pallet_count}</div></td>
                 <td className="px-4 py-3 text-xs text-slate-300 max-w-xs">
                   {g.address || <span className="text-slate-500">—</span>}
                 </td>
                 <td className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>
-                <td className="px-4 py-3 text-right text-xs">{Number(g.weight_kg).toFixed(2)}</td>
+                <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
+                <td className="px-4 py-3 text-right text-xs">{g.total_cad == null ? '待确认' : 'CAD ' + Number(g.total_cad).toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-xs">{fmtCNY(g.fee_cny)}</td>
+                <td className="px-4 py-3">{g.batch_id && g.customer_code ? <BatchCustomerNote batchId={g.batch_id} customerCode={g.customer_code}/> : '—'}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{fmtDate(g.earliest_at)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex flex-wrap justify-end gap-1">
@@ -190,14 +206,15 @@ function DeliveryQueuePage() {
                     )}
                     <button
                       onClick={() => onDeduct(g)}
-                      title="扣款"
+                      title="额外费用扣款"
                       className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/20"
                     >
-                      <Wallet className="inline h-3 w-3" /> 扣款
+                      <Wallet className="inline h-3 w-3" /> 额外扣款
                     </button>
                     <Link
                       to="/admin/delivery-queue/$customerKey"
                       params={{ customerKey: g.customer_user_id || `code:${g.customer_code ?? "unknown"}` }}
+                      search={{batchId:g.batch_id || "unassigned"}}
                       className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-2 py-1 text-[11px] text-brand hover:bg-brand/20"
                     >
                       <Truck className="h-3 w-3" /> 详情 <ArrowRight className="h-3 w-3" />

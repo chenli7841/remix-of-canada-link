@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { groupDeliveryUnits, deliverySettlementSummary } from "@/lib/delivery-summary";
 import { getFxCadPerCny } from "@/lib/orders.functions";
 
 async function assertStaff(supabase: any, userId: string) {
@@ -20,6 +21,21 @@ async function logAction(admin: any, userId: string, action: string, entityId: s
   } catch {
     /* ignore log failure */
   }
+}
+
+async function readDeliveryRows(admin: any, table: string, fields: string, column?: string, ids?: string[], status?: string) {
+  const rows: any[] = [];
+  const chunks = ids ? Array.from({length: Math.ceil(ids.length / 100)}, (_, i) => ids.slice(i*100, i*100+100)) : [null];
+  for (const chunk of chunks) for (let offset = 0; ; offset += 500) {
+    let q = admin.from(table).select(fields).order('id').range(offset, offset+499);
+    if (chunk && column) q = q.in(column, chunk);
+    if (status) q = q.eq('status', status);
+    const result = await q;
+    if (result.error) throw new Error('派送资料读取失败：' + result.error.message);
+    rows.push(...(result.data ?? []));
+    if ((result.data ?? []).length < 500) break;
+  }
+  return rows;
 }
 
 // ===== List delivery queue =====
@@ -58,22 +74,17 @@ export const prepareDelivery = createServerFn({ method: "POST" })
 
     const batchId = recv.batch_id;
 
-    // Pull batch contents
-    const [{ data: pallets }, { data: cartons }, { data: waybills }] = await Promise.all([
-      supabaseAdmin.from("pallets").select("id, pallet_no, customer_user_id, customer_code").eq("batch_id", batchId),
-      supabaseAdmin
-        .from("cartons")
-        .select("id, carton_no, pallet_id, customer_user_id, customer_code")
-        .eq("batch_id", batchId),
-      supabaseAdmin
-        .from("waybills")
-        .select("id, waybill_no, user_id, carton_id, pallet_id")
-        .eq("assigned_batch_id", batchId),
+    const { loadReceivingContents } = await import('./receiving-bulk.server');
+    const contents = await loadReceivingContents(supabaseAdmin, batchId);
+    const [pallets, cartons, waybills] = await Promise.all([
+      readDeliveryRows(supabaseAdmin, 'pallets', 'id,pallet_no,customer_user_id,customer_code', 'id', contents.pallets.map(p=>p.id)),
+      readDeliveryRows(supabaseAdmin, 'cartons', 'id,carton_no,pallet_id,customer_user_id,customer_code', 'id', contents.cartons.map(c=>c.id)),
+      readDeliveryRows(supabaseAdmin, 'waybills', 'id,waybill_no,user_id,carton_id,pallet_id', 'id', contents.waybills.map(w=>w.id)),
     ]);
 
     // 客户号 = customer_code 非空
-    const palletsCust = (pallets ?? []).filter((p) => p.customer_code);
-    const cartonsCust = (cartons ?? []).filter((c) => c.customer_code);
+    const palletsCust = (pallets ?? []).filter((p) => p.customer_code?.trim());
+    const cartonsCust = (cartons ?? []).filter((c) => c.customer_code?.trim() && !palletsCust.some(p => p.id === c.pallet_id));
 
     // 排除：在 (有客户号箱号) 内 或 (有客户号托盘) 内 的运单
     const custCartonIds = new Set(cartonsCust.map((c) => c.id));
@@ -221,34 +232,18 @@ export const removeDeliveryQueueItem = createServerFn({ method: "POST" })
 // ============================================================
 // Helpers to hydrate per-item weight/dims/fee
 // ============================================================
-async function hydrateItems(admin: any, items: any[]) {
+async function hydrateItems(admin: any, items: any[], fx: number) {
   const waybillIds = items.filter((i) => i.kind === "waybill").map((i) => i.ref_id);
   const cartonIds = items.filter((i) => i.kind === "carton").map((i) => i.ref_id);
   const palletIds = items.filter((i) => i.kind === "pallet").map((i) => i.ref_id);
 
-  const [wRes, cRes, pRes] = await Promise.all([
-    waybillIds.length
-      ? admin
-          .from("waybills")
-          .select("id, waybill_no, weight_kg, length_cm, width_cm, height_cm, freight_cad, order_id, user_id")
-          .in("id", waybillIds)
-      : Promise.resolve({ data: [] as any[] }),
-    cartonIds.length
-      ? admin
-          .from("cartons")
-          .select("id, carton_no, weight_kg, length_cm, width_cm, height_cm, self_freight_cny")
-          .in("id", cartonIds)
-      : Promise.resolve({ data: [] as any[] }),
-    palletIds.length
-      ? admin
-          .from("pallets")
-          .select("id, pallet_no, weight_kg, length_cm, width_cm, height_cm, self_freight_cny")
-          .in("id", palletIds)
-      : Promise.resolve({ data: [] as any[] }),
+  const wRows = await readDeliveryRows(admin, 'waybills', 'id,waybill_no,weight_kg,length_cm,width_cm,height_cm,freight_cad,order_id,user_id,carton_id,pallet_id', 'id', [...new Set(waybillIds)]);
+  const allCartonIds = [...new Set([...cartonIds, ...wRows.map(w=>w.carton_id).filter(Boolean)])];
+  const [cRows, pRows] = await Promise.all([
+    readDeliveryRows(admin, 'cartons', 'id,carton_no,weight_kg,length_cm,width_cm,height_cm,self_freight_cny,pallet_id', 'id', allCartonIds),
+    readDeliveryRows(admin, 'pallets', 'id,pallet_no,weight_kg,length_cm,width_cm,height_cm,self_freight_cny', 'id', [...new Set(palletIds)]),
   ]);
-  const wMap = new Map((wRes.data ?? []).map((r: any) => [r.id, r]));
-  const cMap = new Map((cRes.data ?? []).map((r: any) => [r.id, r]));
-  const pMap = new Map((pRes.data ?? []).map((r: any) => [r.id, r]));
+  const wMap = new Map(wRows.map(r=>[r.id,r])), cMap = new Map(cRows.map(r=>[r.id,r])), pMap = new Map(pRows.map(r=>[r.id,r]));
 
   return items.map((it: any) => {
     const src =
@@ -256,6 +251,8 @@ async function hydrateItems(admin: any, items: any[]) {
     const s: any = src ?? {};
     return {
       ...it,
+      carton_id: s.carton_id ?? null,
+      pallet_id: s.pallet_id ?? cMap.get(s.carton_id)?.pallet_id ?? null,
       weight_kg: s.weight_kg != null ? Number(s.weight_kg) : 0,
       length_cm: s.length_cm != null ? Number(s.length_cm) : null,
       width_cm: s.width_cm != null ? Number(s.width_cm) : null,
@@ -263,7 +260,7 @@ async function hydrateItems(admin: any, items: any[]) {
       fee_cny:
         it.kind === "waybill"
           ? s.freight_cad != null
-            ? Number(s.freight_cad)
+            ? Number(s.freight_cad) / fx
             : 0
           : s.self_freight_cny != null
             ? Number(s.self_freight_cny)
@@ -284,37 +281,19 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const fx = await getFxCadPerCny(supabaseAdmin);
 
-    let q = supabaseAdmin.from("delivery_queue").select("*").order("created_at", { ascending: false }).limit(2000);
-    if (data.status) q = q.eq("status", data.status);
-    else q = q.eq("status", "pending");
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-
-    const items = await hydrateItems(supabaseAdmin, rows ?? []);
-
-    // group by customer_user_id (fallback customer_code)
-    const groups = new Map<string, any>();
-    for (const it of items) {
-      const key = it.customer_user_id || `code:${it.customer_code || "unknown"}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          key,
-          customer_user_id: it.customer_user_id ?? null,
-          customer_code: it.customer_code ?? null,
-          count: 0,
-          weight_kg: 0,
-          fee_cny: 0,
-          earliest_at: it.created_at,
-          latest_at: it.created_at,
-        });
-      }
-      const g = groups.get(key);
-      g.count += 1;
-      g.weight_kg += Number(it.weight_kg || 0);
-      g.fee_cny += Number(it.fee_cny || 0);
-      if (it.created_at < g.earliest_at) g.earliest_at = it.created_at;
-      if (it.created_at > g.latest_at) g.latest_at = it.created_at;
-    }
+    const rows = await readDeliveryRows(supabaseAdmin, 'delivery_queue', '*', undefined, undefined, data.status || 'pending');
+    const unresolvedCodes = [...new Set(rows.filter(r=>!r.customer_user_id && r.customer_code).map(r=>r.customer_code))];
+    const profilesByCode = await readDeliveryRows(supabaseAdmin, 'profiles', 'id,customer_code', 'customer_code', unresolvedCodes);
+    const userByCode = new Map(profilesByCode.map(p=>[p.customer_code,p.id]));
+    const items = await hydrateItems(supabaseAdmin, rows.map(r=>({...r,customer_user_id:r.customer_user_id || userByCode.get(r.customer_code) || null})), fx);
+    const groups = groupDeliveryUnits(items);
+    const batchIds = [...new Set(items.map(it=>it.source_batch_id).filter(Boolean))];
+    const [batches, settlements] = await Promise.all([
+      readDeliveryRows(supabaseAdmin, 'batches', 'id,batch_no,display_name,fees_dirty_at', 'id', batchIds),
+      readDeliveryRows(supabaseAdmin, 'batch_settlements', '*', 'batch_id', batchIds),
+    ]);
+    const batchMap = new Map(batches.map(b=>[b.id,b]));
+    const settlementMap = new Map(settlements.map(st=>[st.batch_id + ':' + st.customer_code,st]));
 
     // Enrich with profile / default address / wallet
     const userIds = Array.from(groups.values())
@@ -324,18 +303,11 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
     let addrMap = new Map<string, any>();
     let walletMap = new Map<string, any>();
     if (userIds.length) {
-      const [{ data: profs }, { data: addrs }, { data: wals }] = await Promise.all([
-        supabaseAdmin
-          .from("profiles")
-          .select(
-            "id, full_name, phone, reg_phone, reg_address, reg_city, reg_province, reg_country, reg_postal_code, customer_code",
-          )
-          .in("id", userIds),
-        supabaseAdmin
-          .from("addresses")
-          .select("user_id, recipient, phone, line1, line2, city, province, country, postal_code, is_default")
-          .in("user_id", userIds),
-        supabaseAdmin.from("wallets").select("user_id, balance_cad").in("user_id", userIds),
+      const [profs, addrs, wals] = await Promise.all([
+        readDeliveryRows(supabaseAdmin, 'profiles', 'id,full_name,phone,reg_phone,reg_address,reg_city,reg_province,reg_country,reg_postal_code,customer_code', 'id', userIds),
+        readDeliveryRows(supabaseAdmin, 'addresses', 'id,user_id,recipient,phone,line1,line2,city,province,country,postal_code,is_default', 'user_id', userIds),
+        // wallets are keyed by user_id rather than id, so read them without the pagination helper.
+        supabaseAdmin.from('wallets').select('user_id,balance_cad').in('user_id', userIds).then(r=>{if(r.error)throw new Error('客户余额读取失败');return r.data ?? [];}),
       ]);
       profileMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       for (const a of addrs ?? []) {
@@ -358,6 +330,9 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
         const phone = a?.phone || p?.phone || p?.reg_phone || null;
         return {
           ...g,
+          batch_name: batchMap.get(g.batch_id)?.display_name || batchMap.get(g.batch_id)?.batch_no || '未关联批次',
+          batch_no: batchMap.get(g.batch_id)?.batch_no ?? '',
+          ...deliverySettlementSummary(settlementMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)), batchMap.get(g.batch_id)),
           fee_cad: +(g.fee_cny * fx).toFixed(2),
           customer_code: g.customer_code || p?.customer_code || null,
           full_name: p?.full_name || (a?.recipient ?? null),
@@ -376,7 +351,7 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
 // ============================================================
 export const getCustomerDelivery = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { customerUserId?: string | null; customerCode?: string | null }) => d)
+  .inputValidator((d: { customerUserId?: string | null; customerCode?: string | null; batchId?: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -390,10 +365,11 @@ export const getCustomerDelivery = createServerFn({ method: "GET" })
     if (data.customerUserId) q = q.eq("customer_user_id", data.customerUserId);
     else if (data.customerCode) q = q.eq("customer_code", data.customerCode);
     else throw new Error("缺少客户标识");
+    if (data.batchId) q = data.batchId === 'unassigned' ? q.is('source_batch_id', null) : q.eq('source_batch_id', data.batchId);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
-    const items = await hydrateItems(supabaseAdmin, rows ?? []);
+    const items = await hydrateItems(supabaseAdmin, rows ?? [], fx);
 
     let profile: any = null;
     let address: any = null;
@@ -494,6 +470,7 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
       customerCode?: string | null;
       status: "dispatched" | "cancelled" | "pending";
       ids?: string[];
+      batchId?: string | null;
     }) => d,
   )
   .handler(async ({ data, context }) => {
@@ -510,6 +487,7 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
       else if (data.customerCode) q = q.eq("customer_code", data.customerCode);
       else throw new Error("缺少目标");
     }
+    if (data.batchId !== undefined) q = data.batchId ? q.eq('source_batch_id', data.batchId) : q.is('source_batch_id', null);
     const { error } = await q;
     if (error) throw new Error(error.message);
 

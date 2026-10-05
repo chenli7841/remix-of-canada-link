@@ -1,3 +1,4 @@
+import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -882,6 +883,7 @@ function BatchDetail() {
                   <th className="text-right">小计 CA$</th>
                   <th className="text-center">付款</th>
                   <th className="text-right">余额 CA$</th>
+                  <th>结算备注</th>
                   <th className="text-center">操作</th>
                   <th></th>
                 </tr>
@@ -889,7 +891,7 @@ function BatchDetail() {
               <tbody className="divide-y divide-white/5">
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="py-6 text-center text-xs text-slate-500">
+                    <td colSpan={12} className="py-6 text-center text-xs text-slate-500">
                       没有匹配的客户号
                     </td>
                   </tr>
@@ -934,6 +936,7 @@ function BatchDetail() {
                     <td className="text-right text-xs font-mono text-slate-200">
                       {c.user_id ? Number(c.balance_cad ?? 0).toFixed(2) : "—"}
                     </td>
+                    <td className="px-2 py-2"><BatchCustomerNote batchId={batchId} customerCode={c.customer_code} readOnly={!canEdit}/></td>
                     <td className="text-center" onClick={(e) => e.stopPropagation()}>
                       {canEdit && c.user_id ? (
                         <button

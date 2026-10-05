@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/delivery-queue/$customerKey")({
+  validateSearch: (search: Record<string, unknown>): { batchId?: string } => ({ batchId: typeof search.batchId === 'string' ? search.batchId : undefined }),
   component: CustomerDeliveryDetail,
 });
 
@@ -40,6 +41,7 @@ const KIND_ICON: Record<string, any> = { waybill: Truck, carton: Package, pallet
 
 function CustomerDeliveryDetail() {
   const { customerKey } = Route.useParams();
+  const { batchId } = Route.useSearch();
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getCustomerDelivery);
   const bulkUpdate = useServerFn(bulkUpdateCustomerDelivery);
@@ -54,11 +56,11 @@ function CustomerDeliveryDetail() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const q = useQuery({
-    queryKey: ["delivery-queue-customer", customerKey],
-    queryFn: () => fetchDetail({ data: { customerUserId, customerCode } }),
+    queryKey: ["delivery-queue-customer", customerKey, batchId],
+    queryFn: () => fetchDetail({ data: { customerUserId, customerCode, batchId } }),
   });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-customer", customerKey] });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-customer", customerKey, batchId] });
 
   const items: any[] = q.data?.items ?? [];
   const profile = q.data?.profile;
@@ -90,10 +92,10 @@ function CustomerDeliveryDetail() {
     );
 
   const onBulk = async (status: "dispatched" | "cancelled") => {
-    const ids = Array.from(selected);
+    const ids = Array.from(selected).filter(id=>items.some(i=>i.id===id && i.status === "pending"));
     if (!ids.length) return alert("请先选择项");
     if (!window.confirm(`确认将 ${ids.length} 项标记为 ${STATUS_LABEL[status]}？`)) return;
-    await bulkUpdate({ data: { customerUserId, customerCode, status, ids } });
+    await bulkUpdate({ data: { customerUserId, customerCode, status, ids, ...(batchId ? {batchId: batchId === "unassigned" ? null : batchId} : {}) } });
     setSelected(new Set());
     await refresh();
   };
@@ -105,7 +107,7 @@ function CustomerDeliveryDetail() {
 
   const onDeduct = async () => {
     if (!customerUserId) return alert("该客户未注册账号，无法扣款");
-    const ids = Array.from(selected);
+    const ids = Array.from(selected).filter(id=>items.some(i=>i.id===id && i.status === "pending"));
     const selectedFee = items.filter((i) => ids.includes(i.id)).reduce((s, i) => s + Number(i.fee_cny || 0), 0);
     const suggestedCad = (selectedFee > 0 ? selectedFee : totals.fee) * fx;
     const input = window.prompt(

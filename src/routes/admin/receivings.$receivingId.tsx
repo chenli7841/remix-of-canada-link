@@ -71,6 +71,18 @@ function ReceivingDetail() {
   const [code, setCode] = useState("");
   const [log, setLog] = useState<{ time: string; code: string; ok: boolean; info: string; extra?: boolean }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [confirmPhase, setConfirmPhase] = useState<'idle' | 'processing' | 'refreshing' | 'success' | 'error'>('idle');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmSeconds, setConfirmSeconds] = useState(0);
+  const confirmInFlight = useRef(false);
+  const confirming = confirmPhase === 'processing' || confirmPhase === 'refreshing';
+  useEffect(() => {
+    if (!confirming) return;
+    const started = Date.now();
+    setConfirmSeconds(0);
+    const timer = window.setInterval(() => setConfirmSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [confirming]);
   const [showMatch, setShowMatch] = useState(false);
   const [pickBatchId, setPickBatchId] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +136,7 @@ function ReceivingDetail() {
   };
 
   const onConfirm = async () => {
+    if (busy || isFinal || confirmInFlight.current) return;
     if (!r.batch_id) { alert("请先匹配批次"); return; }
     const hasMissing = diff.missing_waybills.length || diff.missing_cartons.length || diff.missing_pallets.length;
     const hasPendingSecondary = secondary.pending_count > 0;
@@ -136,12 +149,24 @@ function ReceivingDetail() {
     } else {
       if (!window.confirm("确认完成收货？将自动把批次和所有运单标记为已到件并更新轨迹。")) return;
     }
+    confirmInFlight.current = true;
     setBusy(true);
+    setConfirmPhase('processing');
+    setConfirmMessage('正在确认到件并更新运单轨迹，请勿重复操作或关闭页面。');
     try {
       const res = await confirm({ data: { receivingId } });
-      alert(`已确认收货：更新 ${res.waybills_updated} 单`);
+      setConfirmPhase('refreshing');
+      setConfirmMessage('到件处理已完成，正在刷新收货状态…');
       await refresh();
-    } catch (e: any) { alert(e.message); } finally { setBusy(false); }
+      setConfirmMessage('已确认收货：更新 ' + res.waybills_updated + ' 单。');
+      setConfirmPhase('success');
+    } catch (e: any) {
+      setConfirmMessage('未能确认处理结果：' + (e.message || '请求失败') + '。请先刷新核实收货状态，再决定是否重试。');
+      setConfirmPhase('error');
+    } finally {
+      confirmInFlight.current = false;
+      setBusy(false);
+    }
   };
 
   const onMatch = async () => {
@@ -207,11 +232,26 @@ function ReceivingDetail() {
           {!isFinal && (
             <button onClick={onConfirm} disabled={busy || !r.batch_id}
               className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-              <PackageCheck className="h-3.5 w-3.5" />确认到件
+              {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackageCheck className="h-3.5 w-3.5" />}
+              {confirming ? '正在确认到件…' : '确认到件'}
             </button>
           )}
         </div>
       </div>
+
+      {confirmPhase !== 'idle' && (
+        <div role={confirmPhase === 'error' ? 'alert' : 'status'} aria-live="polite" aria-busy={confirming}
+          className={`rounded-xl border p-4 ${confirmPhase === 'error' ? 'border-rose-500/30 bg-rose-500/10 text-rose-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : confirmPhase === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {confirmMessage}
+          </div>
+          {confirming && <>
+            <progress aria-label="确认到件处理中" className="mt-3 h-2 w-full overflow-hidden rounded-full accent-emerald-500" />
+            <p className="mt-2 text-xs text-slate-300">已等待 {confirmSeconds} 秒 · 运单较多时需要更长时间，请耐心等待。</p>
+          </>}
+        </div>
+      )}
 
       {/* Matched batch summary */}
       <Card title="匹配批次">
@@ -334,14 +374,14 @@ function ReceivingDetail() {
       {/* Scan detail — horizontal split */}
       <Card title={`扫描明细 (${scans.length})`}>
         <div className="grid gap-3 lg:grid-cols-3">
-          <ScanCol kind="waybill" title="直挂运单" scans={scans} isFinal={isFinal} onRemove={onRemove} />
+          <ScanCol kind="waybill" title="直挂运单" scans={scans} isFinal={isFinal || busy} onRemove={onRemove} />
           <ScanCol kind="carton" title="直挂箱号" scans={scans} isFinal={isFinal} onRemove={onRemove} />
           <ScanCol kind="pallet" title="直挂托盘号" scans={scans} isFinal={isFinal} onRemove={onRemove} />
         </div>
       </Card>
 
       <Card title="备注">
-        <NotesEditor initial={r.notes ?? ""} disabled={isFinal} onSave={onSaveNotes} />
+        <NotesEditor initial={r.notes ?? ""} disabled={isFinal || busy} onSave={onSaveNotes} />
       </Card>
 
       {showMatch && (
