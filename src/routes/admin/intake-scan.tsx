@@ -1,3 +1,4 @@
+import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -192,6 +193,7 @@ function IntakeScanPage() {
           </div>
           {msg && <div className={`mt-2 text-sm ${msg.ok ? "text-emerald-300" : "text-rose-300"}`}>{msg.text}</div>}
         </form>
+        <CameraScanButton disabled={busy} onScan={setCode} />
 
         <InventoryIntakePanel beforeReceive={async(id,number)=>{setBusy(true);try{return await checkReminder('forwarding',id,number);}finally{setBusy(false);}}} />
 

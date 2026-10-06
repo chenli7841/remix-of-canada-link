@@ -1,3 +1,4 @@
+import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, useEffect } from "react";
@@ -71,6 +72,7 @@ export function ScanAddDialog({
             确认加入
           </button>
         </form>
+        <CameraScanButton disabled={busy} onScan={setCode} />
         <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-white/5 bg-white/[0.02] p-2">
           {log.length === 0 ? <div className="py-4 text-center text-xs text-slate-500">扫描记录将在这里实时显示</div> :
             <ul className="space-y-1">

@@ -1,7 +1,8 @@
+import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyRoles, type AppRole } from "@/lib/admin.functions";
 import { listNavItems } from "@/lib/admin-nav.functions";
@@ -39,6 +40,7 @@ import {
   Bot,
   Wallet,
   KeyRound,
+  Menu,
   Megaphone,
 } from "lucide-react";
 
@@ -187,10 +189,19 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
 function AdminLayout() {
   const { user, signOut } = useAuth();
   const company = useCompanyInfo();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const fetchRoles = useServerFn(getMyRoles);
   const fetchNavItems = useServerFn(listNavItems);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const closeOnDesktop = () => { if (desktop.matches) setMobileMenuOpen(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
+
 
   // Roles and the nav config barely change during a session — cache them for
   // the whole session so every admin page navigation stops re-fetching them.
@@ -288,24 +299,7 @@ function AdminLayout() {
   }
   if (!hasConsoleAccess) return <Outlet />;
 
-  return (
-    <div className="flex min-h-screen w-full bg-[#0B1220] text-slate-100">
-      {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-[#0A0F1A] md:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-white/5 px-4">
-          {company.logo_url ? (
-            <img src={company.logo_url} alt={company.name} className="h-7 w-7 shrink-0 rounded-md object-cover" />
-          ) : (
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gradient-to-br from-brand to-cta font-display text-xs font-bold text-white">
-              {(company.name || "SC").slice(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold leading-tight">{company.name}</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400">Admin Console</div>
-          </div>
-        </div>
-        <nav className="flex-1 space-y-2 overflow-y-auto p-2">
+  const navigation = (<nav className="flex-1 space-y-2 min-h-0 overflow-y-auto overscroll-contain p-2">
           {visibleGroups.map((group, gi) => (
             <div key={gi}>
               {group.title && (
@@ -320,7 +314,7 @@ function AdminLayout() {
                       ? pathname === "/admin"
                       : pathname === item.to || pathname.startsWith(item.to + "/");
                   const cls = [
-                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition",
+                    "flex items-center gap-2.5 min-h-11 rounded-md px-3 py-2 text-sm transition",
                     active ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white",
                     item.soon ? "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-slate-300" : "",
                   ].join(" ");
@@ -338,7 +332,7 @@ function AdminLayout() {
                       </div>
                     );
                   return (
-                    <Link key={`${gi}-${item.to}-${item.label}`} to={item.to as any} className={cls}>
+                    <Link key={`${gi}-${item.to}-${item.label}`} to={item.to as any} onClick={() => setMobileMenuOpen(false)} aria-current={active ? "page" : undefined} className={cls}>
                       {inner}
                     </Link>
                   );
@@ -346,15 +340,44 @@ function AdminLayout() {
               </div>
             </div>
           ))}
-        </nav>
+        </nav>);
+
+  return (
+    <div className="flex min-h-screen w-full bg-[#0B1220] text-slate-100">
+      {/* Sidebar */}
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-[#0A0F1A] md:flex">
+        <div className="flex h-14 items-center gap-2 border-b border-white/5 px-4">
+          {company.logo_url ? (
+            <img src={company.logo_url} alt={company.name} className="h-7 w-7 shrink-0 rounded-md object-cover" />
+          ) : (
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gradient-to-br from-brand to-cta font-display text-xs font-bold text-white">
+              {(company.name || "SC").slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold leading-tight">{company.name}</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">Admin Console</div>
+          </div>
+        </div>
+        {navigation}
 
         <div className="border-t border-white/5 p-3 text-[11px] text-slate-500">v1 · Stage A</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex h-14 items-center gap-3 border-b border-white/5 bg-[#0A0F1A] px-4">
-          <div className="md:hidden font-display text-sm font-bold">{company.name} Admin</div>
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-white/5 bg-[#0A0F1A] px-4">
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild><button type="button" aria-label="打开功能菜单" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg border border-white/10 px-3 text-sm md:hidden"><Menu className="h-5 w-5" />菜单</button></SheetTrigger>
+            <SheetContent side="left" className="flex h-dvh w-[85vw] max-w-80 flex-col gap-0 border-white/10 bg-[#0A0F1A] p-0 text-slate-100">
+              <div className="shrink-0 border-b border-white/10 p-4 pr-12">
+                <SheetTitle className="text-slate-100">{company.name} 后台菜单</SheetTitle>
+                <SheetDescription className="mt-1 text-xs text-slate-400">选择需要操作的功能</SheetDescription>
+              </div>
+              {navigation}
+            </SheetContent>
+          </Sheet>
+          <div className="min-w-0 truncate font-display text-sm font-bold md:hidden">{company.name}</div>
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden flex-wrap items-center gap-1 sm:flex">
               {roles
@@ -369,7 +392,7 @@ function AdminLayout() {
                   </span>
                 ))}
             </div>
-            <div className="text-xs text-slate-400">{user?.email}</div>
+            <div className="hidden text-xs text-slate-400 sm:block">{user?.email}</div>
             <Link
               to="/account"
               className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5"

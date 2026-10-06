@@ -283,6 +283,30 @@ function SystemPage() {
       </div>
 
       <div className="space-y-5">
+        <Card title="常用页面入口">
+          <div className="space-y-4">
+            {[
+              { label: "同行报价", url: "https://shopper.epluscanada.com/partner-shipping", description: "同行查询报价与下单入口" },
+              { label: "司机登录", url: "https://shopper.epluscanada.com/driver", description: "司机专用页面，支持 Google 或账号密码登录，需要司机角色" },
+            ].map(({ label, url, description }) => (
+              <div key={url} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <h3 className="text-sm font-semibold text-slate-100">{label}</h3>
+                <p className="mt-1 text-xs text-slate-400">{description}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input aria-label={`${label}网址`} readOnly value={url} onFocus={(e) => e.currentTarget.select()}
+                    className="min-w-0 w-full flex-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-blue-300 sm:w-auto" />
+                  <a href={url} target="_blank" rel="noopener noreferrer"
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-500">打开页面</a>
+                  <button type="button" className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+                    onClick={async () => {
+                      try { await navigator.clipboard.writeText(url); toast.success(`${label}网址已复制`); }
+                      catch { toast.error("复制失败，请选中网址手动复制"); }
+                    }}>复制网址</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
         {/* Company */}
         <Card title="公司基本信息">
           <Grid>

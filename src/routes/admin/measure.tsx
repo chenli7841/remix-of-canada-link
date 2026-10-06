@@ -1,3 +1,4 @@
+import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -218,6 +219,7 @@ function MeasurePage() {
           </div>
           {msg && <div className={`mt-2 text-sm ${msg.ok ? "text-emerald-300" : "text-rose-300"}`}>{msg.text}</div>}
         </form>
+        <CameraScanButton disabled={busy} onScan={setCode} />
 
         {parent && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">

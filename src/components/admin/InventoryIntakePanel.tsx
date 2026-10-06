@@ -1,3 +1,4 @@
+import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -162,6 +163,7 @@ function OrderCard({ order, onDone, beforeReceive }: { order: any; onDone: () =>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
         </button>
       </form>
+      <CameraScanButton disabled={busy} onScan={setCode} />
 
       {msg && (
         <div className={`inline-flex items-start gap-1.5 text-xs ${msg.ok ? "text-emerald-300" : "text-rose-300"}`}>

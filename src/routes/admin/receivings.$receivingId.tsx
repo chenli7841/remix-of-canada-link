@@ -1,3 +1,4 @@
+import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -283,6 +284,7 @@ function ReceivingDetail() {
                   确认加入
                 </button>
               </form>
+        <CameraScanButton disabled={busy} onScan={setCode} />
               <p className="mt-1.5 text-[11px] text-slate-500">扫描箱号/托盘号仅确认外层；内部明细需进入下方「待二次扫描确认」逐件再次扫描。</p>
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                 <button type="button" onClick={onMatchAll} disabled={busy || !r.batch_id}
