@@ -1,4 +1,5 @@
 import { DeliveryPhotoViewer } from '@/components/admin/DeliveryPhotoViewer';
+import { DeliveryBatchPhotos } from '@/components/admin/DeliveryBatchPhotos';
 import { logActionLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -188,6 +189,10 @@ function CustomerDeliveryDetail() {
 
       </section>
       <DeliveryPhotoViewer items={items}/>
+      {Array.from(new Set(items.filter(it=>it.source_batch_id && it.customer_code).map(it=>it.source_batch_id+':'+it.customer_code))).map(key=>{
+        const [photoBatch,photoCustomer]=key.split(':');
+        return <DeliveryBatchPhotos key={key} batchId={photoBatch} customerCode={photoCustomer}/>;
+      })}
       <details className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <summary className="cursor-pointer text-sm font-semibold">运单列表（{items.length} 项，点击展开）</summary>
       {/* bulk actions */}

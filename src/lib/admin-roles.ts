@@ -27,9 +27,8 @@ export const ASSIGNABLE_ROLES: AppRole[] = [
   "support",
 ];
 
-// Roles allowed into the /admin console. driver/pickup_point don't have a
-// backend console view yet (they'll get their own dedicated page later), so
-// they're deliberately excluded here even though they're staff roles.
+// Drivers use the dedicated /driver portal; pickup points have no console.
+// Both are deliberately excluded here even though they're staff roles.
 export const ADMIN_CONSOLE_ROLES: AppRole[] = [
   "owner",
   "manager",

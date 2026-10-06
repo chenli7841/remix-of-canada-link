@@ -93,7 +93,10 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
 
     const { data, error } = await supabase.auth.getClaims(token);
     if (error || !data?.claims) {
-      throw new Error('Unauthorized: Invalid token');
+      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0)) {
+        throw new Error('暂时无法连接登录服务，请稍后重新验证');
+      }
+      throw new Error('登录状态已失效，请退出后重新登录');
     }
 
     if (!data.claims.sub) {

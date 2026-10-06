@@ -310,10 +310,15 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
   .inputValidator((d: { status?: string } | undefined) => d ?? {})
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
+    return loadDeliveryGroups(data.status || 'pending');
+  });
+
+// Server-only caller must authorize before invoking this shared read model.
+export async function loadDeliveryGroups(status: string, customerCode?: string) {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const fx = await getFxCadPerCny(supabaseAdmin);
 
-    const rows = await readDeliveryRows(supabaseAdmin, 'delivery_queue', '*', undefined, undefined, data.status || 'pending');
+    const rows = await readDeliveryRows(supabaseAdmin, 'delivery_queue', '*', customerCode ? 'customer_code' : undefined, customerCode ? [customerCode] : undefined, status);
     const unresolvedCodes = [...new Set(rows.filter(r=>!r.customer_user_id && r.customer_code).map(r=>r.customer_code))];
     const profilesByCode = await readDeliveryRows(supabaseAdmin, 'profiles', 'id,customer_code', 'customer_code', unresolvedCodes);
     const userByCode = new Map(profilesByCode.map(p=>[p.customer_code,p.id]));
@@ -380,6 +385,7 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
           batch_no: batchMap.get(g.batch_id)?.batch_no ?? '',
           ...deliverySettlementSummary(settlementMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)), batchMap.get(g.batch_id)),
           extra_fee_paid: paidFees.has('delivery-extra:' + g.batch_id + ':' + (g.customer_code || p?.customer_code)),
+          explicit_extra_fee_cny: extraFeeMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) ?? 0,
           fee_cny: feeCny,
           settlement_note: settlementNoteMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) || '',
           fee_cad: +(feeCny * fx).toFixed(2),
@@ -402,7 +408,7 @@ export const listDeliveryByCustomer = createServerFn({ method: "GET" })
       .sort((x, y) => (y.earliest_at || "").localeCompare(x.earliest_at || ""));
 
     return { groups: list, fx };
-  });
+}
 
 // ============================================================
 // Customer detail — items + profile + wallet
