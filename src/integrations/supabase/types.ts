@@ -335,6 +335,41 @@ export type Database = {
         }
         Relationships: []
       }
+      batch_customer_notes: {
+        Row: {
+          batch_id: string
+          customer_code: string
+          extra_fee_cny: number | null
+          note: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          batch_id: string
+          customer_code: string
+          extra_fee_cny?: number | null
+          note?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          batch_id?: string
+          customer_code?: string
+          extra_fee_cny?: number | null
+          note?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_customer_notes_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       batch_settlements: {
         Row: {
           batch_id: string
@@ -963,6 +998,56 @@ export type Database = {
           },
         ]
       }
+      delivery_maps_monthly_usage: {
+        Row: {
+          month: string
+          used: number
+        }
+        Insert: {
+          month: string
+          used?: number
+        }
+        Update: {
+          month?: string
+          used?: number
+        }
+        Relationships: []
+      }
+      delivery_proof_photos: {
+        Row: {
+          batch_id: string
+          created_at: string
+          customer_code: string
+          id: string
+          storage_path: string
+          uploaded_by: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          customer_code: string
+          id: string
+          storage_path: string
+          uploaded_by: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          customer_code?: string
+          id?: string
+          storage_path?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_proof_photos_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_queue: {
         Row: {
           added_by: string | null
@@ -970,7 +1055,10 @@ export type Database = {
           created_at: string
           customer_code: string | null
           customer_user_id: string | null
+          delivery_photo_urls: Json
           dispatched_at: string | null
+          dispatched_by: string | null
+          dispatched_by_name: string | null
           id: string
           kind: string
           notes: string | null
@@ -986,7 +1074,10 @@ export type Database = {
           created_at?: string
           customer_code?: string | null
           customer_user_id?: string | null
+          delivery_photo_urls?: Json
           dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_by_name?: string | null
           id?: string
           kind: string
           notes?: string | null
@@ -1002,7 +1093,10 @@ export type Database = {
           created_at?: string
           customer_code?: string | null
           customer_user_id?: string | null
+          delivery_photo_urls?: Json
           dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_by_name?: string | null
           id?: string
           kind?: string
           notes?: string | null
@@ -1107,6 +1201,21 @@ export type Database = {
           released_at?: string | null
           released_by?: string | null
           status?: string
+        }
+        Relationships: []
+      }
+      domestic_tracking_claims: {
+        Row: {
+          owners: string[]
+          tracking_no: string
+        }
+        Insert: {
+          owners: string[]
+          tracking_no: string
+        }
+        Update: {
+          owners?: string[]
+          tracking_no?: string
         }
         Relationships: []
       }
@@ -1408,6 +1517,9 @@ export type Database = {
           carton_id: string | null
           company_code: string | null
           created_at: string
+          created_by: string | null
+          creation_source: string | null
+          creator_name: string | null
           customer_code: string | null
           customs_cny: number
           declared_value_cad: number | null
@@ -1423,16 +1535,16 @@ export type Database = {
           insured: boolean
           intake_at: string | null
           intake_by: string | null
+          intake_reminder: boolean
           intl_tracking_no: string | null
           items_desc: string | null
           length_cm: number | null
-          intake_reminder: boolean
-          return_reminder: boolean
           note: string | null
           pallet_id: string | null
           pallet_no: string | null
           payment_status: string
           request_no: string | null
+          return_reminder: boolean
           route_code: string | null
           route_id: string | null
           shipping_method: string
@@ -1455,6 +1567,9 @@ export type Database = {
           carton_id?: string | null
           company_code?: string | null
           created_at?: string
+          created_by?: string | null
+          creation_source?: string | null
+          creator_name?: string | null
           customer_code?: string | null
           customs_cny?: number
           declared_value_cad?: number | null
@@ -1470,16 +1585,16 @@ export type Database = {
           insured?: boolean
           intake_at?: string | null
           intake_by?: string | null
+          intake_reminder?: boolean
           intl_tracking_no?: string | null
           items_desc?: string | null
           length_cm?: number | null
-          intake_reminder?: boolean
-          return_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null
           payment_status?: string
           request_no?: string | null
+          return_reminder?: boolean
           route_code?: string | null
           route_id?: string | null
           shipping_method: string
@@ -1502,6 +1617,9 @@ export type Database = {
           carton_id?: string | null
           company_code?: string | null
           created_at?: string
+          created_by?: string | null
+          creation_source?: string | null
+          creator_name?: string | null
           customer_code?: string | null
           customs_cny?: number
           declared_value_cad?: number | null
@@ -1517,16 +1635,16 @@ export type Database = {
           insured?: boolean
           intake_at?: string | null
           intake_by?: string | null
+          intake_reminder?: boolean
           intl_tracking_no?: string | null
           items_desc?: string | null
           length_cm?: number | null
-          intake_reminder?: boolean
-          return_reminder?: boolean
           note?: string | null
           pallet_id?: string | null
           pallet_no?: string | null
           payment_status?: string
           request_no?: string | null
+          return_reminder?: boolean
           route_code?: string | null
           route_id?: string | null
           shipping_method?: string
@@ -2316,8 +2434,8 @@ export type Database = {
           id: string
           insurance_cny: number
           insured: boolean
-          intl_tracking_no: string | null
           intake_reminder: boolean
+          intl_tracking_no: string | null
           note: string | null
           order_no: string
           overridden_by: string | null
@@ -2366,8 +2484,8 @@ export type Database = {
           id?: string
           insurance_cny?: number
           insured?: boolean
-          intl_tracking_no?: string | null
           intake_reminder?: boolean
+          intl_tracking_no?: string | null
           note?: string | null
           order_no: string
           overridden_by?: string | null
@@ -2416,8 +2534,8 @@ export type Database = {
           id?: string
           insurance_cny?: number
           insured?: boolean
-          intl_tracking_no?: string | null
           intake_reminder?: boolean
+          intl_tracking_no?: string | null
           note?: string | null
           order_no?: string
           overridden_by?: string | null
@@ -2822,6 +2940,92 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      partner_quote_routes: {
+        Row: {
+          code: string
+          config: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code: string
+          config: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          config?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      partner_quote_snapshots: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          input: Json
+          result: Json
+          route_id: string
+          route_snapshot: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          input: Json
+          result: Json
+          route_id: string
+          route_snapshot: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input?: Json
+          result?: Json
+          route_id?: string
+          route_snapshot?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_quote_snapshots_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "partner_quote_routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_shipping_settings: {
+        Row: {
+          section: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          section: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          section?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
       }
       product_categories: {
         Row: {
@@ -4294,6 +4498,9 @@ export type Database = {
           clearance_cad: number
           client_package_id: string | null
           created_at: string
+          dispatched_at: string | null
+          dispatched_by: string | null
+          dispatched_by_name: string | null
           duty_cad: number
           eta: string | null
           forwarding_id: string | null
@@ -4329,6 +4536,9 @@ export type Database = {
           clearance_cad?: number
           client_package_id?: string | null
           created_at?: string
+          dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_by_name?: string | null
           duty_cad?: number
           eta?: string | null
           forwarding_id?: string | null
@@ -4364,6 +4574,9 @@ export type Database = {
           clearance_cad?: number
           client_package_id?: string | null
           created_at?: string
+          dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_by_name?: string | null
           duty_cad?: number
           eta?: string | null
           forwarding_id?: string | null
@@ -5548,6 +5761,17 @@ export type Database = {
           }
       confirm_batch_invoice_v2: { Args: { _payload: Json }; Returns: Json }
       current_fx_cny_to_cad: { Args: never; Returns: number }
+      driver_delivery_action: {
+        Args: {
+          _action: string
+          _actor: string
+          _batch: string
+          _customer: string
+          _expected_cad?: number
+          _note?: string
+        }
+        Returns: Json
+      }
       find_by_any_no: { Args: { _input: string }; Returns: Json }
       gen_customer_code: { Args: never; Returns: string }
       gen_short_no: {
@@ -5630,6 +5854,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      reserve_delivery_maps_call: { Args: never; Returns: number }
       reserve_express_shipment: {
         Args: { p_quote: string; p_rate: string; p_user: string }
         Returns: string
@@ -5974,4 +6199,3 @@ export const Constants = {
     },
   },
 } as const
-
