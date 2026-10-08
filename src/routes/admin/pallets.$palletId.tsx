@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -145,7 +146,7 @@ function PalletDetail() {
             <input value={wbSearch} onChange={(e) => setWbSearch(e.target.value)} placeholder="搜索运单号"
               className="mb-3 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"/>
             <div className="max-h-96 overflow-y-auto rounded-lg border border-white/5">
-              <table className="w-full text-sm"><tbody className="divide-y divide-white/5">
+              <ResponsiveTable className="w-full text-sm"><tbody className="divide-y divide-white/5">
                 {wbsQ.data?.waybills.filter((w: any) => w.pallet_id !== palletId).map((w: any) => (
                   <tr key={w.id} className={selectedWb.has(w.id) ? "bg-brand/10" : ""}>
                     <td className="px-2 py-1.5"><input type="checkbox" checked={selectedWb.has(w.id)} onChange={() => { const s = new Set(selectedWb); s.has(w.id) ? s.delete(w.id) : s.add(w.id); setSelectedWb(s); }}/></td>
@@ -153,7 +154,7 @@ function PalletDetail() {
                     <td className="text-xs text-slate-400">{w.pallet_id ? "已在其他托盘" : ""}</td>
                   </tr>
                 ))}
-              </tbody></table>
+              </tbody></ResponsiveTable>
             </div>
             <div className="mt-3 flex justify-end gap-2">
               <button onClick={() => setShowAddWb(false)} className="rounded-md border border-white/10 px-3 py-1.5 text-xs">取消</button>
@@ -175,7 +176,7 @@ function PalletDetail() {
             <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg font-bold">加入箱号</h2>
               <button onClick={() => setShowAssign(false)}><X className="h-4 w-4 text-slate-400"/></button></div>
             <div className="max-h-96 overflow-y-auto rounded-lg border border-white/5">
-              <table className="w-full text-sm"><tbody className="divide-y divide-white/5">
+              <ResponsiveTable className="w-full text-sm"><tbody className="divide-y divide-white/5">
                 {cartonsQ.data?.items.filter((c: any) => c.pallet_id !== palletId).map((c: any) => (
                   <tr key={c.id} className={selected.has(c.id) ? "bg-brand/10" : ""}>
                     <td className="px-2 py-1.5"><input type="checkbox" checked={selected.has(c.id)} onChange={() => { const s = new Set(selected); s.has(c.id) ? s.delete(c.id) : s.add(c.id); setSelected(s); }}/></td>
@@ -183,7 +184,7 @@ function PalletDetail() {
                     <td className="text-xs text-slate-400">{c.pallet_id ? "已在其他托盘" : ""}</td>
                   </tr>
                 ))}
-              </tbody></table>
+              </tbody></ResponsiveTable>
             </div>
             <div className="mt-3 flex justify-end gap-2">
               <button onClick={() => setShowAssign(false)} className="rounded-md border border-white/10 px-3 py-1.5 text-xs">取消</button>

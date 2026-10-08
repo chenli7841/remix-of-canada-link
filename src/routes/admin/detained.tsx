@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -38,7 +39,7 @@ function DetainedPage() {
       </form>
 
       <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr><th className="px-4 py-2.5">国内单号</th><th>客户号</th><th>状态</th><th>登记时间</th><th>登记人</th><th>释放/入库</th><th>释放人</th><th>备注</th></tr>
           </thead>
@@ -62,7 +63,7 @@ function DetainedPage() {
             ))}
 
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       {q.data && <Pagination page={page} pageSize={pageSize} total={q.data.total} onChange={setPage}/>}
     </Page>

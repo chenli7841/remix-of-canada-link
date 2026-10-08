@@ -1,3 +1,4 @@
+import { ResponsiveTable, useNarrowAdminLayout } from "@/components/admin/ResponsiveTable";
 import { groupDeliveriesByCity, groupDeliveriesByCustomerAddress } from '@/lib/delivery-city-groups';
 import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
 import { DeliverySheetBuilder } from '@/components/admin/DeliverySheetBuilder';
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/admin/delivery-queue/")({ component: Deli
 const STATUS_LABEL: Record<string, string> = { pending: "待派送", dispatched: "已派送", cancelled: "已取消" };
 
 function DeliveryQueuePage() {
+  const narrowLayout = useNarrowAdminLayout();
   const qc = useQueryClient();
   const fetchList = useServerFn(listDeliveryByCustomer);
   const bulkUpdate = useServerFn(bulkUpdateCustomerDelivery);
@@ -171,7 +173,7 @@ function DeliveryQueuePage() {
 
       {selectedBatches.size > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button disabled={sheetBusy} className="rounded bg-brand px-3 py-2 text-white disabled:opacity-50" onClick={()=>void openSheet()}>{sheetBusy?'正在读取最新数据…':'生成派送单'}</button><button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
       <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-2.5">客户号</th>
@@ -212,7 +214,7 @@ function DeliveryQueuePage() {
               </th></tr>
             {!collapsedCities.has(cityGroup.key) && groupDeliveriesByCustomerAddress(cityGroup.rows).map(({row:g,sharedRowSpan}: any) => (
               <tr key={g.key} className="hover:bg-white/[0.03] align-top">
-                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs border-r border-white/5">
+                {(narrowLayout || sharedRowSpan > 0) && <td rowSpan={narrowLayout ? 1 : sharedRowSpan} className="px-4 py-3 text-xs border-r border-white/5">
                   <div className="font-mono text-slate-100">{g.customer_code ?? "—"}</div>
                   {g.full_name && <div className="text-[11px] text-slate-500">{g.full_name}</div>}
                   {g.wallet_balance_cad != null && (
@@ -228,10 +230,10 @@ function DeliveryQueuePage() {
                   <div className={g.payment_label === '已付款' ? 'mt-1 text-emerald-300' : 'mt-1 text-amber-300'}>{g.payment_label}</div>
                 </td>
                 <td className="px-4 py-3 text-center text-xs whitespace-nowrap"><strong className="text-brand">{g.count}</strong><div className="mt-1 text-slate-400">独立运单 {g.waybill_count}<br/>客户箱 {g.carton_count} · 客户托盘 {g.pallet_count}</div></td>
-                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs text-slate-300 max-w-xs">
+                {(narrowLayout || sharedRowSpan > 0) && <td rowSpan={narrowLayout ? 1 : sharedRowSpan} className="px-4 py-3 text-xs text-slate-300 max-w-xs">
                   <button type="button" disabled={!g.editable_address} onClick={()=>setAddressEdit(g)} title="点击修改收货地址" className="text-left underline decoration-dotted underline-offset-4 hover:text-brand disabled:no-underline">{g.address || '点击填写地址'}</button>
                 </td>}
-                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>}
+                {(narrowLayout || sharedRowSpan > 0) && <td rowSpan={narrowLayout ? 1 : sharedRowSpan} className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>}
                 <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.total_cad == null ? '待确认' : 'CAD ' + Number(g.total_cad).toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-xs whitespace-nowrap">
@@ -269,7 +271,7 @@ function DeliveryQueuePage() {
             ))}
             </Fragment>)}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
       {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}

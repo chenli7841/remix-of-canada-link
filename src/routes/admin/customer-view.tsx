@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -377,7 +378,7 @@ function MyOrdersTab({ userId }: { userId: string }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
-          <table className="w-full text-xs">
+          <ResponsiveTable className="w-full text-xs">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-3 py-2">类型</th>
@@ -430,7 +431,7 @@ function MyOrdersTab({ userId }: { userId: string }) {
                 );
               })}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </div>
       )}
     </div>
@@ -1567,7 +1568,7 @@ function ItemsTab({ userId }: { userId: string }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-          <table className="w-full text-xs">
+          <ResponsiveTable className="w-full text-xs">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-3 py-2">SKU</th>
@@ -1609,7 +1610,7 @@ function ItemsTab({ userId }: { userId: string }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </div>
       )}
     </div>

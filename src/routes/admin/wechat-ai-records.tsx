@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -179,7 +180,7 @@ function ConversationsTab() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">
             <tr>
               <th className="p-2">最近消息</th>
@@ -225,7 +226,7 @@ function ConversationsTab() {
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       <Pagination page={page} pageSize={pageSize} total={listQ.data?.total ?? 0} onChange={setPage} />
@@ -360,7 +361,7 @@ function BindingsTab() {
       {mut.isError && <p className="text-sm text-destructive">{(mut.error as Error).message}</p>}
 
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">
             <tr>
               <th className="p-2">客户号</th>
@@ -406,7 +407,7 @@ function BindingsTab() {
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       <Pagination page={page} pageSize={pageSize} total={listQ.data?.total ?? 0} onChange={setPage} />
     </div>
@@ -443,7 +444,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function MiniTable({ head, rows }: { head: string[]; rows: Array<Array<string | number>> }) {
   return (
     <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-xs">
+      <ResponsiveTable className="w-full text-xs">
         <thead className="bg-muted/50 text-left text-muted-foreground">
           <tr>
             {head.map((h) => (
@@ -471,7 +472,7 @@ function MiniTable({ head, rows }: { head: string[]; rows: Array<Array<string | 
             </tr>
           )}
         </tbody>
-      </table>
+      </ResponsiveTable>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -152,7 +153,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
       }
     >
       <div className="overflow-hidden rounded-xl border border-white/5">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
               <th className="px-3 py-2">群名称</th>
@@ -187,7 +188,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
     </Card>
   );
@@ -234,7 +235,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
       }
     >
       <div className="overflow-hidden rounded-xl border border-white/5">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
               <th className="px-3 py-2">客户号</th>
@@ -281,7 +282,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {showBind && (
@@ -579,7 +580,7 @@ function ComposeTab() {
             <div className="border-b border-white/5 bg-white/[0.03] px-3 py-2 text-xs text-slate-400">
               预览：共 {previewRows.length} 位客户 · 仅本地渲染，未调用企业微信任何接口
             </div>
-            <table className="w-full text-sm">
+            <ResponsiveTable className="w-full text-sm">
               <thead className="bg-white/[0.02] text-left text-[11px] uppercase text-slate-500">
                 <tr>
                   <th className="px-3 py-2">客户号</th>
@@ -598,7 +599,7 @@ function ComposeTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResponsiveTable>
           </div>
         )}
       </div>
@@ -676,7 +677,7 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
   return (
     <Card title="历史群发任务">
       <div className="overflow-hidden rounded-xl border border-white/5">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
               <th className="px-3 py-2">标题</th>
@@ -740,7 +741,7 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {confirmSendId && (

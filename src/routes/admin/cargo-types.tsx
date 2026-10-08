@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,7 +23,7 @@ function CargoTypesPage() {
       action={<button onClick={() => { setEditing(null); setShow(true); }}
         className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4"/>新增</button>}>
       <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr><th className="px-4 py-2.5">代码</th><th>中文</th><th>英文</th><th>排序</th><th>状态</th><th></th></tr>
           </thead>
@@ -43,7 +44,7 @@ function CargoTypesPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       {show && <EditModal initial={editing} onClose={() => setShow(false)} onSave={async (p) => {
         await save({ data: p }); setShow(false); qc.invalidateQueries({ queryKey: ["cargo-types"] });

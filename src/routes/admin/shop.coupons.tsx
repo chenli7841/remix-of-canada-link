@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +30,7 @@ function CouponsPage() {
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="rounded-2xl border border-white/5 bg-white/[0.02]">
           {q.isLoading ? <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : (
-            <table className="w-full text-sm">
+            <ResponsiveTable className="w-full text-sm">
               <thead className="border-b border-white/5 text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <tr><th className="p-3">码</th><th className="p-3">类型</th><th className="p-3 text-right">面值</th><th className="p-3 text-right">门槛</th><th className="p-3 text-right">已用/上限</th><th className="p-3">状态</th><th></th></tr>
               </thead>
@@ -50,7 +51,7 @@ function CouponsPage() {
                 ))}
                 {(q.data?.items ?? []).length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">暂无优惠券</td></tr>}
               </tbody>
-            </table>
+            </ResponsiveTable>
           )}
         </div>
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">

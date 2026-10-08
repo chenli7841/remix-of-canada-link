@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1323,7 +1324,7 @@ function CustomerHsCard({ userId, canEdit }: { userId: string; canEdit: boolean 
       </div>
 
       <div className="mt-3 overflow-x-auto -mx-2">
-        <table className="w-full text-xs">
+        <ResponsiveTable className="w-full text-xs">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
               <th className="px-2 py-1.5">SKU</th>
@@ -1380,7 +1381,7 @@ function CustomerHsCard({ userId, canEdit }: { userId: string; canEdit: boolean 
               ))
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {editRow && (

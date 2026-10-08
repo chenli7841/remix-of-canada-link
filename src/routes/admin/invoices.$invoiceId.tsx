@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -200,7 +201,7 @@ function InvoiceDetail() {
         {offItems.length === 0 ? (
           <div className="py-3 text-center text-xs text-slate-500">暂无线下付款</div>
         ) : (
-          <table className="w-full text-xs">
+          <ResponsiveTable className="w-full text-xs">
             <thead className="text-left text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="py-1.5">付款时间</th>
@@ -235,7 +236,7 @@ function InvoiceDetail() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         )}
       </div>
 

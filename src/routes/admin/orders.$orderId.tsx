@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
@@ -175,7 +176,7 @@ function OrderDetail() {
       </div>
 
       <Card title="商品 / 物品">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
             <tr><th className="py-2">名称</th><th>SKU</th><th>数量</th><th>单价</th><th className="text-right">小计</th></tr>
           </thead>
@@ -201,7 +202,7 @@ function OrderDetail() {
             <tr><td colSpan={4} className="py-1 text-right text-slate-400">保险</td><td className="text-right">{fmtCNY(order.insurance_cny)}</td></tr>
             <tr><td colSpan={4} className="py-2 text-right font-semibold text-slate-200">合计</td><td className="text-right font-semibold text-emerald-300">{fmtCNY(order.total_cny)}</td></tr>
           </tfoot>
-        </table>
+        </ResponsiveTable>
       </Card>
 
       <Card title="包裹汇总">
@@ -214,7 +215,7 @@ function OrderDetail() {
       </Card>
 
       <Card title={`运单 (${waybills.length})`}>
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
             <tr><th className="py-2">运单号</th><th>方式</th><th>状态</th><th>重量</th><th>尺寸 (L×W×H)</th><th>批次</th><th></th></tr>
           </thead>
@@ -232,7 +233,7 @@ function OrderDetail() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Card>
 
       <Card title="客户上传的文件 / 图片">

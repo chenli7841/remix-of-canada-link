@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -117,7 +118,7 @@ function OversizeRulesPage() {
         {q.isLoading && <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500"/></div>}
         {q.isError && <div className="p-4 text-rose-400 text-sm">{(q.error as Error).message}</div>}
         {q.data && (
-          <table className="w-full text-sm">
+          <ResponsiveTable className="w-full text-sm">
             <thead className="text-left text-[10px] uppercase text-slate-500">
               <tr>
                 <th className="py-2">规则名</th>
@@ -162,7 +163,7 @@ function OversizeRulesPage() {
                 );
               })}
             </tbody>
-          </table>
+          </ResponsiveTable>
         )}
       </Card>
 

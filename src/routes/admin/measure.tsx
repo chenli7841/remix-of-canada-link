@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute } from "@tanstack/react-router";
@@ -269,7 +270,7 @@ function MeasurePage() {
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-white/5">
-              <table className="w-full text-sm">
+              <ResponsiveTable className="w-full text-sm">
                 <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
                   <tr>
                     <th className="px-3 py-2">
@@ -315,7 +316,7 @@ function MeasurePage() {
                     <tr><td colSpan={9} className="py-6 text-center text-xs text-slate-500">扫描后显示运单列表</td></tr>
                   )}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           </div>
         )}

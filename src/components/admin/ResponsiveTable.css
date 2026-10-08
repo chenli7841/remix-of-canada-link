@@ -1,0 +1,35 @@
+@media screen and (max-width:1279px) {
+  .admin-responsive-table {display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;white-space:normal!important;padding:8px;border-collapse:separate;}
+  .admin-responsive-table > thead {display:block;}
+  .admin-responsive-table > thead > tr {display:flex;flex-wrap:wrap;gap:8px;}
+  .admin-responsive-table > thead th {display:none;}
+  .admin-responsive-table > thead th:has(input) {display:flex;align-items:center;gap:8px;padding:10px;}
+  .admin-responsive-table > thead th:has(input)::after {content:'全选';font-size:13px;}
+  .admin-responsive-table > tbody {display:block;width:100%;}
+  .admin-responsive-table > tbody > tr {display:block;min-width:0;margin:0 0 12px;padding:12px;border:1px solid #ffffff1a!important;border-radius:12px;background:#111b2b;}
+  .admin-responsive-table > tbody > tr > td,
+  .admin-responsive-table > tbody > tr > th {display:block;position:static!important;min-width:0!important;max-width:100%!important;width:auto!important;padding:8px 0!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere;box-shadow:none!important;border:0!important;background:transparent;}
+  .admin-responsive-table > tbody > tr > td::before {content:attr(data-label);display:block;font-size:11px;font-weight:400;color:#94a3b8;margin-bottom:4px;}
+  .admin-responsive-table > tbody > tr > td[data-wide]::before {display:none;}
+  .admin-responsive-table > tbody > tr > td:first-child {font-weight:600;font-size:14px;}
+  .admin-responsive-table td :is(.whitespace-nowrap,.truncate) {white-space:normal!important;overflow-wrap:anywhere;}
+  .admin-responsive-table td :is(button,select,a) {min-height:44px;}
+  .admin-responsive-table td a {display:inline-flex;align-items:center;max-width:100%;overflow-wrap:anywhere;}
+  .admin-responsive-table td :is(button,select,input:not([type=checkbox])) {max-width:100%;white-space:normal;}
+  .admin-responsive-table td select {width:100%;}
+  .admin-responsive-table td > div {max-width:100%;flex-wrap:wrap;}
+  .admin-responsive-table td input[type=checkbox],.admin-responsive-table th input[type=checkbox] {width:20px;height:20px;flex-shrink:0;}
+  .admin-responsive-table td[data-label='操作'] {margin-top:8px;border-top:1px solid #ffffff1a!important;}
+  .admin-responsive-table td[data-label='操作'] :is(a,button) {justify-content:center;padding:10px 14px;}
+}
+@media screen and (max-width:767px) {
+  .admin-content :is(input,select,textarea) {min-width:0;max-width:100%;font-size:16px;}
+  .admin-content :is(input:not([type=checkbox]):not([type=radio]),select) {min-height:44px;}
+  .admin-content form {min-width:0;max-width:100%;}
+  .admin-content .relative:has(> input) {min-width:0;max-width:100%;}
+  .admin-content .fixed.inset-0 > :is(form,div) {min-width:0;max-width:100%;max-height:90dvh;overflow-y:auto;}
+}
+@media screen and (max-width:1279px) {
+  .admin-responsive-table > tbody > tr {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px;}
+  .admin-responsive-table > tbody > tr > :is(td:first-child,th,[data-wide],[data-label='操作'],[data-label='地址'],[data-label='结算备注'],[data-label='批次 / 付款']) {grid-column:1/-1;}
+}

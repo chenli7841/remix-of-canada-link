@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -92,7 +93,7 @@ function ProductsPage() {
 
       {listQ.isLoading ? <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-slate-500"/></div> : (
         <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-          <table className="w-full text-sm">
+          <ResponsiveTable className="w-full text-sm">
             <thead className="border-b border-white/5 text-left text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="p-3"><input type="checkbox" checked={selected.size === items.length && items.length > 0} onChange={toggleAll}/></th>
@@ -124,7 +125,7 @@ function ProductsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </div>
       )}
 

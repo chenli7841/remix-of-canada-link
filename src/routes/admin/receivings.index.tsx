@@ -51,7 +51,35 @@ function ReceivingsPage() {
           <Plus className="h-4 w-4"/>新建收货单
         </button>
       }>
-      <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
+      {q.isError && <div className="mb-4 text-sm text-rose-400">读取收货单失败：{q.error.message}</div>}
+      <div className="space-y-3 xl:hidden">
+        {q.isLoading && <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500"/></div>}
+        {q.data?.receivings.length === 0 && <div className="py-10 text-center text-slate-500">暂无收货单</div>}
+        {q.data?.receivings.map((r: any) => (
+          <article key={r.id} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="break-all font-mono text-xs text-slate-300">{r.receiving_no}</span>
+              <StatusBadge map={RECV_LABEL} color={RECV_COLOR} value={r.status}/>
+            </div>
+            <div className="mt-3 break-words text-sm font-semibold text-slate-100">
+              {r.batches ? receivingBatchLabel(r.batches) : "— 未匹配批次 —"}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span>{r.batches?.shipping_method ? METHOD_LABEL[r.batches.shipping_method] : "方式未指定"}</span>
+              <span className="break-all">仓库：{receivingWarehouseLabel(r.warehouse_code, warehousesQ.data?.warehouses)}</span>
+              {r.batches?.status && <span className="inline-flex items-center gap-1">批次 <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={r.batches.status}/></span>}
+            </div>
+            <dl className="mt-3 space-y-1 text-xs text-slate-400">
+              <div className="flex flex-wrap gap-x-2"><dt>确认时间</dt><dd>{r.confirmed_at ? fmtDate(r.confirmed_at) : "尚未确认"}</dd></div>
+              <div className="flex flex-wrap gap-x-2"><dt>创建时间</dt><dd>{fmtDate(r.created_at)}</dd></div>
+            </dl>
+            <Link to="/admin/receivings/$receivingId" params={{ receivingId: r.id }} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-brand/30 bg-brand/10 text-sm font-semibold text-brand">
+              查看详情 <ArrowRight className="h-4 w-4"/>
+            </Link>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] xl:block">
         <table className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
@@ -95,7 +123,7 @@ function ReceivingsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
           <form onClick={(e) => e.stopPropagation()} onSubmit={onCreate}
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0A0F1A] p-5">
+            className="max-h-[90dvh] w-full min-w-0 max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#0A0F1A] p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold inline-flex items-center gap-2"><PackageCheck className="h-4 w-4 text-brand"/>新建收货单</h2>
               <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white"><X className="h-4 w-4"/></button>
@@ -104,7 +132,7 @@ function ReceivingsPage() {
               <div>
                 <label className="text-xs text-slate-400">匹配批次（可留空，扫描首单后自动匹配）</label>
                 <select value={form.batch_id} onChange={(e) => setForm({ ...form, batch_id: e.target.value })}
-                  className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100 [&>option]:bg-[#0E1626]">
+                  className="mt-1 min-h-11 w-full min-w-0 max-w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-base text-slate-100 sm:text-sm [&>option]:bg-[#0E1626]">
                   <option value="">— 未匹配 —</option>
                   {batchesQ.data?.batches
                     .filter((b: any) => b.status === "shipped")

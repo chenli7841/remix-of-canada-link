@@ -66,7 +66,7 @@ export function StatusBadge({ map, color, value }: { map: Record<string, string>
 
 export function Page({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl p-3 sm:p-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold">{title}</h1>

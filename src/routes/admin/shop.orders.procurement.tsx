@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -83,7 +84,7 @@ function ProcurementListPage() {
 
               {isOpen && (
                 <div className="border-t border-white/5">
-                  <table className="w-full text-sm">
+                  <ResponsiveTable className="w-full text-sm">
                     <thead className="bg-white/[0.02] text-left text-[10px] uppercase tracking-wider text-slate-500">
                       <tr>
                         <th className="px-4 py-2 font-medium">订单号</th>
@@ -147,7 +148,7 @@ function ProcurementListPage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </ResponsiveTable>
                 </div>
               )}
             </div>

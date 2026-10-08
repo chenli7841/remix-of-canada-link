@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
@@ -482,7 +483,7 @@ function WaybillsSection({ waybills, canEdit, onAdd, onEditDims, onSurchargesCha
     <Card title={`运单 (${waybills.length})`} action={canEdit && (
       <button onClick={() => setShow(true)} className="inline-flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-xs font-semibold text-white"><Plus className="h-3 w-3"/>新增 / 批量创建</button>
     )}>
-      <table className="w-full text-sm">
+      <ResponsiveTable className="w-full text-sm">
         <thead className="text-left text-[11px] uppercase text-slate-500">
           <tr><th className="py-2">运单号</th><th>唛头号</th><th>箱号</th><th>托盘号</th><th>物品</th><th>状态</th><th>重量</th><th>计费重</th><th>尺寸 (L×W×H)</th><th>运费</th><th>关税</th><th>保险</th><th>附加费</th><th></th></tr>
         </thead>
@@ -546,7 +547,7 @@ function WaybillsSection({ waybills, canEdit, onAdd, onEditDims, onSurchargesCha
             </tr>
           );})}
         </tbody>
-      </table>
+      </ResponsiveTable>
 
 
       {show && (
@@ -563,7 +564,7 @@ function WaybillsSection({ waybills, canEdit, onAdd, onEditDims, onSurchargesCha
               <button onClick={() => dup(10)} className="rounded-md border border-white/10 px-2 py-1 hover:bg-white/5">+10 同规格</button>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              <table className="w-full text-xs">
+              <ResponsiveTable className="w-full text-xs">
                 <thead className="text-left text-[10px] uppercase text-slate-500">
                   <tr><th>#</th><th>重 (kg)</th><th>长</th><th>宽</th><th>高</th><th>备注</th><th></th></tr>
                 </thead>
@@ -580,7 +581,7 @@ function WaybillsSection({ waybills, canEdit, onAdd, onEditDims, onSurchargesCha
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
             <button disabled={busy} onClick={submit} className="mt-3 w-full rounded-md bg-brand py-2 text-sm font-semibold text-white disabled:opacity-50">
               {busy ? "创建中…" : `创建 ${rows.length} 个运单`}
@@ -802,7 +803,7 @@ function ItemsCustomerCard({
       title={<span className="inline-flex items-center gap-1"><Package className="h-3.5 w-3.5"/>客户录入物品（明细）</span> as any}
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <ResponsiveTable className="w-full text-xs">
           <thead className="text-left text-[10px] uppercase text-slate-500">
             <tr>
               {ITEM_COLS.map((c) => <th key={c.k} className="py-1.5 pr-3 font-medium">{c.label}</th>)}
@@ -848,7 +849,7 @@ function ItemsCustomerCard({
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       {canEdit && !adding && (
         <button

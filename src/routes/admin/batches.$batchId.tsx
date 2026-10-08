@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -678,7 +679,7 @@ function BatchDetail() {
               <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
                 明细（线路 × 客户号 · 各加一次预设费）
               </div>
-              <table className="w-full text-xs">
+              <ResponsiveTable className="w-full text-xs">
                 <thead className="text-left text-[10px] uppercase text-slate-500">
                   <tr>
                     <th className="py-1">线路</th>
@@ -695,11 +696,11 @@ function BatchDetail() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
             <div>
               <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">按客户号小计（账单口径）</div>
-              <table className="w-full text-xs">
+              <ResponsiveTable className="w-full text-xs">
                 <thead className="text-left text-[10px] uppercase text-slate-500">
                   <tr>
                     <th className="py-1">客户号</th>
@@ -714,7 +715,7 @@ function BatchDetail() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           </div>
         </Card>
@@ -871,7 +872,7 @@ function BatchDetail() {
                       ),
                     );
                 return (
-            <table className="w-full text-sm">
+            <ResponsiveTable className="w-full text-sm">
               <thead className="text-left text-[10px] uppercase text-slate-500">
                 <tr>
                   <th className="py-2">客户号</th>
@@ -980,7 +981,7 @@ function BatchDetail() {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </ResponsiveTable>
                 );
               })()}
             </>
@@ -1235,7 +1236,7 @@ function BatchDetail() {
               className="mb-3 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
             />
             <div className="max-h-96 overflow-y-auto rounded-lg border border-white/5">
-              <table className="w-full text-sm">
+              <ResponsiveTable className="w-full text-sm">
                 <tbody className="divide-y divide-white/5">
                   {availQ.data?.waybills
                     .filter((w: any) => w.assigned_batch_id !== batchId)
@@ -1260,7 +1261,7 @@ function BatchDetail() {
                       </tr>
                     ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -1595,7 +1596,7 @@ function PickerDialog({
           </button>
         </div>
         <div className="max-h-96 overflow-y-auto rounded-lg border border-white/5">
-          <table className="w-full text-sm">
+          <ResponsiveTable className="w-full text-sm">
             <tbody className="divide-y divide-white/5">
               {rows.length === 0 && (
                 <tr>
@@ -1619,7 +1620,7 @@ function PickerDialog({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </div>
         <div className="mt-3 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-white/10 px-3 py-1.5 text-xs">
@@ -1674,7 +1675,7 @@ function BatchInvoicesPanel({ batchNo }: { batchNo: string }) {
       ) : items.length === 0 ? (
         <div className="py-8 text-center text-xs text-slate-500">暂无账单（确认客户价格后自动生成）</div>
       ) : (
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-2">账单号</th>
@@ -1712,7 +1713,7 @@ function BatchInvoicesPanel({ batchNo }: { batchNo: string }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       )}
     </div>
   );

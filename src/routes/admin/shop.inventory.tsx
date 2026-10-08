@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -139,7 +140,7 @@ function InventoryPage() {
 
       <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         {movQ.isLoading ? <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : (
-          <table className="w-full text-sm">
+          <ResponsiveTable className="w-full text-sm">
             <thead className="border-b border-white/5 text-left text-[10px] uppercase tracking-wider text-slate-500">
               <tr><th className="p-3">时间</th><th className="p-3">仓库</th><th className="p-3">SKU</th><th className="p-3">商品</th><th className="p-3">原因</th><th className="p-3 text-right">变动</th><th className="p-3">备注</th></tr>
             </thead>
@@ -157,7 +158,7 @@ function InventoryPage() {
               ))}
               {items.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">暂无流水</td></tr>}
             </tbody>
-          </table>
+          </ResponsiveTable>
         )}
       </div>
       <div className="mt-3 flex items-center justify-end gap-2 text-xs text-slate-400">

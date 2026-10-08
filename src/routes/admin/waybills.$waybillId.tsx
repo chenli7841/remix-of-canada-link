@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -195,7 +196,7 @@ function WaybillDetail() {
             <Card title="物品明细（按本运单已分配物品显示）">
               {(detailQ.data as any).items_breakdown.some((it: any) => it.tax_rate_valid === false) && <div role="alert" className="mb-3 text-amber-300">HS税率数据无效，关税待核对；下方合计不含这些物品的关税，不能作为完整应缴金额。</div>}
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-xs">
+                <ResponsiveTable className="w-full min-w-[720px] text-xs">
                   <thead className="text-slate-400">
                     <tr className="border-b border-white/10 text-left">
                       <th className="py-1 pr-2">品名</th>
@@ -243,7 +244,7 @@ function WaybillDetail() {
                       <td className="py-1 pr-2">{fmtCAD((detailQ.data as any).computed?.duty_cad ?? 0)}</td>
                     </tr>
                   </tfoot>
-                </table>
+                </ResponsiveTable>
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
                 已分配物品按本运单记录显示；每箱数量优先使用本运单的明确分配数据，未明确分配时才使用商品箱规。

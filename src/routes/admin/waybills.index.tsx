@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -136,7 +137,7 @@ function WaybillsPage() {
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-3 py-2.5"><input type="checkbox" checked={!!selected.size && selected.size === q.data?.waybills.length} onChange={toggleAll}/></th>
@@ -185,7 +186,7 @@ function WaybillsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {q.data && <Pagination page={page} pageSize={pageSize} total={q.data.total} onChange={setPage}/>}

@@ -1,3 +1,4 @@
+import "@/components/admin/ResponsiveTable.css";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -413,7 +414,7 @@ function AdminLayout() {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 bg-[#0B1220] text-slate-100">
+        <main className="admin-content min-w-0 flex-1 bg-[#0B1220] text-slate-100">
           <Outlet />
         </main>
       </div>

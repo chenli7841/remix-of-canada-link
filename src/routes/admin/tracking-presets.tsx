@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ function PresetsPage() {
       )}>
       <Card>
         {q.isLoading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500"/>}
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
             <tr><th className="py-2">代码</th><th>中文</th><th>英文</th><th>默认位置</th><th>排序</th><th>启用</th><th></th></tr>
           </thead>
@@ -57,7 +58,7 @@ function PresetsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Card>
 
       {editing && (

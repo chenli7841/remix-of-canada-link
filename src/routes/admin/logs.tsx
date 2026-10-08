@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -82,7 +83,7 @@ function LogsPage() {
       </form>
 
       <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-3 py-2.5">时间</th>
@@ -116,7 +117,7 @@ function LogsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {listQ.data && <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage}/>}

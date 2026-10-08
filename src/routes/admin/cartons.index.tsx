@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,7 +66,7 @@ function CartonsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr><th className="px-4 py-2.5">箱号</th><th>线路</th><th>客户</th><th>目的地</th><th>状态</th><th>付款</th><th>计费重<div className="normal-case text-[10px] text-slate-500"><span className="text-sky-300/70">本身</span> / <span className="text-amber-300/70">运单合计</span></div></th><th>总费用 (CAD)<div className="normal-case text-[10px] text-slate-500"><span className="text-sky-300/70">A 本身</span> / <span className="text-amber-300/70">B 运单合计</span></div></th><th>所属托盘</th><th>所属批次</th><th>创建</th><th></th></tr>
           </thead>
@@ -107,7 +108,7 @@ function CartonsPage() {
               );
             })}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
       {q.data && <Pagination page={page} pageSize={pageSize} total={q.data.total} onChange={setPage}/>}
 

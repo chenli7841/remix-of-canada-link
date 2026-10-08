@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -109,7 +110,7 @@ function AdminIndex() {
             />
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-sm">
+            <ResponsiveTable className="w-full whitespace-nowrap text-sm">
               <thead>
                 <tr>
                   {[
@@ -152,7 +153,7 @@ function AdminIndex() {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </ResponsiveTable>
           </div>
           <p className="mt-2 text-xs text-slate-500 sm:hidden">左右滑动查看完整金额与余额</p>
         </section>
@@ -173,7 +174,7 @@ function AdminIndex() {
                 <span className="text-xs text-slate-400">{batches.length} 个批次</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full whitespace-nowrap text-sm">
+                <ResponsiveTable className="w-full whitespace-nowrap text-sm">
                   <thead>
                     <tr>
                       {["批次", "发出日期", "距发出", "状态"].map((t) => (
@@ -220,7 +221,7 @@ function AdminIndex() {
                       </tr>
                     )}
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </div>
             </section>
           );

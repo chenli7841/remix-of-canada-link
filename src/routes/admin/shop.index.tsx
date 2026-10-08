@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,7 +59,7 @@ function ShopHome() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Panel title="低库存预警" link="/admin/shop/inventory">
           {d.lowStock.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">无</div> : (
-            <table className="w-full text-xs">
+            <ResponsiveTable className="w-full text-xs">
               <thead className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <tr><th className="py-1.5 pr-3">SKU</th><th className="py-1.5 pr-3">商品</th><th className="py-1.5 text-right">库存</th></tr>
               </thead>
@@ -71,7 +72,7 @@ function ShopHome() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResponsiveTable>
           )}
         </Panel>
 

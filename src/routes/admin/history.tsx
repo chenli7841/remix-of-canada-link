@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -134,7 +135,7 @@ function HistoryPage() {
 function HistoryTable({ headers, rows }: { headers: string[]; rows: { cells: React.ReactNode[] }[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <ResponsiveTable className="w-full text-xs">
         <thead className="text-left text-[11px] uppercase tracking-wider text-slate-500">
           <tr>{headers.map((h, i) => <th key={i} className="whitespace-nowrap px-3 py-2 font-semibold">{h}</th>)}</tr>
         </thead>
@@ -145,7 +146,7 @@ function HistoryTable({ headers, rows }: { headers: string[]; rows: { cells: Rea
             </tr>
           ))}
         </tbody>
-      </table>
+      </ResponsiveTable>
     </div>
   );
 }

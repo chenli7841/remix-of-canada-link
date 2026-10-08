@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,7 +103,7 @@ function HsCodesPage() {
             <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-slate-500"/></div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <ResponsiveTable className="w-full text-sm">
                 <thead className="border-b border-white/5 text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="p-3">HS 编码</th>
@@ -160,7 +161,7 @@ function HsCodesPage() {
                   )}
 
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           )}
           {totalPages > 1 && (

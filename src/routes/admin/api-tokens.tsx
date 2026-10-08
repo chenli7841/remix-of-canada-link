@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -165,7 +166,7 @@ function ApiTokensPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
-        <table className="w-full text-sm">
+        <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
               <th className="px-4 py-2.5">名称</th>
@@ -230,7 +231,7 @@ function ApiTokensPage() {
               );
             })}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
 
       {showIssue && (
