@@ -17,6 +17,7 @@ export function sanitizeOtt(v: any, depth = 0): any {
 }
 
 export type OttTx = {
+  channel?: string | null;
   id: string;
   ref_no: string | null;
   amount_cad: number | string | null;
@@ -36,6 +37,14 @@ const REFUND_STATES = new Set(["fully_refunded", "partial_refunded", "fully_reve
 const FAIL_STATES = new Set(["orderclosed", "failure", "failed", "expired", "rejected", "reversed", "revoked", "cancelled"]);
 
 export async function verifyOttRecharge(tx: OttTx): Promise<OttDecision> {
+  if (tx.channel === "card" || /hosted=1/.test(tx.note ?? "")) {
+    try {
+      const { verifyHostedOrder } = await import("@/lib/ottpay-hosted.server");
+      return await verifyHostedOrder(tx);
+    } catch (e: any) {
+      return { decision: "error", error: e?.message ?? "信用卡查询失败" };
+    }
+  }
   const { ottPost } = await import("@/lib/ottpay.server");
   const localPid = tx.provider_payment_id || /pid=([A-Za-z0-9_-]+)/.exec(tx.note ?? "")?.[1] || null;
   const localRef = tx.ref_no ?? "";

@@ -96,6 +96,7 @@ export async function hostedPost(action: string, version: string, data: Record<s
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, version, merchant_id: cfg.merchantId, data: enc.data, md5: enc.md5 }),
+    signal: AbortSignal.timeout(20_000),
   });
   const json: any = await res.json().catch(() => null);
   const code = String(json?.rsp_code ?? "");
@@ -103,7 +104,37 @@ export async function hostedPost(action: string, version: string, data: Record<s
     throw new Error(`OTT Pay 信用卡请求失败 (${action}): ${json?.rsp_msg ?? code ?? res.status}`);
   }
   const result = json?.data ? decryptHosted({ data: String(json.data), md5: String(json.md5) }) : {};
+  if (json?.data && !hostedMd5Matches(String(json.md5), result)) throw new Error("信用卡支付响应校验失败，请稍后查询原充值记录");
   return { rsp_code: code, rsp_msg: json?.rsp_msg, ...result };
+}
+
+export async function verifyHostedOrder(tx: { ref_no: string | null; amount_cad: number | string | null; provider_payment_id?: string | null }) {
+  const cfg = hostedConfig();
+  const q = await hostedPost("STATUS_QUERY", "1.0", {
+    order_id: tx.ref_no ?? "", orderId: tx.ref_no ?? "", merchant_id: cfg.merchantId,
+    bizType: "converge_hosted", txnTime: txnTime(), channelType: "ELAVONECOM",
+  });
+  const status = String(q.order_status ?? q.orderStatus ?? "").toLowerCase();
+  const cents = Number(q.total_amount ?? q.amount);
+  const pid = String(q.bizpay_order_id ?? "");
+  // Only retain reconciliation fields, never cardholder details or hosted URLs.
+  const base = { providerStatus: status, providerPaymentId: pid || tx.provider_payment_id || null,
+    providerResponse: { order_id: q.order_id ?? q.orderId, order_status: status, total_amount: cents, bizpay_order_id: pid } };
+  if (String(q.order_id ?? q.orderId ?? "") !== tx.ref_no
+    || (q.merchant_id != null && String(q.merchant_id) !== cfg.merchantId)
+    || (q.currency != null && String(q.currency).toUpperCase() !== "CAD")
+    || (tx.provider_payment_id && pid !== tx.provider_payment_id)) {
+    return { ...base, decision: "mismatch" as const, warning: "信用卡交易身份或币种不匹配，请人工核验" };
+  }
+  if (["refunded", "fully_refunded", "partial_refunded", "fully_reversal", "chargeback", "reversed"].includes(status))
+    return { ...base, decision: "refund" as const, warning: "该信用卡交易已退款、冲正或拒付，请人工对账" };
+  if (HOSTED_PAID_STATES.has(status)) {
+    if (!Number.isSafeInteger(cents) || cents <= 0 || !Number.isFinite(Number(tx.amount_cad))
+      || cents !== Math.round(Number(tx.amount_cad) * 100))
+      return { ...base, decision: "mismatch" as const, warning: "信用卡交易金额不匹配，充值保持待核验" };
+    return { ...base, decision: "settle" as const };
+  }
+  return { ...base, decision: HOSTED_FAILED_STATES.has(status) ? "fail" as const : "pending" as const };
 }
 
 export const HOSTED_PAID_STATES = new Set(["success", "paid", "trade_success", "captured"]);

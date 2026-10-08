@@ -22,9 +22,9 @@ export const Route = createFileRoute("/api/public/hooks/reconcile-ott")({
           .eq("type", "recharge")
           .eq("status", "pending")
           .in("channel", ["wechat", "alipay", "card"])
-          .gt("created_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+          .gt("created_at", new Date(Date.now() - 24 * 60 * 60_000).toISOString())
           .lt("created_at", new Date(Date.now() - 45_000).toISOString())
-          .order("created_at", { ascending: true })
+          .order("verified_at", { ascending: true, nullsFirst: true })
           .limit(25);
         if (error) return json({ ok: false, error: error.message }, 500);
 
@@ -50,21 +50,26 @@ export const Route = createFileRoute("/api/public/hooks/reconcile-ott")({
             out.error++;
             continue;
           }
-          const apply = (op: "ott_settle" | "ott_mark_failed" | "ott_record") =>
-            (supabaseAdmin as any).rpc("_wallet_recharge_settle_system", {
+          const apply = async (op: "ott_settle" | "ott_mark_failed" | "ott_record") => {
+            const result = await (supabaseAdmin as any).rpc("_wallet_recharge_settle_system", {
               _payload: {
                 op,
                 tx_id: tx.id,
-                provider_payment_id: (v as any).providerPaymentId ?? null,
+                provider_payment_id: v.decision === "mismatch" ? null : (v as any).providerPaymentId ?? null,
                 provider_status: (v as any).providerStatus ?? null,
                 provider_response: (v as any).providerResponse ?? null,
               },
             } as any);
+            if (result.error) throw new Error(result.error.message);
+            if (!result.data?.ok && !["completed", "failed", "cancelled"].includes(result.data?.status))
+              throw new Error("对账结果未保存");
+            return result.data;
+          };
 
           try {
             if (v.decision === "settle") {
-              await apply("ott_settle");
-              out.settled++;
+              const saved = await apply("ott_settle");
+              if (saved.status === "completed" && saved.rows_changed > 0) out.settled++;
             } else if (v.decision === "fail") {
               await apply("ott_mark_failed");
               out.failed++;

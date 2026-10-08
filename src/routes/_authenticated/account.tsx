@@ -3169,6 +3169,7 @@ function WalletTab() {
     [amount, channel, topupNonce],
   );
   const [qr, setQr] = useState<{ src: string; reference: string; notice?: string; openUrl?: string } | null>(null);
+  const [paymentCheck, setPaymentCheck] = useState<{reference: string; checking: boolean; message: string} | null>(null);
   const QR_TTL_SEC = 20;
   const [qrLeft, setQrLeft] = useState<number>(QR_TTL_SEC);
 
@@ -3262,17 +3263,30 @@ function WalletTab() {
 
   // Poll a pending OTT Pay top-up (QR flow, or after returning from WeChat/Alipay)
   const pollRef = async (reference: string, isActive?: () => boolean) => {
+    const showResult = localStorage.getItem("ott_pending_ref") === reference;
+    if (showResult) setPaymentCheck({reference, checking: true, message: tr("正在核验付款结果…", "Checking payment…")});
     for (let i = 0; i < 40; i++) {
       if (isActive && !isActive()) return false;
       try {
         const r = await syncOtt({ data: { reference } });
+        if (isActive && !isActive()) return false;
         if (r.status === "completed") {
+          if (localStorage.getItem("ott_pending_ref") === reference) localStorage.removeItem("ott_pending_ref");
+          sessionStorage.removeItem("ott_card_intent");
+          const url = new URL(window.location.href);
+          if (url.searchParams.get("ott") === reference) { url.searchParams.delete("ott"); window.history.replaceState(null, "", url); }
+          setPaymentCheck(null);
           toast.success(tr("充值成功，余额已更新", "Top-up successful, balance updated"));
           setQr(null);
           await load();
           return true;
         }
-        if (r.status === "failed") {
+        if (r.status === "failed" || r.status === "cancelled") {
+          if (localStorage.getItem("ott_pending_ref") === reference) localStorage.removeItem("ott_pending_ref");
+          sessionStorage.removeItem("ott_card_intent");
+          const url = new URL(window.location.href);
+          if (url.searchParams.get("ott") === reference) { url.searchParams.delete("ott"); window.history.replaceState(null, "", url); }
+          setPaymentCheck(null);
           toast.error(tr("支付未完成", "Payment not completed"));
           setQr(null);
           return false;
@@ -3282,6 +3296,7 @@ function WalletTab() {
       }
       await new Promise((res) => setTimeout(res, 3000));
     }
+    if (showResult && (!isActive || isActive())) setPaymentCheck({reference, checking: false, message: tr("付款结果尚未确认，请勿重复付款。可稍后重新查询或联系工作人员。", "Payment is not confirmed. Do not pay again; retry checking or contact support.")});
     return false;
   };
 
@@ -3289,8 +3304,10 @@ function WalletTab() {
     const url = new URL(window.location.href);
     const ref = url.searchParams.get("ott") ?? localStorage.getItem("ott_pending_ref");
     if (!ref) return;
-    localStorage.removeItem("ott_pending_ref");
-    pollRef(ref).then(() => load());
+    localStorage.setItem("ott_pending_ref", ref);
+    let active = true;
+    pollRef(ref, () => active);
+    return () => { active = false; };
   }, []);
 
   // QR is valid for 20s; auto-close if nothing happens
@@ -3320,7 +3337,11 @@ function WalletTab() {
     submittingRef.current = true;
     setBusy(true);
     try {
-      const r = await startHosted({ data: { amountCad: amount, idempotencyKey: topupKey } });
+      let intent: {amount: number; key: string} | null = null;
+      try { intent = JSON.parse(sessionStorage.getItem("ott_card_intent") ?? "null"); } catch { /* discard invalid browser state */ }
+      if (intent?.amount !== amount || !intent?.key) intent = {amount, key: topupKey};
+      sessionStorage.setItem("ott_card_intent", JSON.stringify(intent));
+      const r = await startHosted({ data: { amountCad: amount, idempotencyKey: intent.key } });
       setTopupNonce((n) => n + 1);
       localStorage.setItem("ott_pending_ref", r.reference);
       window.location.href = r.url;
@@ -3381,6 +3402,13 @@ function WalletTab() {
 
   return (
     <div className="space-y-6">
+      {paymentCheck && <div role="status" className="rounded-2xl border border-brand/30 p-4 text-sm">
+        <p>{paymentCheck.message}</p>
+        <p className="mt-1 break-all text-xs text-ink-soft">{paymentCheck.reference}</p>
+        <button disabled={paymentCheck.checking} className="mt-2 text-brand disabled:opacity-50" onClick={() => pollRef(paymentCheck.reference)}>
+          {tr("重新查询付款结果", "Check payment again")}
+        </button>
+      </div>}
       <div className="rounded-3xl border border-brand/30 bg-brand-gradient p-6 text-white shadow-elevated">
         <div className="text-xs uppercase tracking-wide opacity-80">{tr("当前余额", "Current balance")}</div>
         <div className="mt-2 font-display text-4xl font-bold">CA${balanceCad.toFixed(2)}</div>

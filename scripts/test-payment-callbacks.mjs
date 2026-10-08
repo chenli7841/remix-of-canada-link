@@ -64,7 +64,7 @@ function load(path, deps = {}, runtime = {}) {
   }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, {
-    exports, Buffer, Request, Response, process: { env }, console: { warn() {}, error() {} },
+    exports, Buffer, Request, Response, AbortSignal, process: { env }, console: { warn() {}, error() {} },
     require(id) {
       if (id === "crypto") return crypto;
       if (!(id in deps)) throw new Error(`Unexpected dependency: ${id}`);
@@ -159,13 +159,15 @@ test("Hosted polling verifies identity and amount before writing and propagates 
       update() { writes++; return this; },
       then(resolve) { resolve({ error: scenario === "db-error" ? { message: "offline" } : null }); },
     };
+    const hosted = load("src/lib/ottpay-hosted.server.ts", {}, {fetch: async () => Response.json({rsp_code: "SUCCESS", ...card.encryptHosted(response)})});
+    const reconcile = load("src/lib/ottpay-reconcile.server.ts", {"@/lib/ottpay-hosted.server": hosted});
     const api = load("src/lib/ottpay.functions.ts", {
       "@tanstack/react-start": { createServerFn: () => ({
         middleware() { return this; }, inputValidator() { return this; }, handler(fn) { return fn; },
       }) },
       "@/integrations/supabase/auth-middleware": { requireSupabaseAuth: {} },
-      "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query } },
-      "@/lib/ottpay-hosted.server": { ...card, hostedPost: async () => response },
+      "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query, rpc: async (_name, {_payload}) => { if (_payload.op === "ott_settle") writes++; return {error: scenario === "db-error" ? {message:"offline"} : null, data:{status:_payload.op === "ott_settle" ? "completed" : "pending"}}; } } },
+      "@/lib/ottpay-reconcile.server": reconcile,
     });
     const run = () => api.syncOttTopup({ data: { reference: "TEST" }, context: { userId: "user" } });
     if (scenario === "valid") assert.equal((await run()).status, "completed");
@@ -327,3 +329,60 @@ for (const channel of ["ottpay", "ottpay-card"]) {
     assert.equal(state.credits, 1);
   });
 }
+
+test("Card requests reserve locally before gateway calls and reuse concurrent requests", async () => {
+  let row = null, calls = 0, dbFails = false;
+  const query = {
+    select() {return this;}, eq() {return this;},
+    async maybeSingle() {return {data:row && {...row}};},
+    async insert(value) {if(dbFails) return {error:{code:"offline"}}; if(row) return {error:{code:"23505"}}; row={...value,id:"tx"}; return {};},
+    update(value) {Object.assign(row,value); return this;},
+    async single() {return {data:{id:"tx"}};},
+  };
+  const api = load("src/lib/ottpay.functions.ts", {
+    "@tanstack/react-start":{createServerFn:()=>({middleware(){return this;},inputValidator(){return this;},handler(fn){return fn;}})},
+    "@/integrations/supabase/auth-middleware":{requireSupabaseAuth:{}},
+    "@/integrations/supabase/client.server":{supabaseAdmin:{from:()=>query}},
+    "@/lib/orders.functions":{getFxCadPerCny:async()=>0.2},
+    "@/lib/ottpay-hosted.server":{...card,hostedPost:async()=>{calls++;assert.ok(row);return {codeUrl:"https://payments.example.test/pay"};}},
+  });
+  const run = (amountCad=2) => api.startOttHostedCardTopup({data:{amountCad,idempotencyKey:"test-card-key"},context:{userId:"user"}});
+  for(const value of [NaN,Infinity,1,2.001,"2"]) await assert.rejects(run(value));
+  assert.equal(calls,0);
+  dbFails=true;await assert.rejects(run(),/保存/);assert.equal(calls,0);dbFails=false;
+  const results=await Promise.allSettled([run(),run()]);
+  assert.equal(calls,1);assert.ok(results.some(r=>r.status==="fulfilled"));
+  assert.equal((await run()).reference,row.ref_no);assert.equal(calls,1);
+  await assert.rejects(run(3),/金额/);
+  row.pay_session={};await assert.rejects(run(),/核验/);assert.equal(calls,1);
+  row.status="completed";await assert.rejects(run(),/已处理/);
+});
+
+test("Reconciliation reports database write failure instead of settlement success", async () => {
+  const query={select(){return this;},eq(){return this;},in(){return this;},gt(){return this;},lt(){return this;},order(){return this;},limit(){return this;},
+    then(resolve){resolve({data:[{id:"tx",channel:"card"}]});}};
+  const {Route}=load("src/routes/api/public/hooks/reconcile-ott.ts",{
+    "@tanstack/react-router":{createFileRoute:()=>r=>r},
+    "@/integrations/supabase/client.server":{supabaseAdmin:{from:()=>query,rpc:async()=>({error:{message:"offline"}})}},
+    "@/lib/ottpay-reconcile.server":{verifyOttRecharge:async()=>({decision:"settle"})},
+  },{process:{env:{OTT_RECONCILE_SECRET:"test"}}});
+  const response=await Route.server.handlers.POST({request:new Request("https://example.test",{method:"POST",headers:{"x-reconcile-secret":"test"}})});
+  const result=await response.json();assert.equal(result.settled,0);assert.equal(result.error,1);
+});
+
+test("Card reconciliation uses hosted lookup even before a provider ID exists", async () => {
+  const api=load("src/lib/ottpay-reconcile.server.ts", {
+    "@/lib/ottpay-hosted.server":{verifyHostedOrder:async(tx)=>{assert.equal(tx.ref_no,"TEST");return {decision:"pending"};}},
+    "@/lib/ottpay.server":{ottPost:()=>assert.fail("Card must not use CMP")},
+  });
+  assert.equal((await api.verifyOttRecharge({channel:"card",ref_no:"TEST",provider_payment_id:null,note:null})).decision,"pending");
+});
+
+test("Hosted lookup rejects mismatched merchant, currency, and gateway identity", async () => {
+  for(const patch of [{merchant_id:"other"},{currency:"CNY"},{bizpay_order_id:"other"}]) {
+    const body={order_id:"TEST",order_status:"success",total_amount:"200",bizpay_order_id:"pid",...patch};
+    const api=load("src/lib/ottpay-hosted.server.ts",{}, {fetch:async()=>Response.json({rsp_code:"SUCCESS",...card.encryptHosted(body)})});
+    const result=await api.verifyHostedOrder({ref_no:"TEST",amount_cad:2,provider_payment_id:"pid"});
+    assert.equal(result.decision,"mismatch");
+  }
+});

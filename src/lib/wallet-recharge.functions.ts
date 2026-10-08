@@ -272,7 +272,7 @@ export const queryOttTopup = createServerFn({ method: "POST" })
       };
     }
     if (v.decision === "mismatch") {
-      await callRpc({ op: "ott_record", tx_id: data.txId, provider_status: v.providerStatus, provider_response: v.providerResponse, provider_payment_id: v.providerPaymentId });
+      await callRpc({ op: "ott_record", tx_id: data.txId, provider_status: v.providerStatus, provider_response: v.providerResponse, provider_payment_id: null });
       return { ok: false, status: "mismatch", warning: v.warning };
     }
     if (v.decision === "fail") {
