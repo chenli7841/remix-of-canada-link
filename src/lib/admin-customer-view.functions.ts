@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getFxCadPerCny, computeMyBatchesForUser } from "@/lib/orders.functions";
+import { computeMyBatchesForUser } from "@/lib/orders.functions";
+import { invoiceAmountsCad } from "@/lib/invoice-amounts";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 
 // Backs the admin "客户视图" page: owner/warehouse/support/sales (see
@@ -112,18 +113,18 @@ export const getCustomerOverview = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCustomerViewAccess(context.supabase, context.userId, data.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ data: wallet }, { data: orders }, { data: fwd }, { data: unpaidInv }] = await Promise.all([
+    const [{ data: wallet }, { data: orders }, { data: fwd }, unpaidResult] = await Promise.all([
       supabaseAdmin.from("wallets").select("balance_cad").eq("user_id", data.userId).maybeSingle(),
       supabaseAdmin.from("orders").select("id,status").eq("user_id", data.userId),
       supabaseAdmin.from("forwarding_orders").select("id,status").eq("user_id", data.userId),
       supabaseAdmin
         .from("invoices")
-        .select("invoice_no,total_cny,paid_cny,status,due_date")
+        .select("invoice_no,total_cny,paid_cny,paid_cad,fx_rate,status,due_date")
         .eq("user_id", data.userId)
         .in("status", ["unpaid", "overdue"]),
     ]);
-    // 用系统设定汇率（app_settings.fx_rate）换算，不用每张账单快照的 fx_rate
-    const fx = await getFxCadPerCny(supabaseAdmin);
+    if (unpaidResult.error) throw new Error(unpaidResult.error.message);
+    const unpaidInv = unpaidResult.data;
     const oRows = orders ?? [];
     const fRows = fwd ?? [];
     const inTransit =
@@ -131,10 +132,9 @@ export const getCustomerOverview = createServerFn({ method: "POST" })
       fRows.filter((r: any) => ["shipped", "in_transit"].includes(r.status)).length;
     const unwarehoused = fRows.filter((r: any) => r.status === "pending").length;
     const unpaidInvoices = (unpaidInv ?? []).map((inv: any) => {
-      const dueCny = Math.max(0, Number(inv.total_cny ?? 0) - Number(inv.paid_cny ?? 0));
       return {
         invoice_no: inv.invoice_no,
-        due_cad: +(dueCny * fx).toFixed(2),
+        due_cad: invoiceAmountsCad(inv).due,
         status: inv.status,
         due_date: inv.due_date,
       };
