@@ -253,11 +253,23 @@ function renderContainer(d: LabelData, m: SizeMeta): string {
 function buildBody(list: LabelData[], size: LabelSize): string {
   const m = SIZE_META[size];
   return list
-    .map((item) =>
-      item.entityType === "order" || item.entityType === "forwarding"
+    .map((item) => {
+      const body = item.entityType === "order" || item.entityType === "forwarding"
         ? renderOrderOrForwarding(item, m)
-        : renderContainer(item, m),
-    )
+        : renderContainer(item, m);
+      const isOrder = item.entityType === "order" || item.entityType === "forwarding";
+      const destination = isOrder
+        ? item.address?.destination_code ?? item.address?.destination ?? item.meta?.address_destination_code ?? "—"
+        : item.meta?.destination_code ?? "—";
+      const customer = isOrder ? item.user?.customer_code : item.meta?.customer_code;
+      const escape = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+      const name = destination === "TOR" ? "多伦多" : "目的地";
+      const header = `<div class="destination-banner"><div class="destination-main"><strong>${escape(destination)}</strong><span>${name}</span></div>${customer ? `<div class="customer-main"><span>客户号</span><strong>${escape(customer)}</strong></div>` : ""}</div>`;
+      // Preserve a distinct shipping mark; the customer number already has a prominent header.
+      const content = body.replace(/<div class="mark">唛头号 · ([\s\S]*?)<\/div>/g,
+        (match, mark) => customer != null && mark === String(customer) ? "" : match);
+      return content.replaceAll('<div class="label">', '<div class="label">' + header);
+    })
     .join("");
 }
 
@@ -346,6 +358,32 @@ export function renderLabel(d: LabelData | LabelData[], opts?: { size?: LabelSiz
     body[data-size="150x100"] .sheet[data-sheet="150x100"] { display: block !important; }
     body[data-size="100x80"] .sheet[data-sheet="100x80"] { display: block !important; }
   }
+  /* Destination and customer hierarchy shared by all printed labels. */
+  .destination-banner { display:flex; align-items:center; justify-content:space-between; border:2px solid #000; padding:1mm 4mm; flex-shrink:0; }
+  .destination-main { display:flex; align-items:center; gap:4mm; }
+  .destination-main strong { font-family:Arial,sans-serif; font-size:42px; font-weight:900; line-height:1; letter-spacing:1px; }
+  .destination-main span { font-size:16px; font-weight:700; }
+  .customer-main { display:flex; flex-direction:column; align-items:center; }
+  .customer-main span { font-size:10px; }
+  .customer-main strong { font-size:26px; line-height:1.1; }
+  .row, .muted { font-weight:500; }
+  .row b { font-weight:700; }
+  .sheet { padding-top:40px; }
+  body[data-size="150x100"] .stack .barcodes { gap:0.5mm; padding-bottom:1mm; }
+  body[data-size="150x100"] .stack { gap:1mm; }
+  body[data-size="150x100"] .bc-lg svg { max-height:18mm; }
+  body[data-size="150x100"] .label { gap:1.5mm; }
+  body[data-size="100x80"] .destination-banner { padding:1mm 2mm; }
+  body[data-size="100x80"] .destination-main { gap:2mm; }
+  body[data-size="100x80"] .destination-main strong { font-size:30px; }
+  body[data-size="100x80"] .destination-main span { font-size:12px; }
+  body[data-size="100x80"] .customer-main strong { font-size:20px; }
+  body[data-size="100x80"] .bc-lg svg { max-height:11mm; }
+  @media print { .sheet { padding-top:0; } }
+
+  .mark { background:#fff; color:#000; border:1px solid #000; }
+  body[data-size="150x100"] .mark { font-size:12px; padding:0; }
+  body[data-size="100x80"] .mark { font-size:10px; padding:0; }
 </style></head><body>
 <div class="count">共 ${list.length} 张面单</div>
 <div class="toolbar">
