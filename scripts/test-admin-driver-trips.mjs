@@ -1,0 +1,32 @@
+import {PGlite} from '../outputs/db-test-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite(),id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+try {
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+ create table auth.users(id uuid primary key);insert into auth.users values('${id(1)}'),('${id(2)}');
+ create function has_role(uuid,text) returns boolean language sql as $$select $1='${id(2)}'::uuid and $2='driver'$$;
+ create function is_staff(uuid) returns boolean language sql as $$select $1='${id(1)}'::uuid$$;
+ create table profiles(id uuid,full_name text);insert into profiles values('${id(2)}','测试司机');
+ create table app_settings(key text,value jsonb);insert into app_settings values('driver-origin:${id(3)}','{"active":true,"address":"仓库地址"}');
+ create table delivery_queue(id uuid primary key,code text,status text,customer_code text,dispatched_by uuid);
+ create table admin_action_logs(entity_type text,entity_id text,action text,operator_id uuid,note text,after jsonb);
+ insert into delivery_queue values('${id(10)}','BOX1','pending','00123',null),('${id(11)}','WB2','pending','00123',null),('${id(12)}','WB3','dispatched','00123',null);`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261008030000_driver_trips.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261008190000_admin_driver_trips.sql','utf8'));
+ const assign=(trip,ids,actor=1,driver=2)=>db.query('select admin_assign_delivery_trip($1,$2,$3,$4,$5,$6)',[id(actor),id(trip),id(driver),id(3),ids.map(id),{origin:'仓库地址',plans:[]}]);
+ await assert.rejects(assign(20,[10],2),/权限/);
+ await assert.rejects(assign(20,[10],1,1),/司机权限/);
+ await assert.rejects(assign(20,[10,12]),/状态已变化/);
+ assert.equal((await db.query('select count(*)::int n from driver_trips')).rows[0].n,0);
+ await assign(20,[10,11]);await assign(20,[10,11]);
+ assert.equal((await db.query('select count(*)::int n from driver_trips')).rows[0].n,1);
+ assert.equal((await db.query('select count(*)::int n from driver_trip_items where sequence is null')).rows[0].n,2);
+ await assert.rejects(assign(21,[10]),/其他趟/);
+ assert.equal((await db.query('select count(*)::int n from driver_trips')).rows[0].n,1);
+ await db.query('select driver_dispatch_units($1,$2,$3)',[id(2),id(20),[id(10)]]);
+ assert.equal((await db.query('select status from delivery_queue where id=$1',[id(10)])).rows[0].status,'dispatched');
+ assert.equal((await db.query('select status from delivery_queue where id=$1',[id(11)])).rows[0].status,'pending');
+ assert.equal((await db.query("select has_function_privilege('authenticated','admin_assign_delivery_trip(uuid,uuid,uuid,uuid,uuid[],jsonb)','execute') allowed")).rows[0].allowed,false);
+ console.log('后台分配司机趟次测试通过：权限、重复生成、原子回滚、跨趟冲突、无序号和精确派送。');
+} finally {await db.close();}

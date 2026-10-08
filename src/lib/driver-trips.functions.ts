@@ -107,6 +107,26 @@ export const listDriverTrips = createServerFn({ method: "GET" })
       }),
     );
   });
+// The foreign key on driver_trip_items also blocks deletion if a concurrent scan adds a unit.
+export const deleteEmptyDriverTrip = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(tripInput)
+  .handler(async ({ data, context }) => {
+    const admin = await db(context);
+    const trip = await owned(admin, context.userId, data.tripId);
+    const items = await admin.from("driver_trip_items").select("id").eq("trip_id", data.tripId).limit(1);
+    if (items.error) throw new Error("派送单位读取失败，请稍后重试");
+    if (items.data?.length) throw new Error("这趟已有派送单位，不能删除，请刷新列表");
+    const result = await admin.from("driver_trips").delete().eq("id", data.tripId)
+      .eq("driver_id", context.userId).select("id");
+    if (result.error?.code === "23503") throw new Error("这趟刚加入了派送单位，不能删除，请刷新列表");
+    if (result.error || !result.data?.length) throw new Error("删除失败，请刷新列表后重试");
+    const { recordAdminLog } = await import("@/lib/admin-log");
+    await recordAdminLog(admin, {entity_type: "driver_trip", entity_id: data.tripId,
+      action: "删除空派送趟", operator_id: context.userId, note: "无派送单位",
+      before: {driver_name: trip.driver_name, created_at: trip.created_at}});
+    return {ok: true};
+  });
 export const createDriverTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ id: z.string().uuid() }))
@@ -136,6 +156,8 @@ export const scanDriverTrip = createServerFn({ method: "POST" })
   .inputValidator(tripInput.extend({ code: z.string().trim().min(1).max(200) }))
   .handler(async ({ data, context }) => {
     const admin = await db(context);
+    const trip = await owned(admin, context.userId, data.tripId);
+    if (trip.source === "admin") throw new Error("后台分配的派送趟不使用扫码上车编号");
     const r = await admin.rpc("driver_load_unit", {
       _actor: context.userId,
       _trip: data.tripId,

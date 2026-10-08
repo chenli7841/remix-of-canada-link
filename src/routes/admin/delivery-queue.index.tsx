@@ -1,3 +1,4 @@
+import { AssignDriverTrip } from "@/components/admin/AssignDriverTrip";
 import { ResponsiveTable, useNarrowAdminLayout } from "@/components/admin/ResponsiveTable";
 import { groupDeliveriesByCity, groupDeliveriesByCustomerAddress } from '@/lib/delivery-city-groups';
 import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
@@ -35,6 +36,7 @@ function DeliveryQueuePage() {
   const [feeEdit, setFeeEdit] = useState<any>(null);
   const [addressEdit, setAddressEdit] = useState<any>(null);
   const [sheetRows,setSheetRows] = useState<DeliverySheetRow[] | null>(null);
+  const [tripKeys,setTripKeys] = useState<string[] | null>(null);
   const [sheetBusy,setSheetBusy] = useState(false);
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
@@ -171,7 +173,7 @@ function DeliveryQueuePage() {
         />
       </div>
 
-      {selectedBatches.size > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button disabled={sheetBusy} className="rounded bg-brand px-3 py-2 text-white disabled:opacity-50" onClick={()=>void openSheet()}>{sheetBusy?'正在读取最新数据…':'生成派送单'}</button><button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
+      {selectedBatches.size > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button disabled={sheetBusy} className="rounded bg-brand px-3 py-2 text-white disabled:opacity-50" onClick={()=>void openSheet()}>{sheetBusy?'正在读取最新数据…':'生成派送单'}</button>{status === "pending" && <button className="rounded bg-brand px-3 py-2 text-white" onClick={()=>setTripKeys([...selectedBatches])}>生成司机派送趟</button>}<button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
       <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase tracking-wider text-slate-400">
@@ -275,6 +277,7 @@ function DeliveryQueuePage() {
       </div>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
       {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}
+      {tripKeys && <AssignDriverTrip keys={tripKeys} onClose={()=>setTripKeys(null)} onDone={()=>{setTripKeys(null);setSelectedBatches(new Set());void refresh();alert("已生成，司机可在司机派送页面查看");}}/>}
       {sheetRows && <DeliverySheetBuilder rows={sheetRows} onClose={()=>setSheetRows(null)}/>}
     </Page>
   );

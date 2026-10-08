@@ -26,5 +26,11 @@ try{
  await db.query('select driver_dispatch_units($1,$2,$3)',[id(1),id(20),[id(10)]]);
  assert.equal((await db.query(`select has_function_privilege('authenticated','driver_load_unit(uuid,uuid,text)','execute') allowed`)).rows[0].allowed,false);
  assert.equal((await db.query(`select has_table_privilege('authenticated','driver_trip_items','select') allowed`)).rows[0].allowed,false);
+ await assert.rejects(db.query('delete from driver_trips where id=$1',[id(20)]),/foreign key/);
+ await db.query('delete from driver_trips where id=$1 and driver_id=$2',[id(21),id(1)]);
+ assert.equal((await db.query('select count(*)::int n from driver_trips where id=$1',[id(21)])).rows[0].n,1);
+ await db.query('delete from driver_trips where id=$1 and driver_id=$2',[id(21),id(2)]);
+ assert.equal((await db.query('select count(*)::int n from driver_trips where id=$1',[id(21)])).rows[0].n,0);
+ await assert.rejects(scan(2,21,'WB3'),/不存在/);
  console.log('司机趟次测试通过：连续编号、重复去重、跨司机隔离、跨趟拒绝、精确派送范围、幂等重试、数据库权限。');
 }finally{await db.close();}

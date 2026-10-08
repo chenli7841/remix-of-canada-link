@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   listDriverTrips,
+  deleteEmptyDriverTrip,
   createDriverTrip,
   getDriverTrip,
   scanDriverTrip,
@@ -29,6 +30,7 @@ const money = (n: any) => (n == null ? "待确认" : `CA$${Number(n).toFixed(2)}
 export function DriverWorkspace() {
   const { user } = useAuth();
   const driverId = user?.id;
+  const removeEmpty = useServerFn(deleteEmptyDriverTrip);
   const list = useServerFn(listDriverTrips),
     create = useServerFn(createDriverTrip),
     read = useServerFn(getDriverTrip),
@@ -117,9 +119,23 @@ export function DriverWorkspace() {
       setMessage("新一趟从 1 开始编号");
       await trips.refetch();
     });
+  const deleteEmpty = async (t: any) => {
+    if (lock.current || !window.confirm("确认删除这趟空派送清单？删除后无法恢复。")) return;
+    lock.current = true; setBusy(true); setError("");
+    try {
+      await removeEmpty({data: {tripId: t.id}});
+      if (tripId === t.id) {setTripId(""); setSelected(new Set()); setCustomer(null);}
+      setExpanded(old => {const next = new Set(old); next.delete(t.id); return next;});
+      setMaps(old => {const next = {...old}; delete next[t.id]; return next;});
+      setMessage("空派送趟已删除");
+      await trips.refetch();
+    } catch (e: any) {setError(e.message || "删除失败"); await trips.refetch();}
+    finally {lock.current = false; setBusy(false);}
+  };
   const complete = (t: any) => t.total > 0 && t.completed === t.total;
   const candidates = (trips.data || [])
-    .filter((t) => page !== "routes" || t.generated_at)
+    .filter((t) => page !== "routes" || t.generated_at || t.total === 0)
+    .filter((t) => page !== "loading" || t.source !== "admin")
     .filter(
       (t) =>
         !filter ||
@@ -138,7 +154,7 @@ export function DriverWorkspace() {
       (x) =>
         x.unit?.customer_code === customer?.customer_code && customer?.ids.includes(x.queue_id),
     )
-    .sort((a, b) => a.sequence - b.sequence);
+    .sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER));
   const toggle = (id: string) =>
     setExpanded((old) => {
       const n = new Set(old);
@@ -333,6 +349,7 @@ export function DriverWorkspace() {
                   已派送 {t.completed} / 共 {t.total} 个派送单位
                 </p>
               </button>
+              {t.total === 0 && <div className="px-4 pb-3"><button disabled={busy} className={btn + " text-red-300"} onClick={() => void deleteEmpty(t)}>删除空趟</button></div>}
               {expanded.has(t.id) && (
                 <div className="space-y-3 p-4">
                   {page === "loading" ? (
@@ -545,9 +562,9 @@ export function DriverWorkspace() {
                     </p>
                   </td>
                   <td className="break-all p-2">
-                    <div className="mb-2 inline-flex items-center gap-1 rounded-lg bg-amber-300 px-2 py-1 text-slate-950">
+                    {x.sequence != null && <div className="mb-2 inline-flex items-center gap-1 rounded-lg bg-amber-300 px-2 py-1 text-slate-950">
                       上车 <b className="text-2xl">{x.sequence}</b> 号
-                    </div>
+                    </div>}
                     <p>
                       {x.unit.kind === "carton"
                         ? "客户箱"
