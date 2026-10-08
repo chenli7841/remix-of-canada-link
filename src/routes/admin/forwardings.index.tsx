@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin/forwardings/")({ component: Forward
 const STATUSES = ["all","pending","received","storage","packed","shipped","in_transit","ready_pickup","delivered","cancelled"];
 const STATUS_LABEL: Record<string, string> = {
   all:"全部", pending:"待入库", received:"已入库", storage:"仓储中", packed:"已打包",
-  shipped:"已发出", in_transit:"运输中", ready_pickup:"可取货", delivered:"已签收", cancelled:"已取消",
+  shipped:"已发出", in_transit:"运输中", ready_pickup:"可取货", delivered:"已完成", cancelled:"已取消",
   procurement:"代采购", arrived:"清关中",
 };
 // 每个状态的徽标颜色（tailwind class）—— 可手动调整

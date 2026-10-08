@@ -148,7 +148,7 @@ function ReceivingDetail() {
       playAlertBeep();
       if (!window.confirm(`⚠ 仍有差异：\n${parts.join("\n")}\n\n仍确认到件？`)) return;
     } else {
-      if (!window.confirm("确认完成收货？将自动把批次和所有运单标记为已到件并更新轨迹。")) return;
+      if (!window.confirm("确认完成收货？将匹配批次及已扫描收货的运单标记为已到件，同步已收齐的订单，并记录操作人、时间和轨迹。")) return;
     }
     confirmInFlight.current = true;
     setBusy(true);
@@ -159,7 +159,7 @@ function ReceivingDetail() {
       setConfirmPhase('refreshing');
       setConfirmMessage('到件处理已完成，正在刷新收货状态…');
       await refresh();
-      setConfirmMessage('已确认收货：更新 ' + res.waybills_updated + ' 单。');
+      setConfirmMessage('已确认收货：匹配批次已到件，更新 ' + res.waybills_updated + ' 张运单、' + res.orders_updated + ' 张订单，操作记录已保存。');
       setConfirmPhase('success');
     } catch (e: any) {
       setConfirmMessage('未能确认处理结果：' + (e.message || '请求失败') + '。请先刷新核实收货状态，再决定是否重试。');
@@ -223,10 +223,8 @@ function ReceivingDetail() {
               {r.batch_id ? "更换批次" : "匹配批次"}
             </button>
           )}
-          {/* 准备派送不改收货单/批次状态，只是把批次内容同步进待派送列表，且有去重——
-              到件确认后仍然可能需要补跑（比如确认前忘了点，或确认后批次内容有变动），
-              所以不跟 isFinal 挂钩，一直可用。 */}
-          <button onClick={onPrepare} disabled={busy || !r.batch_id}
+          {/* 确认到件后可重复同步批次内容；已进入队列或已派送的项目会跳过。 */}
+          <button onClick={onPrepare} disabled={busy || !r.batch_id || r.status !== 'confirmed'} title={r.status !== 'confirmed' ? '请先确认到件' : '将本批次加入待派送列表，已加入的项目不会重复添加'}
             className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20 disabled:opacity-50">
             <Truck className="h-3.5 w-3.5" />准备派送
           </button>

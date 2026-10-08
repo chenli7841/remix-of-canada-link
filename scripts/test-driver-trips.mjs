@@ -1,0 +1,30 @@
+import {PGlite} from '../outputs/db-test-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite(),id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);insert into auth.users values('${id(1)}'),('${id(2)}');
+ create function has_role(uuid,text) returns boolean language sql as $$select $1 in ('${id(1)}'::uuid,'${id(2)}'::uuid) and $2='driver'$$;
+ create table delivery_queue(id uuid primary key,code text,status text,customer_code text,dispatched_by uuid);
+ create table admin_action_logs(entity_type text,entity_id text,action text,operator_id uuid,note text,after jsonb);
+ insert into delivery_queue values('${id(10)}','BOX1','pending','00123',null),('${id(11)}','WB2','pending','00123',null),('${id(12)}','WB3','pending','00123',null);`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261008030000_driver_trips.sql','utf8'));
+ await db.exec(`insert into driver_trips(id,driver_id,driver_name) values('${id(20)}','${id(1)}','司机甲'),('${id(21)}','${id(2)}','司机乙');`);
+ const scan=async(actor,trip,code)=>(await db.query(`select driver_load_unit($1,$2,$3) r`,[id(actor),id(trip),code])).rows[0].r;
+ assert.equal((await scan(1,20,'BOX1')).sequence,1);assert.equal((await scan(1,20,'BOX1')).duplicate,true);
+ assert.equal((await scan(1,20,'WB2')).sequence,2);
+ await assert.rejects(scan(2,20,'WB3'),/不属于/);
+ await assert.rejects(scan(2,21,'BOX1'),/另一趟/);
+ await assert.rejects(scan(1,20,'unknown'),/未找到唯一/);
+ assert.equal((await db.query(`select revision from driver_trips where id='${id(20)}'`)).rows[0].revision,2);
+ assert.equal((await db.query('select count(*)::int n from admin_action_logs')).rows[0].n,2);
+ await assert.rejects(db.query('select driver_dispatch_units($1,$2,$3)',[id(2),id(20),[id(10)]]),/不属于/);
+ await assert.rejects(db.query('select driver_dispatch_units($1,$2,$3)',[id(1),id(20),[id(12)]]),/不属于此趟/);
+ await db.query('select driver_dispatch_units($1,$2,$3)',[id(1),id(20),[id(10)]]);
+ assert.equal((await db.query(`select status from delivery_queue where id='${id(10)}'`)).rows[0].status,'dispatched');
+ assert.equal((await db.query(`select status from delivery_queue where id='${id(11)}'`)).rows[0].status,'pending');
+ await db.query('select driver_dispatch_units($1,$2,$3)',[id(1),id(20),[id(10)]]);
+ assert.equal((await db.query(`select has_function_privilege('authenticated','driver_load_unit(uuid,uuid,text)','execute') allowed`)).rows[0].allowed,false);
+ assert.equal((await db.query(`select has_table_privilege('authenticated','driver_trip_items','select') allowed`)).rows[0].allowed,false);
+ console.log('司机趟次测试通过：连续编号、重复去重、跨司机隔离、跨趟拒绝、精确派送范围、幂等重试、数据库权限。');
+}finally{await db.close();}

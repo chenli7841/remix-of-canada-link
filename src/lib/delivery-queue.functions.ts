@@ -96,13 +96,15 @@ export const prepareDelivery = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: recv } = await supabaseAdmin
+    const { data: recv, error: receivingError } = await supabaseAdmin
       .from("receivings")
       .select("id, batch_id, status")
       .eq("id", data.receivingId)
       .maybeSingle();
+    if (receivingError) throw new Error('收货单读取失败：' + receivingError.message);
     if (!recv) throw new Error("收货单不存在");
     if (!recv.batch_id) throw new Error("请先匹配批次");
+    if (recv.status !== 'confirmed') throw new Error('请先确认到件，再准备派送');
 
     const batchId = recv.batch_id;
 
@@ -136,7 +138,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
     const userIds = Array.from(new Set(waybillsToAdd.map((w) => w.user_id).filter(Boolean)));
     let userMap = new Map<string, { customer_code?: string | null }>();
     if (userIds.length) {
-      const { data: profs } = await supabaseAdmin.from("profiles").select("id, customer_code").in("id", userIds);
+      const profs = await readDeliveryRows(supabaseAdmin, 'profiles', 'id,customer_code', 'id', userIds);
       userMap = new Map((profs ?? []).map((p: any) => [p.id, { customer_code: p.customer_code }]));
     }
 
@@ -187,24 +189,22 @@ export const prepareDelivery = createServerFn({ method: "POST" })
       })),
     ];
 
-    // Skip rows already in pending
+    // Keep batches independent; retrying preparation must not overwrite another queue entry.
     let inserted = 0,
       skipped = 0;
     if (rows.length) {
-      // fetch existing pending by (kind, ref_id)
       const refIds = rows.map((r) => r.ref_id);
-      const { data: existing } = await supabaseAdmin
-        .from("delivery_queue")
-        .select("kind, ref_id")
-        .in("ref_id", refIds)
-        .eq("status", "pending");
-      const exSet = new Set((existing ?? []).map((e: any) => `${e.kind}:${e.ref_id}`));
+      const existing = await readDeliveryRows(supabaseAdmin, 'delivery_queue', 'id,kind,ref_id,status', 'ref_id', refIds);
+      const exSet = new Set(existing.filter(e => e.status === 'pending' || e.status === 'dispatched').map((e: any) => `${e.kind}:${e.ref_id}`));
       const toInsert = rows.filter((r) => !exSet.has(`${r.kind}:${r.ref_id}`));
       skipped = rows.length - toInsert.length;
       if (toInsert.length) {
-        const { error } = await supabaseAdmin.from("delivery_queue").insert(toInsert);
+        const { error, count } = await supabaseAdmin.from("delivery_queue").upsert(toInsert, {
+          onConflict: 'kind,ref_id,status', ignoreDuplicates: true, count: 'exact',
+        });
         if (error) throw new Error(error.message);
-        inserted = toInsert.length;
+        inserted = count ?? 0;
+        skipped = rows.length - inserted;
       }
     }
 

@@ -13,9 +13,10 @@ export const driverAccess = createServerFn({method:'GET'}).middleware([requireSu
   await requireDriver(context);return {ok:true};
 });
 export const searchDriverDeliveries = createServerFn({method:'GET'}).middleware([requireSupabaseAuth])
-  .inputValidator(z.object({customerCode:customer})).handler(async({data,context})=>{
+  .inputValidator(z.object({customerCode:customer,includeCompleted:z.boolean().optional()})).handler(async({data,context})=>{
     await requireDriver(context);
     const result=await loadDeliveryGroups('pending',data.customerCode);
+    if(data.includeCompleted){const done=await loadDeliveryGroups('dispatched',data.customerCode);for(const g of done.groups)if(!result.groups.some(p=>p.batch_id===g.batch_id))result.groups.push(g);}
     return result.groups.map(g=>({
       batch_id:g.batch_id,batch_no:g.batch_no,batch_name:g.batch_name,customer_code:g.customer_code,
       full_name:g.full_name,address:g.address,phone:g.phone,wallet_balance_cad:g.wallet_balance_cad,

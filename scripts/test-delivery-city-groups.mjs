@@ -21,3 +21,17 @@ assert.equal(groups.find(g=>g.city==='Montréal').count,3);
 assert.equal(groups.reduce((n,g)=>n+g.count,0),13);
 assert.equal(rows[0].city,' Toronto ');
 console.log('城市分组测试通过：大小写/空格/重音合并、跨省同名分开、客户去重、单位数保留、缺失城市置后。');
+const batches = [
+ {key:'a:1',customer_code:'001',address:'40 Test Road',phone:'123',ids:['one']},
+ {key:'b:1',customer_code:'002',address:'40 Test Road',phone:'123',ids:['two']},
+ {key:'a:2',customer_code:'001',address:' 40 TEST Road ',phone:'123',ids:['three']},
+ {key:'a:3',customer_code:'001',address:'50 Test Road',phone:'123',ids:['four']},
+];
+const shared=exports.groupDeliveriesByCustomerAddress(batches);
+assert.deepEqual(Array.from(shared,x=>x.row.key),['a:1','a:2','b:1','a:3']);
+assert.deepEqual(Array.from(shared,x=>x.sharedRowSpan),[2,0,1,1]);
+assert.equal(shared[0].row,batches[0]);
+assert.equal(shared[1].row,batches[2]);
+assert.deepEqual(shared[0].row.ids,['one']);
+assert.deepEqual(shared[1].row.ids,['three']);
+console.log('多批次显示通过：同客户同地址相邻合并，不同客户/地址分开，批次操作 ID 保持独立。');

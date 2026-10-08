@@ -103,7 +103,7 @@ function CustomerDeliveryDetail() {
   const onBulk = async (status: "dispatched" | "cancelled") => {
     const ids = Array.from(selected).filter(id=>items.some(i=>i.id===id && i.status === "pending"));
     if (!ids.length) return alert("请先选择项");
-    if (!window.confirm(`确认将 ${ids.length} 项标记为 ${STATUS_LABEL[status]}？`)) return;
+    if (!window.confirm(`确认将 ${ids.length} 项标记为 ${STATUS_LABEL[status]}？${status === 'dispatched' ? '运单将完成，并记录已派送及晚 30 秒的已完成轨迹。' : ''}`)) return;
     if (busy) return;
     setBusy(true);
     try { await bulkUpdate({ data: { customerUserId, customerCode, status, ids, ...(batchId ? {batchId: batchId === "unassigned" ? null : batchId} : {}) } }); setSelected(new Set()); await refresh(); }
@@ -112,7 +112,7 @@ function CustomerDeliveryDetail() {
 
   const onItemAction = async (id: string, status: "dispatched" | "cancelled") => {
     if (busy) return;
-    if (!window.confirm('确认将此项标记为' + STATUS_LABEL[status] + '？')) return;
+    if (!window.confirm('确认将此项标记为' + STATUS_LABEL[status] + '？' + (status === 'dispatched' ? '运单将完成，并记录已派送及晚 30 秒的已完成轨迹。' : ''))) return;
     setBusy(true);
     try { await updateItem({ data: { id, status } }); await refresh(); } catch (e:any) { alert(e.message || '操作失败'); } finally { setBusy(false); }
   };

@@ -38,7 +38,9 @@ export const deliveryMapsReady = createServerFn({method:'GET'}).middleware([requ
 
 export const planDeliveryRoute = createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
   .inputValidator(z.object({origin:z.string().trim().min(1).max(500), addresses:z.array(z.string().trim().min(1).max(500)).min(1).max(21), roundTrip:z.boolean(), optimize:z.boolean(), keepFirst:z.boolean().optional(), returnAddress:z.string().trim().min(1).max(500).optional()}))
-  .handler(async ({data,context})=>{
+  .handler(async ({data,context})=>computeDeliveryRoute(data,context));
+
+export async function computeDeliveryRoute(data:{origin:string;addresses:string[];roundTrip:boolean;optimize:boolean;keepFirst?:boolean;returnAddress?:string},context:any) {
     await staff(context);
     const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
     if (!key) throw new Error('尚未配置 Google 地图，可先手动排序并打开导航');
@@ -98,4 +100,4 @@ export const planDeliveryRoute = createServerFn({method:'POST'}).middleware([req
       }
     } catch { /* Route order remains usable if the map request fails. */ }
     return {order,map,optimized:optimize,warning:map?'':'路线已生成，但地图图片加载失败，请检查 Maps Static API 后重试'};
-  });
+  }

@@ -1,4 +1,4 @@
-import { groupDeliveriesByCity } from '@/lib/delivery-city-groups';
+import { groupDeliveriesByCity, groupDeliveriesByCustomerAddress } from '@/lib/delivery-city-groups';
 import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
 import { DeliverySheetBuilder } from '@/components/admin/DeliverySheetBuilder';
 import { deliveryStops, type DeliverySheetRow } from '@/lib/delivery-sheet';
@@ -83,7 +83,7 @@ function DeliveryQueuePage() {
 
   const onDispatchAll = async (g: any) => {
     if (!g.customer_user_id && !g.customer_code) return;
-    if (!window.confirm(`将客户 ${g.customer_code ?? ""} 在批次 ${g.batch_name} 的 ${g.count} 项标记为已派送？`)) return;
+    if (!window.confirm(`确认派送客户 ${g.customer_code ?? ""} 在批次 ${g.batch_name} 的 ${g.count} 项？运单将标记已完成，并记录已派送及晚 30 秒的已完成轨迹。`)) return;
     await bulkUpdate({
       data: {
         customerUserId: g.customer_user_id,
@@ -210,9 +210,9 @@ function DeliveryQueuePage() {
                 <span className="ml-2 text-xs font-normal text-slate-400">{[cityGroup.province, cityGroup.country].filter(Boolean).join(' · ')}</span>
                 <span className="ml-4 text-xs font-normal text-slate-300">{cityGroup.customers.size} 个客户 · {cityGroup.rows.length} 个客户批次 · {cityGroup.count} 个派送单位</span>
               </th></tr>
-            {!collapsedCities.has(cityGroup.key) && cityGroup.rows.map((g: any) => (
+            {!collapsedCities.has(cityGroup.key) && groupDeliveriesByCustomerAddress(cityGroup.rows).map(({row:g,sharedRowSpan}: any) => (
               <tr key={g.key} className="hover:bg-white/[0.03] align-top">
-                <td className="px-4 py-3 text-xs">
+                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs border-r border-white/5">
                   <div className="font-mono text-slate-100">{g.customer_code ?? "—"}</div>
                   {g.full_name && <div className="text-[11px] text-slate-500">{g.full_name}</div>}
                   {g.wallet_balance_cad != null && (
@@ -220,17 +220,18 @@ function DeliveryQueuePage() {
                       <Wallet className="h-3 w-3" /> 余额 CA${Number(g.wallet_balance_cad).toFixed(2)}
                     </div>
                   )}
-                </td>
+                  {sharedRowSpan > 1 && <div className="mt-2 text-sky-300">{sharedRowSpan} 个派送批次</div>}
+                </td>}
                 <td className="px-4 py-3 text-xs min-w-40">
                   {g.batch_id ? <Link to="/admin/batches/$batchId" params={{batchId:g.batch_id}} className="text-brand">{g.batch_name}</Link> : '未关联批次'}
                   <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-slate-300"><input type="checkbox" className="accent-brand" checked={selectedBatches.has(g.key)} onChange={e=>toggleBatches([g.key],e.target.checked)}/>{g.batch_no || '未关联批次'}</label>
                   <div className={g.payment_label === '已付款' ? 'mt-1 text-emerald-300' : 'mt-1 text-amber-300'}>{g.payment_label}</div>
                 </td>
                 <td className="px-4 py-3 text-center text-xs whitespace-nowrap"><strong className="text-brand">{g.count}</strong><div className="mt-1 text-slate-400">独立运单 {g.waybill_count}<br/>客户箱 {g.carton_count} · 客户托盘 {g.pallet_count}</div></td>
-                <td className="px-4 py-3 text-xs text-slate-300 max-w-xs">
+                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs text-slate-300 max-w-xs">
                   <button type="button" disabled={!g.editable_address} onClick={()=>setAddressEdit(g)} title="点击修改收货地址" className="text-left underline decoration-dotted underline-offset-4 hover:text-brand disabled:no-underline">{g.address || '点击填写地址'}</button>
-                </td>
-                <td className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>
+                </td>}
+                {sharedRowSpan > 0 && <td rowSpan={sharedRowSpan} className="px-4 py-3 text-xs">{g.phone ?? <span className="text-slate-500">—</span>}</td>}
                 <td className="px-4 py-3 text-right text-xs">{g.chargeable_weight_kg == null ? '待更新' : Number(g.chargeable_weight_kg).toFixed(3)}</td>
                 <td className="px-4 py-3 text-right text-xs">{g.total_cad == null ? '待确认' : 'CAD ' + Number(g.total_cad).toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-xs whitespace-nowrap">

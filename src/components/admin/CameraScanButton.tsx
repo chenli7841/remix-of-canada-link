@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, X } from 'lucide-react';
 
 /** Decode into the existing input only. Existing submit/reminder flows retain control. */
-export function CameraScanButton({ onScan, disabled = false }: {
-  onScan: (code: string) => void;
+export function CameraScanButton({ onScan, disabled = false, continuous = false }: {
+  onScan: (code: string) => void | Promise<void>;
   disabled?: boolean;
+  continuous?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
@@ -64,8 +65,14 @@ export function CameraScanButton({ onScan, disabled = false }: {
                   setMessage('刚刚已识别此单号，请移开条码。');
                 } else {
                   last.current = { code, time: Date.now() };
+                  if (continuous) {
+                    try { await callback.current(code); setMessage(`已识别：${code}，继续扫描下一件。`); }
+                    catch (e) { setMessage(e instanceof Error ? e.message : '扫码处理失败，请重试'); }
+                    if (!cancelled) timer = setTimeout(tick, 250);
+                    return;
+                  }
                   stop(); setOpen(false);
-                  callback.current(code);
+                  void callback.current(code);
                   setMessage(`已识别：${code}。请核对后点击原页面的确认按钮；完成后可继续扫码。`);
                   return;
                 }
@@ -87,7 +94,7 @@ export function CameraScanButton({ onScan, disabled = false }: {
     }
     void start();
     return () => { stop(); document.removeEventListener('visibilitychange', hide); };
-  }, [open, disabled]);
+  }, [open, disabled, continuous]);
 
   return <div className="mt-3 text-slate-100">
     <button type="button" disabled={disabled} onClick={() => { setMessage(''); setOpen(v => !v); }}

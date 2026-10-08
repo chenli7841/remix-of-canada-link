@@ -376,68 +376,14 @@ export const confirmReceiving = createServerFn({ method: "POST" })
     const { assertReturnReminder } = await import('./return-reminder.server');
     await assertReturnReminder(supabaseAdmin, 'confirmReceiving', data, { batchIds: [recv.batch_id] });
 
-    // 1. Batch → arrived
-    await supabaseAdmin.from("batches").update({ status: "arrived" }).eq("id", recv.batch_id);
-    // 2. Waybills under this batch → arrived (skip terminal/downstream)
-    const { data: wbs } = await supabaseAdmin
-      .from("waybills")
-      .select("id, waybill_no, status")
-      .eq("assigned_batch_id", recv.batch_id);
-    // 跳过已是终态/下游状态的运单，既不改它们的 status，也不给它们补一条"已到达目的地
-    // 仓库"的轨迹——否则一个已经 delivered/in_transit 的运单会在轨迹时间线上凭空多出一条
-    // 排在后面的"到达"记录，跟它实际的状态倒挂。
-    const updWbs = (wbs ?? []).filter((w) => !["delivered", "cancelled", "in_transit", "ready_pickup"].includes(w.status));
-    if (updWbs.length) {
-      const updIds = updWbs.map((w) => w.id);
-      await supabaseAdmin.from("waybills").update({ status: "arrived" }).in("id", updIds);
-      // 3. Add tracking event to each updated waybill
-      const loc = data.location_zh || recv.warehouse_code || "目的地仓库";
-      const now = new Date().toISOString();
-      for (const w of updWbs) {
-        let { data: ship } = await supabaseAdmin
-          .from("shipments")
-          .select("id")
-          .eq("tracking_no", w.waybill_no)
-          .maybeSingle();
-        if (!ship) {
-          const { data: ins } = await supabaseAdmin
-            .from("shipments")
-            .insert({ tracking_no: w.waybill_no, status: "created" })
-            .select("id")
-            .single();
-          ship = ins;
-        }
-        if (!ship) continue;
-        await supabaseAdmin.from("tracking_events").insert({
-          shipment_id: ship.id,
-          status_zh: "已到达目的地仓库",
-          status_en: "Arrived at destination warehouse",
-          location_zh: loc,
-          location_en: loc,
-          event_time: now,
-          source: "admin_action",
-          source_ref: "receiving:" + data.receivingId,
-        });
-      }
-    }
-    // 4. Mark receiving confirmed
-    await supabaseAdmin
-      .from("receivings")
-      .update({
-        status: "confirmed",
-        confirmed_at: new Date().toISOString(),
-      })
-      .eq("id", data.receivingId);
-
-    await recordAdminLog(supabaseAdmin, {
-      entity_type: "receiving",
-      entity_id: data.receivingId,
-      action: "confirm",
-      after: { batch_id: recv.batch_id, waybills_updated: updWbs.length },
-      operator_id: context.userId,
+    const { data: result, error } = await (supabaseAdmin as any).rpc("confirm_receiving_atomic", {
+      _receiving_id: data.receivingId,
+      _batch_id: recv.batch_id,
+      _operator_id: context.userId,
+      _location: data.location_zh || null,
     });
-
-    return { ok: true, waybills_updated: updWbs.length };
+    if (error) throw new Error("确认到件失败：" + error.message);
+    return result as { ok: boolean; already_confirmed?: boolean; waybills_updated: number; orders_updated: number };
   });
 
 // ===== Update notes / warehouse / close =====

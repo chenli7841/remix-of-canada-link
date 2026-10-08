@@ -18,3 +18,19 @@ export function groupDeliveriesByCity<T extends { city?: string | null; province
     return a.city.localeCompare(b.city, 'zh-CN', { sensitivity: 'base' }) || a.key.localeCompare(b.key);
   });
 }
+
+/** Keep each batch operationally independent, sharing only identical customer/address cells. */
+export function groupDeliveriesByCustomerAddress<T extends { key?: string; customer_user_id?: string | null; customer_code?: string | null; address?: string | null; phone?: string | null }>(rows: T[]) {
+  const groups = new Map<string, T[]>();
+  const clean = (value?: string | null) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  for (const row of rows) {
+    const owner = row.customer_user_id || row.customer_code || row.key;
+    const key = JSON.stringify([owner, clean(row.address), clean(row.phone)]);
+    const group = groups.get(key) || [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).flatMap(group => group.map((row,index) => ({
+    row, sharedRowSpan: index === 0 ? group.length : 0,
+  })));
+}
