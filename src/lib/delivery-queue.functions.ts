@@ -299,11 +299,25 @@ export const updateDeliveryQueueItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("delivery_queue")
+      .select("source_batch_id,customer_code")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (beforeError) throw new Error(beforeError.message);
     const patch: any = { status: data.status };
     if (data.notes !== undefined) patch.notes = data.notes;
     if (data.status === "dispatched") patch.dispatched_by = context.userId;
     const { error } = await supabaseAdmin.from("delivery_queue").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
+    if (data.status === "dispatched" && before?.source_batch_id && before?.customer_code) {
+      const { recordWecomDailyDispatched } = await import("./wecom-daily-notify.server");
+      await recordWecomDailyDispatched(
+        supabaseAdmin,
+        before.source_batch_id,
+        before.customer_code,
+      );
+    }
     if (data.status !== "dispatched") await logAction(supabaseAdmin, context.userId, `delivery_queue.${data.status}`, data.id, patch);
     return { ok: true };
   });
@@ -609,6 +623,26 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
     const patch: any = { status: data.status };
     if (data.status === "dispatched") patch.dispatched_by = context.userId;
 
+    let notificationTargets: Array<{ source_batch_id: string | null; customer_code: string | null }> = [];
+    if (data.status === "dispatched") {
+      let targetQuery = supabaseAdmin
+        .from("delivery_queue")
+        .select("source_batch_id,customer_code")
+        .eq("status", "pending");
+      if (data.ids?.length) targetQuery = targetQuery.in("id", data.ids);
+      else if (data.customerUserId) targetQuery = targetQuery.eq("customer_user_id", data.customerUserId);
+      else if (data.customerCode) targetQuery = targetQuery.eq("customer_code", data.customerCode);
+      else throw new Error("缺少目标");
+      if (data.batchId !== undefined) {
+        targetQuery = data.batchId
+          ? targetQuery.eq("source_batch_id", data.batchId)
+          : targetQuery.is("source_batch_id", null);
+      }
+      const { data: targets, error: targetError } = await targetQuery;
+      if (targetError) throw new Error(targetError.message);
+      notificationTargets = targets ?? [];
+    }
+
     let q = supabaseAdmin.from("delivery_queue").update(patch);
     if (data.ids && data.ids.length) q = q.in("id", data.ids);
     else {
@@ -620,6 +654,23 @@ export const bulkUpdateCustomerDelivery = createServerFn({ method: "POST" })
     if (data.batchId !== undefined) q = data.batchId ? q.eq('source_batch_id', data.batchId) : q.is('source_batch_id', null);
     const { error } = await q;
     if (error) throw new Error(error.message);
+
+    if (data.status === "dispatched") {
+      const uniqueTargets = new Map<string, { batchId: string; customerCode: string }>();
+      for (const target of notificationTargets) {
+        const batchId = target.source_batch_id;
+        const customerCode = target.customer_code?.trim();
+        if (batchId && customerCode) {
+          uniqueTargets.set(`${batchId}:${customerCode}`, { batchId, customerCode });
+        }
+      }
+      if (uniqueTargets.size) {
+        const { recordWecomDailyDispatched } = await import("./wecom-daily-notify.server");
+        for (const target of uniqueTargets.values()) {
+          await recordWecomDailyDispatched(supabaseAdmin, target.batchId, target.customerCode);
+        }
+      }
+    }
 
     if (data.status !== "dispatched") await logAction(
       supabaseAdmin,

@@ -50,6 +50,13 @@ type DailySections = {
     unitCount: number;
     address: string;
   }>;
+  dispatched?: Array<{
+    batchId: string;
+    batchName: string;
+    batchNo: string;
+    unitCount: number;
+    dispatchedAt: string;
+  }>;
 };
 
 type StoredDailyEvent = {
@@ -69,6 +76,7 @@ type StoredDailyEvent = {
     batchNo?: string;
     unitCount?: number;
     address?: string;
+    dispatchedAt?: string;
   };
   occurred_at: string;
 };
@@ -78,6 +86,18 @@ const displayWeight = (value: number) => Number(value.toFixed(3));
 function chineseDate(serviceDate: string): string {
   const [year, month, day] = serviceDate.split("-").map(Number);
   return `${year}年${month}月${day}日`;
+}
+
+function torontoDateTime(value: string): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: TORONTO_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(value));
 }
 
 function renderDailyContent(
@@ -135,6 +155,18 @@ function renderDailyContent(
     });
     lines.push("预计在一周内派送到家。", "如有问题，请联系客服。");
   }
+  if (sections.dispatched?.length) {
+    lines.push("", "【已派送】");
+    sections.dispatched.forEach((item, index) => {
+      if (index > 0) lines.push("");
+      lines.push(
+        `批次名称：${item.batchName}`,
+        `批次号：${item.batchNo}`,
+        `派送时间：${torontoDateTime(item.dispatchedAt)}`,
+        `派送单元：${item.unitCount}个`,
+      );
+    });
+  }
   return lines.join("\n");
 }
 
@@ -171,6 +203,7 @@ async function refreshDailyDraft(
     (event) => event.category === "customer_payment",
   );
   const deliveryReadyEvents = storedEvents.filter((event) => event.category === "delivery_ready");
+  const dispatchedEvents = storedEvents.filter((event) => event.category === "dispatched");
   const sections: DailySections = { ...(existing?.sections ?? {}) };
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
@@ -224,6 +257,17 @@ async function refreshDailyDraft(
     }));
   } else {
     delete sections.deliveryReady;
+  }
+  if (dispatchedEvents.length) {
+    sections.dispatched = dispatchedEvents.map((event) => ({
+      batchId: String(event.payload.batchId ?? ""),
+      batchName: String(event.payload.batchName ?? "未命名批次"),
+      batchNo: String(event.payload.batchNo ?? "—"),
+      unitCount: Number(event.payload.unitCount ?? 0),
+      dispatchedAt: String(event.payload.dispatchedAt ?? event.occurred_at),
+    }));
+  } else {
+    delete sections.dispatched;
   }
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
@@ -540,4 +584,57 @@ export async function recordWecomDailyDeliveryReady(
   if (error) throw new Error(`生成准备派送微信通知失败: ${error.message}`);
   await refreshDailyDraft(admin, serviceDate, input.customerCode);
   return { recorded: 1, serviceDate, customerCode: input.customerCode };
+}
+
+export async function recordWecomDailyDispatched(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  batchId: string,
+  customerCode: string,
+) {
+  const [{ data: units, error: unitError }, { data: batch, error: batchError }] = await Promise.all(
+    [
+      admin
+        .from("delivery_queue")
+        .select("id,dispatched_at")
+        .eq("source_batch_id", batchId)
+        .eq("customer_code", customerCode)
+        .eq("status", "dispatched"),
+      admin.from("batches").select("batch_no,display_name").eq("id", batchId).maybeSingle(),
+    ],
+  );
+  if (unitError) throw new Error(`读取已派送单元失败: ${unitError.message}`);
+  if (batchError || !batch)
+    throw new Error(`读取派送批次失败: ${batchError?.message ?? "批次不存在"}`);
+  if (!units?.length) throw new Error("没有找到已派送单元");
+  const dispatchedAt =
+    (units as Array<{ dispatched_at?: string | null }>)
+      .map((unit) => unit.dispatched_at)
+      .filter((value): value is string => !!value)
+      .sort()
+      .at(-1) ?? new Date().toISOString();
+  const serviceDate = nextTorontoSendDate();
+  const eventKey = `dispatched:${batchId}:${customerCode}:${serviceDate}`;
+  const { error } = await admin.from("wecom_daily_notification_events").upsert(
+    {
+      service_date: serviceDate,
+      customer_code: customerCode,
+      category: "dispatched",
+      source_type: "batch",
+      source_id: batchId,
+      event_key: eventKey,
+      payload: {
+        batchId,
+        batchName: String(batch.display_name ?? batch.batch_no ?? "未命名批次"),
+        batchNo: String(batch.batch_no ?? "—"),
+        unitCount: units.length,
+        dispatchedAt,
+      },
+      occurred_at: dispatchedAt,
+    },
+    { onConflict: "event_key" },
+  );
+  if (error) throw new Error(`生成已派送微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, customerCode);
+  return { recorded: 1, serviceDate, customerCode, unitCount: units.length };
 }

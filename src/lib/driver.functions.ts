@@ -33,7 +33,12 @@ export const actOnDriverDelivery = createServerFn({method:'POST'}).middleware([r
     const {supabaseAdmin:admin}=await import('@/integrations/supabase/client.server');
     const r=await (admin as any).rpc('driver_delivery_action',{_actor:context.userId,_batch:data.batchId,_customer:data.customerCode,
       _action:data.action,_note:data.note,_expected_cad:data.expectedCad??null});
-    if(r.error)throw new Error(r.error.message);return r.data as {ok:boolean;alreadyPaid:boolean};
+    if(r.error)throw new Error(r.error.message);
+    if(data.action==='dispatch'){
+      const {recordWecomDailyDispatched}=await import('@/lib/wecom-daily-notify.server');
+      await recordWecomDailyDispatched(admin,data.batchId,data.customerCode);
+    }
+    return r.data as {ok:boolean;alreadyPaid:boolean};
   });
 
 async function requirePhotoScope(context:any,data:{batchId:string;customerCode:string},upload=false) {
