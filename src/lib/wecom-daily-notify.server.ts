@@ -43,6 +43,13 @@ type DailySections = {
     dueCad: number;
     balanceCad: number;
   };
+  deliveryReady?: Array<{
+    receivingId: string;
+    batchName: string;
+    batchNo: string;
+    unitCount: number;
+    address: string;
+  }>;
 };
 
 type StoredDailyEvent = {
@@ -58,6 +65,10 @@ type StoredDailyEvent = {
     totalFeeCad?: number;
     dueCad?: number;
     balanceCad?: number;
+    receivingId?: string;
+    batchNo?: string;
+    unitCount?: number;
+    address?: string;
   };
   occurred_at: string;
 };
@@ -111,6 +122,19 @@ function renderDailyContent(
       `余额不足：CAD ${(sections.customerPayment.dueCad - sections.customerPayment.balanceCad).toFixed(2)}`,
     );
   }
+  if (sections.deliveryReady?.length) {
+    lines.push("", "【准备派送】");
+    sections.deliveryReady.forEach((item, index) => {
+      if (index > 0) lines.push("");
+      lines.push(
+        `批次名称：${item.batchName}`,
+        `批次号：${item.batchNo}`,
+        `派送单元：${item.unitCount}个`,
+        `派送地址：${item.address || "未设置"}`,
+      );
+    });
+    lines.push("预计在一周内派送到家。", "如有问题，请联系客服。");
+  }
   return lines.join("\n");
 }
 
@@ -146,6 +170,7 @@ async function refreshDailyDraft(
   const customerPaymentEvents = storedEvents.filter(
     (event) => event.category === "customer_payment",
   );
+  const deliveryReadyEvents = storedEvents.filter((event) => event.category === "delivery_ready");
   const sections: DailySections = { ...(existing?.sections ?? {}) };
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
@@ -188,6 +213,17 @@ async function refreshDailyDraft(
     };
   } else {
     delete sections.customerPayment;
+  }
+  if (deliveryReadyEvents.length) {
+    sections.deliveryReady = deliveryReadyEvents.map((event) => ({
+      receivingId: String(event.payload.receivingId ?? ""),
+      batchName: String(event.payload.batchName ?? "未命名批次"),
+      batchNo: String(event.payload.batchNo ?? "—"),
+      unitCount: Number(event.payload.unitCount ?? 0),
+      address: String(event.payload.address ?? "未设置"),
+    }));
+  } else {
+    delete sections.deliveryReady;
   }
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
@@ -459,4 +495,49 @@ export async function removeWecomDailyCustomerPayment(
     .eq("event_key", `customer_payment:${customerCode}:${serviceDate}`);
   if (error) throw new Error(`清理客户代付款微信通知失败: ${error.message}`);
   await refreshDailyDraft(admin, serviceDate, customerCode);
+}
+
+export async function recordWecomDailyDeliveryReady(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  input: {
+    receivingId: string;
+    batchId: string;
+    customerCode: string;
+    unitCount: number;
+    address: string;
+  },
+) {
+  if (!(input.unitCount > 0)) return { recorded: 0 };
+  const { data: batch, error: batchError } = await admin
+    .from("batches")
+    .select("batch_no,display_name")
+    .eq("id", input.batchId)
+    .maybeSingle();
+  if (batchError || !batch)
+    throw new Error(`读取派送批次失败: ${batchError?.message ?? "批次不存在"}`);
+  const serviceDate = nextTorontoSendDate();
+  const eventKey = `delivery_ready:${input.receivingId}:${input.customerCode}:${serviceDate}`;
+  const { error } = await admin.from("wecom_daily_notification_events").upsert(
+    {
+      service_date: serviceDate,
+      customer_code: input.customerCode,
+      category: "delivery_ready",
+      source_type: "receiving",
+      source_id: input.receivingId,
+      event_key: eventKey,
+      payload: {
+        receivingId: input.receivingId,
+        batchName: String(batch.display_name ?? batch.batch_no ?? "未命名批次"),
+        batchNo: String(batch.batch_no ?? "—"),
+        unitCount: input.unitCount,
+        address: input.address || "未设置",
+      },
+      occurred_at: new Date().toISOString(),
+    },
+    { onConflict: "event_key" },
+  );
+  if (error) throw new Error(`生成准备派送微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, input.customerCode);
+  return { recorded: 1, serviceDate, customerCode: input.customerCode };
 }

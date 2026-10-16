@@ -220,6 +220,65 @@ export const prepareDelivery = createServerFn({ method: "POST" })
       },
     });
 
+    const unitsByCustomer = new Map<string, number>();
+    const userByCustomer = new Map<string, string>();
+    for (const row of rows) {
+      const customerCode = row.customer_code?.trim();
+      if (!customerCode) continue;
+      unitsByCustomer.set(customerCode, (unitsByCustomer.get(customerCode) ?? 0) + 1);
+      if (row.customer_user_id) userByCustomer.set(customerCode, row.customer_user_id);
+    }
+    const missingUserCodes = [...unitsByCustomer.keys()].filter(
+      (customerCode) => !userByCustomer.has(customerCode),
+    );
+    if (missingUserCodes.length) {
+      const { data: customerProfiles, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("id,customer_code")
+        .in("customer_code", missingUserCodes);
+      if (profileError) throw new Error(`读取派送客户账号失败：${profileError.message}`);
+      for (const profile of customerProfiles ?? []) {
+        if (profile.customer_code) userByCustomer.set(profile.customer_code, profile.id);
+      }
+    }
+    const deliveryUserIds = [...new Set(userByCustomer.values())];
+    const { data: addresses, error: addressError } = deliveryUserIds.length
+      ? await supabaseAdmin
+          .from("addresses")
+          .select("user_id,recipient,phone,line1,line2,city,province,postal_code,country")
+          .in("user_id", deliveryUserIds)
+          .eq("is_default", true)
+      : { data: [], error: null };
+    if (addressError) throw new Error(`读取客户默认派送地址失败：${addressError.message}`);
+    const addressByUser = new Map(
+      (addresses ?? []).map((address: any) => [
+        address.user_id,
+        [
+          address.recipient,
+          address.phone,
+          address.line1,
+          address.line2,
+          address.city,
+          address.province,
+          address.postal_code,
+          address.country,
+        ]
+          .filter(Boolean)
+          .join("，"),
+      ]),
+    );
+    const { recordWecomDailyDeliveryReady } = await import("./wecom-daily-notify.server");
+    for (const [customerCode, unitCount] of unitsByCustomer) {
+      const customerUserId = userByCustomer.get(customerCode);
+      await recordWecomDailyDeliveryReady(supabaseAdmin, {
+        receivingId: recv.id,
+        batchId,
+        customerCode,
+        unitCount,
+        address: (customerUserId && addressByUser.get(customerUserId)) || "未设置",
+      });
+    }
+
     return {
       ok: true,
       counts: {
@@ -229,6 +288,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
         inserted,
         skipped,
       },
+      notifiedCustomers: unitsByCustomer.size,
     };
   });
 
