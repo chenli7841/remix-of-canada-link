@@ -34,6 +34,11 @@ type DailySections = {
     totalChargeableWeightKg: number;
     totalFeeCad: number;
   }>;
+  batchPrices?: Array<{
+    batchId: string;
+    batchName: string;
+    totalFeeCad: number;
+  }>;
 };
 
 type StoredDailyEvent = {
@@ -44,6 +49,9 @@ type StoredDailyEvent = {
     volumetricWeightKg?: number;
     chargeableWeightKg?: number;
     freightCad?: number;
+    batchId?: string;
+    batchName?: string;
+    totalFeeCad?: number;
   };
   occurred_at: string;
 };
@@ -81,6 +89,13 @@ function renderDailyContent(
       );
     });
   }
+  if (sections.batchPrices?.length) {
+    lines.push("", "【批次价格已确认】");
+    sections.batchPrices.forEach((item) => {
+      lines.push(`${item.batchName} | CAD ${item.totalFeeCad.toFixed(2)}`);
+    });
+    lines.push("价格已经确认，请前往“我的批次”查看账单并完成付款。");
+  }
   return lines.join("\n");
 }
 
@@ -112,6 +127,7 @@ async function refreshDailyDraft(
   const storedEvents = (events ?? []) as StoredDailyEvent[];
   const intakeEvents = storedEvents.filter((event) => event.category === "intake");
   const measurementEvents = storedEvents.filter((event) => event.category === "measurement");
+  const batchPriceEvents = storedEvents.filter((event) => event.category === "batch_price");
   const sections: DailySections = { ...(existing?.sections ?? {}) };
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
@@ -136,6 +152,15 @@ async function refreshDailyDraft(
     sections.measurements = [...totalsByTracking.values()];
   } else {
     delete sections.measurements;
+  }
+  if (batchPriceEvents.length) {
+    sections.batchPrices = batchPriceEvents.map((event) => ({
+      batchId: String(event.payload.batchId ?? event.payload.batchName ?? ""),
+      batchName: String(event.payload.batchName ?? "未命名批次"),
+      totalFeeCad: Number(event.payload.totalFeeCad ?? 0),
+    }));
+  } else {
+    delete sections.batchPrices;
   }
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
@@ -302,4 +327,66 @@ export async function recordWecomDailyMeasurements(
   for (const customerCode of customerCodes)
     await refreshDailyDraft(admin, serviceDate, customerCode);
   return { recorded: rows.length, serviceDate, customerCodes };
+}
+
+export async function recordWecomDailyBatchPrice(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  batchId: string,
+  customerCode: string,
+) {
+  const serviceDate = nextTorontoSendDate();
+  const [{ data: batch, error: batchError }, { data: settlement, error: settlementError }] =
+    await Promise.all([
+      admin.from("batches").select("batch_no,display_name").eq("id", batchId).maybeSingle(),
+      admin
+        .from("batch_settlements")
+        .select("subtotal_cad,is_paid,confirmed")
+        .eq("batch_id", batchId)
+        .eq("customer_code", customerCode)
+        .maybeSingle(),
+    ]);
+  if (batchError) throw new Error(`读取批次名称失败: ${batchError.message}`);
+  if (settlementError) throw new Error(`读取批次确认金额失败: ${settlementError.message}`);
+  if (!settlement?.confirmed) throw new Error("价格尚未确认，不能生成微信预发送信息");
+  if (settlement.is_paid) return { recorded: 0, skipped: "paid" as const };
+
+  const eventKey = `batch_price:${batchId}:${customerCode}:${serviceDate}`;
+  const { error } = await admin.from("wecom_daily_notification_events").upsert(
+    {
+      service_date: serviceDate,
+      customer_code: customerCode,
+      category: "batch_price",
+      source_type: "batch",
+      source_id: batchId,
+      event_key: eventKey,
+      payload: {
+        batchId,
+        batchName: String(batch?.display_name ?? batch?.batch_no ?? batchId),
+        totalFeeCad: Number(settlement.subtotal_cad ?? 0),
+      },
+      occurred_at: new Date().toISOString(),
+    },
+    { onConflict: "event_key" },
+  );
+  if (error) throw new Error(`生成批次价格微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, customerCode);
+  return { recorded: 1, serviceDate, customerCode };
+}
+
+export async function removeWecomDailyBatchPrice(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  batchId: string,
+  customerCode: string,
+) {
+  const serviceDate = nextTorontoSendDate();
+  const eventKey = `batch_price:${batchId}:${customerCode}:${serviceDate}`;
+  const { error } = await admin
+    .from("wecom_daily_notification_events")
+    .delete()
+    .eq("event_key", eventKey);
+  if (error) throw new Error(`取消批次价格微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, customerCode);
+  return { removed: 1, serviceDate, customerCode };
 }

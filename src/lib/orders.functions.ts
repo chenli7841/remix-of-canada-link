@@ -10,6 +10,10 @@ import { effectiveWaybillInsurance } from "./insurance.server";
 import { normalizeHsCodeForStorage } from "./hs-code-format";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  recordWecomDailyBatchPrice,
+  removeWecomDailyBatchPrice,
+} from "./wecom-daily-notify.server";
 
 export type WaybillStatus =
   | "procurement"
@@ -3903,9 +3907,11 @@ export const setBatchPriceConfirmed = createServerFn({ method: "POST" })
     if (!data.confirmed) {
       const {error} = await supabaseAdmin.rpc("cancel_batch_invoice_v2" as any, { _batch_id: data.batchId, _customer_code: data.customerCode, _operator_id: context.userId } as any);
       if (error) throw new Error(error.message);
+      await removeWecomDailyBatchPrice(supabaseAdmin, data.batchId, data.customerCode);
       return {ok:true, confirmed:false, invoice_ok:true, snapshot_ok:true, invoice_no:null};
     }
     const r = await confirmBatchCustomerInvoice(supabaseAdmin, { ...data, operatorId: context.userId });
+    await recordWecomDailyBatchPrice(supabaseAdmin, data.batchId, data.customerCode);
     return {ok:true, confirmed:true, invoice_ok:true, snapshot_ok:true, invoice_no:r.invoice_no};
   });
 
@@ -3919,7 +3925,11 @@ export const confirmAllBatchPrices = createServerFn({ method: "POST" })
     const codes = [...new Set(summary.per_customer.filter((p:any) => p.customer_code && !p.price_confirmed).map((p:any) => String(p.customer_code)))];
     const invoices:any[] = [], invoice_failed:any[] = [];
     for (const customerCode of codes) {
-      try { invoices.push({customer_code:customerCode, ...await confirmBatchCustomerInvoice(supabaseAdmin, {batchId:data.batchId,customerCode,operatorId:context.userId}, summary)}); }
+      try {
+        const confirmed = await confirmBatchCustomerInvoice(supabaseAdmin, {batchId:data.batchId,customerCode,operatorId:context.userId}, summary);
+        await recordWecomDailyBatchPrice(supabaseAdmin, data.batchId, customerCode);
+        invoices.push({customer_code:customerCode, ...confirmed});
+      }
       catch (e:any) { invoice_failed.push({customer_code:customerCode,error:e.message}); }
     }
     return {ok:invoice_failed.length===0,confirmed_count:invoices.length,invoice_ok_count:invoices.length,invoice_failed,invoice_warned:[],invoices,snapshot_ok:invoice_failed.length===0,snapshot_error:invoice_failed.map(f=>f.customer_code+"："+f.error).join("；")};
