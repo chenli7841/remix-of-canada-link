@@ -974,7 +974,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     }
     const { data: targets, error: tErr } = await supabaseAdmin
       .from("wecom_notify_message_targets")
-      .select("id, chat_id, rendered_content")
+      .select("id, chat_id, rendered_content, status")
       .eq("message_id", data.messageId);
     if (tErr) throw new Error(tErr.message);
     if (!targets?.length) throw new Error("该消息没有任何目标，无法发送");
@@ -995,15 +995,23 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       ...target,
       group: groupByChatId.get(target.chat_id) ?? null,
     }));
-    const missingGroups = targetsWithGroup.filter((target) => !target.group);
+    // A partially failed task may be retried. Never submit targets that were already
+    // accepted by WeCom, otherwise customers can receive duplicate notifications.
+    const retryableTargets = targetsWithGroup.filter((target) =>
+      ["pending", "failed"].includes(target.status),
+    );
+    if (!retryableTargets.length) {
+      return { ok: true, already_processed: true, status: msg.status };
+    }
+    const missingGroups = retryableTargets.filter((target) => !target.group);
     if (missingGroups.length) {
       await supabaseAdmin
         .from("wecom_notify_message_targets")
         .update({ status: "failed", error: "目标群不存在，请刷新群列表后重试" })
         .in("id", missingGroups.map((target) => target.id));
     }
-    const blockedTargets = targetsWithGroup.filter((target) => target.group?.is_blocked);
-    const activeTargets = targetsWithGroup.filter(
+    const blockedTargets = retryableTargets.filter((target) => target.group?.is_blocked);
+    const activeTargets = retryableTargets.filter(
       (target) => target.group && !target.group.is_blocked,
     );
     if (blockedTargets.length) {

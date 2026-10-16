@@ -21,7 +21,7 @@ const TOKEN_ROW_ID = "notify";
 
 let memToken: { token: string; expiresAt: number } | null = null;
 
-async function gatewayCall<T>(path: string, payload: unknown): Promise<T | null> {
+async function gatewayCall<T>(path: string, payload: unknown, retry = true): Promise<T | null> {
   const { gatewayUrl, gatewaySharedSecret } = wecomNotifyConfig();
   if (!gatewayUrl) return null;
   if (!gatewaySharedSecret) throw new Error("wecom_gateway_secret_not_configured");
@@ -42,7 +42,13 @@ async function gatewayCall<T>(path: string, payload: unknown): Promise<T | null>
     body,
   });
   const result: any = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result?.error ?? `wecom_gateway_http_${response.status}`);
+  if (!response.ok) {
+    if (retry && response.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return gatewayCall<T>(path, payload, false);
+    }
+    throw new Error(result?.error ?? `wecom_gateway_http_${response.status}`);
+  }
   return result as T;
 }
 
