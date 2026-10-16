@@ -166,6 +166,98 @@ export const setWecomGroupBlocked = createServerFn({ method: "POST" })
     return { ok: true, blocked: data.blocked };
   });
 
+export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { chatId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
+    const chatId = data.chatId.trim();
+    if (!chatId) throw new Error("群 ID 不能为空");
+    const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
+    const [group] = await getExternalGroupDetails([chatId]);
+    if (!group) throw new Error("企业微信未返回该群资料，群可能已经解散或无权限访问");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .update({ name: group.name || "（企业微信未返回群名）", member_count: group.member_count, synced_at: now })
+      .eq("chat_id", chatId);
+    if (error) throw new Error(error.message);
+    if (group.member_count <= 15) {
+      const { error: deleteError } = await supabaseAdmin
+        .from("wecom_notify_group_members")
+        .delete()
+        .eq("chat_id", chatId);
+      if (deleteError) throw new Error(deleteError.message);
+      if (group.external_members.length) {
+        const { error: memberError } = await supabaseAdmin
+          .from("wecom_notify_group_members")
+          .insert(group.external_members.map((member) => ({
+            chat_id: chatId,
+            external_userid: member.external_userid,
+            display_name: member.display_name,
+            synced_at: now,
+          })));
+        if (memberError) throw new Error(memberError.message);
+      }
+    }
+    return { ok: true, name: group.name || "（企业微信未返回群名）", memberCount: group.member_count };
+  });
+
+export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { chatId: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const chatId = data.chatId.trim();
+    if (!chatId) throw new Error("群 ID 不能为空");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: group, error: groupError } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .select("chat_id,name")
+      .eq("chat_id", chatId)
+      .maybeSingle();
+    if (groupError) throw new Error(groupError.message);
+    if (!group) throw new Error("群不存在");
+    const runs = [...new Set(String(group.name ?? "").match(/\d{4,}/g) ?? [])]
+      .filter((digits) => digits.length === 4 || digits.length === 5)
+      .map((digits) => (digits.length === 4 ? `0${digits}` : digits));
+    const candidates = [...new Set(runs)];
+    if (!candidates.length) throw new Error("群名中没有可匹配的 4/5 位客户号");
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("customer_code")
+      .in("customer_code", candidates);
+    if (profileError) throw new Error(profileError.message);
+    const matchedCodes: string[] = [
+      ...new Set<string>((profiles ?? []).map((profile: any) => String(profile.customer_code))),
+    ];
+    if (!matchedCodes.length) throw new Error(`找不到客户号：${candidates.join("、")}`);
+    if (matchedCodes.length > 1) throw new Error("群名中匹配到多个客户号，请手动分配");
+    const customerCode = matchedCodes[0];
+    const [{ data: byGroup }, { data: byCustomer }] = await Promise.all([
+      supabaseAdmin.from("wecom_notify_bindings").select("customer_code").eq("chat_id", chatId).maybeSingle(),
+      supabaseAdmin.from("wecom_notify_bindings").select("chat_id").eq("customer_code", customerCode).maybeSingle(),
+    ]);
+    if (byGroup && byGroup.customer_code !== customerCode) throw new Error("该群已绑定其它客户");
+    if (byCustomer && byCustomer.chat_id !== chatId) throw new Error("该客户号已绑定其它群，请手动处理");
+    if (!byGroup) {
+      const { error } = await supabaseAdmin.from("wecom_notify_bindings").insert({
+        customer_code: customerCode,
+        chat_id: chatId,
+        bound_by: context.userId,
+        bound_at: new Date().toISOString(),
+      });
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true, customerCode, alreadyMatched: Boolean(byGroup) };
+  });
+
 // 每次只补全一小批尚无群名的群，避免 1000+ 群详情请求触发超时。
 export const enrichWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

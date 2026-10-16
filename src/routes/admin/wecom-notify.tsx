@@ -15,6 +15,8 @@ import {
   autoBindWecomGroupsByName,
   listWecomProblemGroups,
   setWecomGroupBlocked,
+  refreshSingleWecomGroup,
+  autoMatchSingleWecomGroup,
   searchCustomersForBinding,
   bindCustomerGroup,
   unbindCustomerGroup,
@@ -30,7 +32,7 @@ import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, S
 
 export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
 
-type Tab = "bindings" | "groups" | "problems" | "compose" | "history";
+type Tab = "bindings" | "groups" | "problems" | "blocked" | "compose" | "history";
 
 function WecomNotifyPage() {
   const [tab, setTab] = useState<Tab>("bindings");
@@ -91,6 +93,7 @@ function WecomNotifyPage() {
             ["bindings", "客户 · 专属群绑定"],
             ["groups", "群列表"],
             ["problems", "问题群"],
+            ["blocked", "已屏蔽群"],
             ["compose", "新建群发"],
             ["history", "历史任务"],
           ] as [Tab, string][]
@@ -112,6 +115,7 @@ function WecomNotifyPage() {
       {tab === "bindings" && <BindingsTab enabled={!!status?.enabled} />}
       {tab === "groups" && <GroupsTab enabled={!!status?.configured} />}
       {tab === "problems" && <ProblemGroupsTab />}
+      {tab === "blocked" && <BlockedGroupsTab />}
       {tab === "compose" && <ComposeTab />}
       {tab === "history" && <HistoryTab enabled={!!status?.enabled} />}
     </Page>
@@ -125,21 +129,26 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const sync = useServerFn(syncWecomGroups);
   const enrich = useServerFn(enrichWecomGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
+  const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const autoMatchOne = useServerFn(autoMatchSingleWecomGroup);
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState("");
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
+  const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [matchingChatId, setMatchingChatId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
   const rows = ((groupsQ.data as any)?.items ?? []) as any[];
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase();
+    const unblockedRows = rows.filter((group) => !group.is_blocked);
     const visibleRows = showAllGroups
-      ? [...rows].sort((a, b) => Number(Boolean(a.matched_customer_code)) - Number(Boolean(b.matched_customer_code)))
-      : rows.filter((group) => !group.matched_customer_code);
+      ? [...unblockedRows].sort((a, b) => Number(Boolean(a.matched_customer_code)) - Number(Boolean(b.matched_customer_code)))
+      : unblockedRows.filter((group) => !group.matched_customer_code);
     if (!keyword) return visibleRows;
     return visibleRows.filter((group) => {
       const members = (group.wecom_notify_group_members ?? [])
@@ -202,6 +211,35 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
     }
   };
 
+  const refreshGroup = async (group: any) => {
+    setRefreshingChatId(group.chat_id);
+    try {
+      const result: any = await refreshOne({ data: { chatId: group.chat_id } });
+      toast.success(`群名已刷新：${result.name}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "刷新群名失败");
+    } finally {
+      setRefreshingChatId(null);
+    }
+  };
+
+  const autoMatchGroup = async (group: any) => {
+    setMatchingChatId(group.chat_id);
+    try {
+      const result: any = await autoMatchOne({ data: { chatId: group.chat_id } });
+      toast.success(`已匹配客户号 ${result.customerCode}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "自动匹配失败");
+    } finally {
+      setMatchingChatId(null);
+    }
+  };
+
   return (
     <Card
       title="企业微信客户群"
@@ -261,7 +299,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             {search
               ? `找到 ${filteredRows.length} 个群`
               : showAllGroups
-                ? `全部 ${rows.length} 个群（未匹配优先）`
+                ? `全部 ${rows.filter((group) => !group.is_blocked).length} 个未屏蔽群（未匹配优先）`
                 : `未匹配 ${filteredRows.length} 个群`}
           </span>
         </div>
@@ -331,14 +369,33 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                     {g.matched_customer_code ? (
                       <span className="self-center text-xs text-emerald-400">已匹配</span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setBindingGroup(g)}
-                        className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
-                      >
-                        匹配客户
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          disabled={matchingChatId === g.chat_id}
+                          onClick={() => autoMatchGroup(g)}
+                          className="whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 disabled:opacity-50"
+                        >
+                          {matchingChatId === g.chat_id ? "匹配中…" : "自动匹配"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBindingGroup(g)}
+                          className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                        >
+                          手动匹配
+                        </button>
+                      </>
                     )}
+                    <button
+                      type="button"
+                      disabled={refreshingChatId === g.chat_id}
+                      onClick={() => refreshGroup(g)}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${refreshingChatId === g.chat_id ? "animate-spin" : ""}`} />
+                      刷新群名
+                    </button>
                     <button
                       type="button"
                       disabled={blockingChatId === g.chat_id}
@@ -386,11 +443,15 @@ function ProblemGroupsTab() {
   const qc = useQueryClient();
   const fetchProblems = useServerFn(listWecomProblemGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
+  const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const autoMatchOne = useServerFn(autoMatchSingleWecomGroup);
   const [search, setSearch] = useState("");
   const [problemType, setProblemType] = useState("all");
   const [page, setPage] = useState(1);
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
+  const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [matchingChatId, setMatchingChatId] = useState<string | null>(null);
   const pageSize = 25;
   const problemsQ = useQuery({
     queryKey: ["wecom-notify-problem-groups"],
@@ -426,6 +487,35 @@ function ProblemGroupsTab() {
       toast.error(error instanceof Error ? error.message : "更新屏蔽状态失败");
     } finally {
       setBlockingChatId(null);
+    }
+  };
+
+  const refreshGroup = async (group: any) => {
+    setRefreshingChatId(group.chat_id);
+    try {
+      const result: any = await refreshOne({ data: { chatId: group.chat_id } });
+      toast.success(`群名已刷新：${result.name}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "刷新群名失败");
+    } finally {
+      setRefreshingChatId(null);
+    }
+  };
+
+  const autoMatchGroup = async (group: any) => {
+    setMatchingChatId(group.chat_id);
+    try {
+      const result: any = await autoMatchOne({ data: { chatId: group.chat_id } });
+      toast.success(`已匹配客户号 ${result.customerCode}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "自动匹配失败");
+    } finally {
+      setMatchingChatId(null);
     }
   };
 
@@ -488,10 +578,27 @@ function ProblemGroupsTab() {
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
+                      disabled={matchingChatId === group.chat_id}
+                      onClick={() => autoMatchGroup(group)}
+                      className="whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 disabled:opacity-50"
+                    >
+                      {matchingChatId === group.chat_id ? "匹配中…" : "自动匹配"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setBindingGroup(group)}
                       className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
                     >
                       手动分配
+                    </button>
+                    <button
+                      type="button"
+                      disabled={refreshingChatId === group.chat_id}
+                      onClick={() => refreshGroup(group)}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${refreshingChatId === group.chat_id ? "animate-spin" : ""}`} />
+                      刷新群名
                     </button>
                     <button
                       type="button"
@@ -527,6 +634,131 @@ function ProblemGroupsTab() {
           }}
         />
       )}
+    </Card>
+  );
+}
+
+// ============ 已屏蔽群 ============
+function BlockedGroupsTab() {
+  const qc = useQueryClient();
+  const fetchGroups = useServerFn(listWecomGroups);
+  const setBlocked = useServerFn(setWecomGroupBlocked);
+  const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [busyChatId, setBusyChatId] = useState<string | null>(null);
+  const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const pageSize = 25;
+  const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
+  const blockedRows = (((groupsQ.data as any)?.items ?? []) as any[]).filter((group) => group.is_blocked);
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return blockedRows;
+    return blockedRows.filter((group) =>
+      [group.name, group.chat_id, group.matched_customer_code]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword),
+    );
+  }, [blockedRows, search]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setPage(1), [search]);
+
+  const unblock = async (group: any) => {
+    setBusyChatId(group.chat_id);
+    try {
+      await setBlocked({ data: { chatId: group.chat_id, blocked: false } });
+      toast.success("已取消屏蔽");
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "取消屏蔽失败");
+    } finally {
+      setBusyChatId(null);
+    }
+  };
+
+  const refreshGroup = async (group: any) => {
+    setRefreshingChatId(group.chat_id);
+    try {
+      const result: any = await refreshOne({ data: { chatId: group.chat_id } });
+      toast.success(`群名已刷新：${result.name}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "刷新群名失败");
+    } finally {
+      setRefreshingChatId(null);
+    }
+  };
+
+  return (
+    <Card title="已屏蔽群 · 不参与任何群发">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="relative block w-full max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索群名称、客户号或 chat_id"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
+          />
+        </label>
+        <span className="text-xs text-slate-500">共 {filteredRows.length} 个已屏蔽群</span>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-white/5">
+        <ResponsiveTable className="w-full text-sm">
+          <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">群名称</th>
+              <th>匹配客户号</th>
+              <th>群成员数</th>
+              <th>chat_id</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {groupsQ.isLoading && (
+              <tr><td colSpan={5} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+            )}
+            {groupsQ.isSuccess && filteredRows.length === 0 && (
+              <tr><td colSpan={5} className="py-8 text-center text-xs text-slate-500">尚无已屏蔽群</td></tr>
+            )}
+            {pageRows.map((group) => (
+              <tr key={group.chat_id}>
+                <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
+                <td className="font-mono text-xs text-slate-300">{group.matched_customer_code || "—"}</td>
+                <td className="text-xs text-slate-400">{group.member_count}</td>
+                <td className="font-mono text-xs text-slate-500">{group.chat_id}</td>
+                <td className="px-3 py-2 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={refreshingChatId === group.chat_id}
+                      onClick={() => refreshGroup(group)}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${refreshingChatId === group.chat_id ? "animate-spin" : ""}`} />
+                      刷新群名
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyChatId === group.chat_id}
+                      onClick={() => unblock(group)}
+                      className="whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 disabled:opacity-50"
+                    >
+                      {busyChatId === group.chat_id ? "处理中…" : "取消屏蔽"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </ResponsiveTable>
+      </div>
+      <Pagination page={currentPage} pageSize={pageSize} total={filteredRows.length} onChange={setPage} />
     </Card>
   );
 }
