@@ -53,7 +53,7 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabaseAdmin
         .from("wecom_notify_groups")
-        .select("chat_id, name, member_count, synced_at, is_blocked, wecom_notify_group_members(external_userid, display_name)")
+        .select("chat_id, name, owner_userid, member_count, synced_at, is_blocked, wecom_notify_group_members(external_userid, display_name)")
         .order("synced_at", { ascending: false })
         .range(from, from + 999);
       if (error) throw new Error(error.message);
@@ -95,15 +95,33 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
     };
     const now = new Date().toISOString();
     if (groups.length) {
+      const existingRows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error: existingError } = await supabaseAdmin
+          .from("wecom_notify_groups")
+          .select("chat_id,name,owner_userid,member_count")
+          .range(from, from + 999);
+        if (existingError) throw new Error(existingError.message);
+        existingRows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      const existingByChatId = new Map(
+        existingRows.map((row: any) => [String(row.chat_id), row]),
+      );
       // 网关同步会同时拉取每个群的详情，所以新群与已有群都更新群名、群主和人数。
       const { error } = await supabaseAdmin.from("wecom_notify_groups").upsert(
-        groups.map((g) => ({
-          chat_id: g.chat_id,
-          name: g.name,
-          owner_userid: g.owner_userid,
-          member_count: g.member_count,
-          synced_at: now,
-        })),
+        groups.map((g) => {
+          const existing = existingByChatId.get(g.chat_id);
+          const hasValidDetails = Boolean(g.name.trim()) || g.member_count > 0 || g.external_members.length > 0;
+          return {
+            chat_id: g.chat_id,
+            // 企业微信偶尔会只返回 chat_id；不允许空响应覆盖已保存的群资料。
+            name: g.name.trim() || existing?.name || "",
+            owner_userid: g.owner_userid || existing?.owner_userid || null,
+            member_count: hasValidDetails ? g.member_count : Number(existing?.member_count ?? 0),
+            synced_at: now,
+          };
+        }),
         { onConflict: "chat_id" },
       );
       if (error) throw new Error(error.message);
@@ -184,19 +202,20 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
     const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
     const [group] = await getExternalGroupDetails([chatId]);
     if (!group) throw new Error("企业微信未返回该群资料，群可能已经解散或无权限访问");
+    if (!group.name.trim() && group.member_count === 0 && !group.external_members.length) {
+      throw new Error("企业微信未返回有效群资料，已保留原群名");
+    }
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
     const now = new Date().toISOString();
-    const hasName = Boolean(group.name.trim());
     const { error } = await supabaseAdmin
       .from("wecom_notify_groups")
       .update({
-        name: group.name || "（企业微信未返回群名）",
+        ...(group.name.trim() ? { name: group.name.trim() } : {}),
         ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
         member_count: group.member_count,
         synced_at: now,
-        ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
       })
       .eq("chat_id", chatId);
     if (error) throw new Error(error.message);
@@ -238,14 +257,15 @@ export const refreshWecomGroupsBatch = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     for (const group of groups) {
       const hasName = Boolean(group.name.trim());
+      const hasValidDetails = hasName || group.member_count > 0 || group.external_members.length > 0;
+      if (!hasValidDetails) continue;
       const { error } = await supabaseAdmin
         .from("wecom_notify_groups")
         .update({
-          name: group.name || "（企业微信未返回群名）",
-          owner_userid: group.owner_userid,
+          ...(hasName ? { name: group.name.trim() } : {}),
+          ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
           member_count: group.member_count,
           synced_at: now,
-          ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
         })
         .eq("chat_id", group.chat_id);
       if (error) throw new Error(error.message);
@@ -578,7 +598,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
       return rows;
     };
     const [groups, profiles, bindings] = await Promise.all([
-      fetchAll("wecom_notify_groups", "chat_id,name,member_count,synced_at,is_blocked"),
+      fetchAll("wecom_notify_groups", "chat_id,name,owner_userid,member_count,synced_at,is_blocked"),
       fetchAll("profiles", "customer_code"),
       fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
     ]);
@@ -639,6 +659,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
       return {
         chat_id: group.chat_id,
         name: group.name,
+        owner_userid: group.owner_userid,
         member_count: group.member_count,
         synced_at: group.synced_at,
         is_blocked: Boolean(group.is_blocked),

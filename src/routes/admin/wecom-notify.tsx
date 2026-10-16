@@ -396,6 +396,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             <tr>
               <th className="px-3 py-2">选择</th>
               <th className="px-3 py-2">群名称</th>
+              <th>群主（企业微信账号）</th>
               <th>匹配客户号</th>
               <th>chat_id</th>
               <th>外部联系人（微信名 / external_userid）</th>
@@ -407,14 +408,14 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
           <tbody className="divide-y divide-white/5">
             {groupsQ.isLoading && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-500">
+                <td colSpan={9} className="py-8 text-center text-slate-500">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {groupsQ.isSuccess && filteredRows.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-xs text-slate-500">
+                <td colSpan={9} className="py-8 text-center text-xs text-slate-500">
                   {rows.length
                     ? "没有找到符合条件的群"
                     : `尚未同步任何群${!enabled ? "（网关或企业微信凭证尚未配置）" : ""}`}
@@ -428,6 +429,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                   {g.name || "—"}
                   {g.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
                 </td>
+                <td className="font-mono text-xs text-slate-300">{g.owner_userid || "—"}</td>
                 <td className="font-mono text-xs text-slate-300">
                   {g.matched_customer_code || <span className="text-amber-400">未匹配</span>}
                 </td>
@@ -667,6 +669,7 @@ function ProblemGroupsTab() {
             <tr>
               <th className="px-3 py-2">选择</th>
               <th className="px-3 py-2">群名称</th>
+              <th>群主（企业微信账号）</th>
               <th>候选客户号</th>
               <th>问题</th>
               <th>群成员数</th>
@@ -676,10 +679,10 @@ function ProblemGroupsTab() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {problemsQ.isLoading && (
-              <tr><td colSpan={7} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+              <tr><td colSpan={8} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
             )}
             {problemsQ.isSuccess && filteredRows.length === 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-500">没有符合条件的问题群</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-xs text-slate-500">没有符合条件的问题群</td></tr>
             )}
             {pageRows.map((group) => (
               <tr key={group.chat_id}>
@@ -688,6 +691,7 @@ function ProblemGroupsTab() {
                   {group.name || "—"}
                   {group.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
                 </td>
+                <td className="font-mono text-xs text-slate-300">{group.owner_userid || "—"}</td>
                 <td className="font-mono text-xs text-slate-300">{group.candidate_customer_code || "—"}</td>
                 <td className="text-xs text-amber-300">{group.problem_label}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
@@ -862,6 +866,7 @@ function BlockedGroupsTab() {
             <tr>
               <th className="px-3 py-2">测试</th>
               <th className="px-3 py-2">群名称</th>
+              <th>群主（企业微信账号）</th>
               <th>匹配客户号</th>
               <th>群成员数</th>
               <th>chat_id</th>
@@ -870,10 +875,10 @@ function BlockedGroupsTab() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {groupsQ.isLoading && (
-              <tr><td colSpan={6} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+              <tr><td colSpan={7} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
             )}
             {groupsQ.isSuccess && filteredRows.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-xs text-slate-500">尚无已屏蔽群</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-500">尚无已屏蔽群</td></tr>
             )}
             {pageRows.map((group) => (
               <tr key={group.chat_id}>
@@ -888,6 +893,7 @@ function BlockedGroupsTab() {
                   />
                 </td>
                 <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
+                <td className="font-mono text-xs text-slate-300">{group.owner_userid || "—"}</td>
                 <td className="font-mono text-xs text-slate-300">{group.matched_customer_code || "—"}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
                 <td className="font-mono text-xs text-slate-500">{group.chat_id}</td>
