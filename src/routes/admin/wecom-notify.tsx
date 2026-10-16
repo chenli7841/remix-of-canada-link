@@ -1577,13 +1577,13 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
                       刷新状态
                     </button>
                   )}
-                  {(m.status === "previewed" || m.status === "failed") && (
+                  {["previewed", "failed", "partially_failed"].includes(m.status) && (
                     <button
                       onClick={() => setConfirmSendId(m.id)}
                       className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand/80"
                     >
                       <Send className="h-3 w-3" />
-                      发送
+                      {m.status === "partially_failed" ? "重试失败客户" : "发送"}
                     </button>
                   )}
                 </td>
