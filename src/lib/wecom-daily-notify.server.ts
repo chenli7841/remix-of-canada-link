@@ -28,23 +28,27 @@ type IntakeWaybill = {
 type DailySections = {
   intake?: { pieces: number };
   measurements?: Array<{
-    waybillId: string;
     trackingNo: string;
-    lengthCm: number;
-    widthCm: number;
-    heightCm: number;
-    actualWeightKg: number;
-    volumetricWeightKg: number;
-    chargeableWeightKg: number;
-    freightCad: number;
+    totalActualWeightKg: number;
+    totalVolumetricWeightKg: number;
+    totalChargeableWeightKg: number;
+    totalFeeCad: number;
   }>;
 };
 
 type StoredDailyEvent = {
   category: string;
-  payload: DailySections["measurements"] extends Array<infer Item> ? Item : never;
+  payload: {
+    trackingNo?: string;
+    actualWeightKg?: number;
+    volumetricWeightKg?: number;
+    chargeableWeightKg?: number;
+    freightCad?: number;
+  };
   occurred_at: string;
 };
+
+const displayWeight = (value: number) => Number(value.toFixed(3));
 
 function chineseDate(serviceDate: string): string {
   const [year, month, day] = serviceDate.split("-").map(Number);
@@ -70,11 +74,10 @@ function renderDailyContent(
       if (index > 0) lines.push("");
       lines.push(
         item.trackingNo,
-        `尺寸：${item.lengthCm}×${item.widthCm}×${item.heightCm}cm`,
-        `实重：${item.actualWeightKg}kg`,
-        `体积重：${item.volumetricWeightKg}kg`,
-        `计费重：${item.chargeableWeightKg}kg`,
-        `运费：CAD ${item.freightCad.toFixed(2)}`,
+        `总体积重：${displayWeight(item.totalVolumetricWeightKg)}kg`,
+        `总实重：${displayWeight(item.totalActualWeightKg)}kg`,
+        `总收费重量：${displayWeight(item.totalChargeableWeightKg)}kg`,
+        `总费用：CAD ${item.totalFeeCad.toFixed(2)}`,
       );
     });
   }
@@ -113,7 +116,24 @@ async function refreshDailyDraft(
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
   if (measurementEvents.length) {
-    sections.measurements = measurementEvents.map((event) => event.payload);
+    const totalsByTracking = new Map<string, NonNullable<DailySections["measurements"]>[number]>();
+    for (const event of measurementEvents) {
+      const trackingNo = String(event.payload.trackingNo ?? "").trim();
+      if (!trackingNo) continue;
+      const current = totalsByTracking.get(trackingNo) ?? {
+        trackingNo,
+        totalActualWeightKg: 0,
+        totalVolumetricWeightKg: 0,
+        totalChargeableWeightKg: 0,
+        totalFeeCad: 0,
+      };
+      current.totalActualWeightKg += Number(event.payload.actualWeightKg ?? 0);
+      current.totalVolumetricWeightKg += Number(event.payload.volumetricWeightKg ?? 0);
+      current.totalChargeableWeightKg += Number(event.payload.chargeableWeightKg ?? 0);
+      current.totalFeeCad += Number(event.payload.freightCad ?? 0);
+      totalsByTracking.set(trackingNo, current);
+    }
+    sections.measurements = [...totalsByTracking.values()];
   } else {
     delete sections.measurements;
   }
@@ -255,9 +275,6 @@ export async function recordWecomDailyMeasurements(
       payload: {
         waybillId: waybill.id,
         trackingNo: parent.trackingNo || waybill.waybill_no,
-        lengthCm,
-        widthCm,
-        heightCm,
         actualWeightKg,
         volumetricWeightKg: Number(snapshot.volumetric_weight ?? 0),
         chargeableWeightKg: Number(snapshot.chargeable_weight ?? 0),
