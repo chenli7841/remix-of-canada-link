@@ -215,6 +215,63 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
     return { ok: true, name: group.name || "（企业微信未返回群名）", memberCount: group.member_count };
   });
 
+export const refreshWecomGroupsBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { chatIds: string[] }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
+    const chatIds = [...new Set(data.chatIds.map((id) => id.trim()).filter(Boolean))];
+    if (!chatIds.length) throw new Error("本页没有可刷新的群");
+    if (chatIds.length > 50) throw new Error("一次最多刷新 50 个群");
+    const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
+    const groups = await getExternalGroupDetails(chatIds);
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const now = new Date().toISOString();
+    for (const group of groups) {
+      const hasName = Boolean(group.name.trim());
+      const { error } = await supabaseAdmin
+        .from("wecom_notify_groups")
+        .update({
+          name: group.name || "（企业微信未返回群名）",
+          owner_userid: group.owner_userid,
+          member_count: group.member_count,
+          synced_at: now,
+          ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
+        })
+        .eq("chat_id", group.chat_id);
+      if (error) throw new Error(error.message);
+      if (group.member_count <= 15) {
+        const { error: deleteError } = await supabaseAdmin
+          .from("wecom_notify_group_members")
+          .delete()
+          .eq("chat_id", group.chat_id);
+        if (deleteError) throw new Error(deleteError.message);
+        if (group.external_members.length) {
+          const { error: memberError } = await supabaseAdmin
+            .from("wecom_notify_group_members")
+            .insert(group.external_members.map((member) => ({
+              chat_id: group.chat_id,
+              external_userid: member.external_userid,
+              display_name: member.display_name,
+              synced_at: now,
+            })));
+          if (memberError) throw new Error(memberError.message);
+        }
+      }
+    }
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "wecom_notify_group",
+      entity_id: "batch-refresh",
+      action: "batch_refresh",
+      after: { requested: chatIds.length, refreshed: groups.length },
+      operator_id: context.userId,
+    });
+    return { ok: true, requested: chatIds.length, refreshed: groups.length, missing: chatIds.length - groups.length };
+  });
+
 export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { chatId: string }) => d)

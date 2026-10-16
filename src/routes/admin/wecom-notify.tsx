@@ -16,6 +16,7 @@ import {
   listWecomProblemGroups,
   setWecomGroupBlocked,
   refreshSingleWecomGroup,
+  refreshWecomGroupsBatch,
   autoMatchSingleWecomGroup,
   sendBlockedWecomGroupsTest,
   searchCustomersForBinding,
@@ -131,6 +132,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const enrich = useServerFn(enrichWecomGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
   const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const refreshBatch = useServerFn(refreshWecomGroupsBatch);
   const autoMatchOne = useServerFn(autoMatchSingleWecomGroup);
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
@@ -139,6 +141,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
   const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [refreshingPage, setRefreshingPage] = useState(false);
   const [matchingChatId, setMatchingChatId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 25;
@@ -226,6 +229,21 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
     }
   };
 
+  const refreshCurrentPage = async () => {
+    if (!pageRows.length) return toast.error("本页没有可刷新的群");
+    setRefreshingPage(true);
+    try {
+      const result: any = await refreshBatch({ data: { chatIds: pageRows.map((group) => group.chat_id) } });
+      toast.success(`已刷新 ${result.refreshed} 个群名${result.missing ? `，${result.missing} 个未返回资料` : ""}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量刷新失败");
+    } finally {
+      setRefreshingPage(false);
+    }
+  };
+
   const autoMatchGroup = async (group: any) => {
     setMatchingChatId(group.chat_id);
     try {
@@ -246,6 +264,14 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
       title="企业微信客户群"
       action={
         <div className="flex gap-2">
+          <button
+            onClick={refreshCurrentPage}
+            disabled={!enabled || refreshingPage || !pageRows.length}
+            className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-40"
+          >
+            {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            批量刷新本页群名（{pageRows.length}）
+          </button>
           <button
             onClick={doEnrich}
             disabled={!enabled || enriching}
@@ -445,6 +471,7 @@ function ProblemGroupsTab() {
   const fetchProblems = useServerFn(listWecomProblemGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
   const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const refreshBatch = useServerFn(refreshWecomGroupsBatch);
   const autoMatchOne = useServerFn(autoMatchSingleWecomGroup);
   const [search, setSearch] = useState("");
   const [problemType, setProblemType] = useState("all");
@@ -452,6 +479,7 @@ function ProblemGroupsTab() {
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
   const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [refreshingPage, setRefreshingPage] = useState(false);
   const [matchingChatId, setMatchingChatId] = useState<string | null>(null);
   const pageSize = 25;
   const problemsQ = useQuery({
@@ -505,6 +533,21 @@ function ProblemGroupsTab() {
     }
   };
 
+  const refreshCurrentPage = async () => {
+    if (!pageRows.length) return toast.error("本页没有可刷新的群");
+    setRefreshingPage(true);
+    try {
+      const result: any = await refreshBatch({ data: { chatIds: pageRows.map((group) => group.chat_id) } });
+      toast.success(`已刷新 ${result.refreshed} 个群名${result.missing ? `，${result.missing} 个未返回资料` : ""}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量刷新失败");
+    } finally {
+      setRefreshingPage(false);
+    }
+  };
+
   const autoMatchGroup = async (group: any) => {
     setMatchingChatId(group.chat_id);
     try {
@@ -545,6 +588,15 @@ function ProblemGroupsTab() {
           <option value="no_number">群名没有 4/5 位客户号</option>
         </select>
         <span className="text-xs text-slate-500">共 {filteredRows.length} 个问题群</span>
+        <button
+          type="button"
+          onClick={refreshCurrentPage}
+          disabled={refreshingPage || !pageRows.length}
+          className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand disabled:opacity-40"
+        >
+          {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          批量刷新本页群名（{pageRows.length}）
+        </button>
       </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
@@ -651,11 +703,13 @@ function BlockedGroupsTab() {
   const fetchGroups = useServerFn(listWecomGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
   const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const refreshBatch = useServerFn(refreshWecomGroupsBatch);
   const sendTest = useServerFn(sendBlockedWecomGroupsTest);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [busyChatId, setBusyChatId] = useState<string | null>(null);
   const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [refreshingPage, setRefreshingPage] = useState(false);
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>(INITIAL_TEST_CHAT_IDS);
   const [testContent, setTestContent] = useState("【EPLUS群发测试】这是一条系统功能测试消息，请忽略。");
   const [sendingTest, setSendingTest] = useState(false);
@@ -702,6 +756,21 @@ function BlockedGroupsTab() {
       toast.error(error instanceof Error ? error.message : "刷新群名失败");
     } finally {
       setRefreshingChatId(null);
+    }
+  };
+
+  const refreshCurrentPage = async () => {
+    if (!pageRows.length) return toast.error("本页没有可刷新的群");
+    setRefreshingPage(true);
+    try {
+      const result: any = await refreshBatch({ data: { chatIds: pageRows.map((group) => group.chat_id) } });
+      toast.success(`已刷新 ${result.refreshed} 个群名${result.missing ? `，${result.missing} 个未返回资料` : ""}`);
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量刷新失败");
+    } finally {
+      setRefreshingPage(false);
     }
   };
 
@@ -752,7 +821,18 @@ function BlockedGroupsTab() {
             className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
           />
         </label>
-        <span className="text-xs text-slate-500">共 {filteredRows.length} 个已屏蔽群</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500">共 {filteredRows.length} 个已屏蔽群</span>
+          <button
+            type="button"
+            onClick={refreshCurrentPage}
+            disabled={refreshingPage || !pageRows.length}
+            className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand disabled:opacity-40"
+          >
+            {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            批量刷新本页群名（{pageRows.length}）
+          </button>
+        </div>
       </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
