@@ -52,7 +52,9 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_groups")
       .select("chat_id, name, member_count, synced_at, wecom_notify_group_members(external_userid, display_name)")
-      .order("name", { ascending: true });
+      // 页面目前只渲染前 500 条。优先显示最近补全详情的群，避免大量空群名
+      // 排在前面，导致已经读取到真实群名的群反而完全看不到。
+      .order("synced_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
   });

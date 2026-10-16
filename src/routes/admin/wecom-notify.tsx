@@ -1,8 +1,9 @@
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
+import { Pagination } from "@/components/admin/Pagination";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   getWecomNotifyStatus,
@@ -22,7 +23,7 @@ import {
   refreshWecomMessageStatus,
 } from "@/lib/wecom-notify.functions";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
-import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink } from "lucide-react";
+import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, Search } from "lucide-react";
 
 export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
 
@@ -120,8 +121,32 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const enrich = useServerFn(enrichWecomGroups);
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
   const rows = ((groupsQ.data as any)?.items ?? []) as any[];
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((group) => {
+      const members = (group.wecom_notify_group_members ?? [])
+        .flatMap((member: any) => [member.display_name, member.external_userid])
+        .join(" ");
+      return [group.name, group.chat_id, members]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword);
+    });
+  }, [rows, search]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const doSync = async () => {
     setSyncing(true);
@@ -176,6 +201,30 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
         </div>
       }
     >
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="relative block w-full max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索群名称、chat_id、微信名或 external_userid"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-9 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="清空搜索"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-200"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </label>
+        <span className="text-xs text-slate-500">
+          {search ? `找到 ${filteredRows.length} 个群` : `共 ${rows.length} 个群`}
+        </span>
+      </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
@@ -195,14 +244,16 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                 </td>
               </tr>
             )}
-            {groupsQ.isSuccess && rows.length === 0 && (
+            {groupsQ.isSuccess && filteredRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
-                  尚未同步任何群{!enabled && "（网关或企业微信凭证尚未配置）"}
+                  {rows.length
+                    ? "没有找到符合条件的群"
+                    : `尚未同步任何群${!enabled ? "（网关或企业微信凭证尚未配置）" : ""}`}
                 </td>
               </tr>
             )}
-            {rows.map((g) => (
+            {pageRows.map((g) => (
               <tr key={g.chat_id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{g.name || "—"}</td>
                 <td className="font-mono text-xs text-slate-400">{g.chat_id}</td>
@@ -231,6 +282,12 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
           </tbody>
         </ResponsiveTable>
       </div>
+      <Pagination
+        page={currentPage}
+        pageSize={pageSize}
+        total={filteredRows.length}
+        onChange={setPage}
+      />
     </Card>
   );
 }
