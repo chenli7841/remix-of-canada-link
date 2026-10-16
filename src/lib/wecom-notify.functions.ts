@@ -49,14 +49,34 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
-    const { data, error } = await supabaseAdmin
-      .from("wecom_notify_groups")
-      .select("chat_id, name, member_count, synced_at, wecom_notify_group_members(external_userid, display_name)")
-      // 页面目前只渲染前 500 条。优先显示最近补全详情的群，避免大量空群名
-      // 排在前面，导致已经读取到真实群名的群反而完全看不到。
-      .order("synced_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
+    const groups: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabaseAdmin
+        .from("wecom_notify_groups")
+        .select("chat_id, name, member_count, synced_at, wecom_notify_group_members(external_userid, display_name)")
+        .order("synced_at", { ascending: false })
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      groups.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    const bindings: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabaseAdmin
+        .from("wecom_notify_bindings")
+        .select("chat_id,customer_code")
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      bindings.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    const codeByChat = new Map(bindings.map((row) => [row.chat_id, row.customer_code]));
+    return {
+      items: groups.map((group) => ({
+        ...group,
+        matched_customer_code: codeByChat.get(group.chat_id) ?? null,
+      })),
+    };
   });
 
 // 真正调用企业微信「客户群」接口拉取群列表——总开关关闭/凭证没配好时直接拒绝，
@@ -178,6 +198,210 @@ export const listWecomBindings = createServerFn({ method: "GET" })
       .order("bound_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
+  });
+
+// 从群名中提取至少 4 位连续数字，并与 profiles.customer_code 精确匹配。
+// 仅自动写入唯一且无冲突的 1:1 关系；同一客户号出现在多个群时跳过，避免误绑。
+export const autoBindWecomGroupsByName = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+
+    const fetchAll = async (table: string, columns: string) => {
+      const rows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabaseAdmin
+          .from(table)
+          .select(columns)
+          .range(from, from + 999);
+        if (error) throw new Error(error.message);
+        rows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
+    };
+
+    const [groups, profiles, existing] = await Promise.all([
+      fetchAll("wecom_notify_groups", "chat_id,name"),
+      fetchAll("profiles", "customer_code"),
+      fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
+    ]);
+
+    const profileCodes = new Map<string, string>();
+    for (const profile of profiles) {
+      const code = String(profile.customer_code ?? "").trim();
+      if (code) profileCodes.set(code.toUpperCase(), code);
+    }
+    const boundCodes = new Set(existing.map((row) => row.customer_code));
+    const boundChats = new Set(existing.map((row) => row.chat_id));
+    const candidatesByCode = new Map<string, Array<{ chat_id: string; name: string }>>();
+    let groupsWithoutNumber = 0;
+    let groupsWithoutCustomer = 0;
+
+    for (const group of groups) {
+      if (boundChats.has(group.chat_id)) continue;
+      const name = String(group.name ?? "");
+      const digitRuns = [...new Set(name.match(/\d{4,}/g) ?? [])];
+      if (!digitRuns.length) {
+        groupsWithoutNumber += 1;
+        continue;
+      }
+      const matchedCodes = [...new Set(
+        digitRuns
+          .filter((digits) => digits.length === 4 || digits.length === 5)
+          .map((digits) => (digits.length === 4 ? `0${digits}` : digits))
+          .map((code) => profileCodes.get(code.toUpperCase()))
+          .filter((code): code is string => Boolean(code)),
+      )];
+      if (matchedCodes.length !== 1) {
+        groupsWithoutCustomer += 1;
+        continue;
+      }
+      const code = matchedCodes[0];
+      const list = candidatesByCode.get(code) ?? [];
+      list.push({ chat_id: group.chat_id, name });
+      candidatesByCode.set(code, list);
+    }
+
+    const ambiguous = [...candidatesByCode.values()].filter((items) => items.length > 1).length;
+    const rows = [...candidatesByCode.entries()]
+      .filter(([code, items]) => !boundCodes.has(code) && items.length === 1)
+      .map(([customer_code, items]) => ({
+        customer_code,
+        chat_id: items[0].chat_id,
+        bound_by: context.userId,
+        bound_at: new Date().toISOString(),
+      }));
+
+    for (let index = 0; index < rows.length; index += 200) {
+      const { error } = await supabaseAdmin
+        .from("wecom_notify_bindings")
+        .insert(rows.slice(index, index + 200));
+      if (error) throw new Error(error.message);
+    }
+
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "wecom_notify_binding",
+      entity_id: "auto-match-by-group-name",
+      action: "bind",
+      after: {
+        matched: rows.length,
+        ambiguous,
+        groups_without_number: groupsWithoutNumber,
+        groups_without_customer: groupsWithoutCustomer,
+      },
+      operator_id: context.userId,
+      note: "按群名中的连续数字自动匹配客户号",
+    });
+
+    return {
+      ok: true,
+      matched: rows.length,
+      ambiguous,
+      groupsWithoutNumber,
+      groupsWithoutCustomer,
+    };
+  });
+
+export const listWecomProblemGroups = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const fetchAll = async (table: string, columns: string) => {
+      const rows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabaseAdmin.from(table).select(columns).range(from, from + 999);
+        if (error) throw new Error(error.message);
+        rows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
+    };
+    const [groups, profiles, bindings] = await Promise.all([
+      fetchAll("wecom_notify_groups", "chat_id,name,member_count,synced_at"),
+      fetchAll("profiles", "customer_code"),
+      fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
+    ]);
+    const profileCodes = new Map(
+      profiles
+        .map((profile) => String(profile.customer_code ?? "").trim())
+        .filter(Boolean)
+        .map((code) => [code.toUpperCase(), code]),
+    );
+    const boundChats = new Set(bindings.map((row) => row.chat_id));
+    const boundCodes = new Set(bindings.map((row) => row.customer_code));
+    const analyzed = groups
+      .filter((group) => !boundChats.has(group.chat_id))
+      .map((group) => {
+        const runs = [...new Set(String(group.name ?? "").match(/\d{4,}/g) ?? [])];
+        const normalized = [...new Set(
+          runs
+            .filter((digits) => digits.length === 4 || digits.length === 5)
+            .map((digits) => (digits.length === 4 ? `0${digits}` : digits)),
+        )];
+        const matchedCodes = normalized
+          .map((code) => profileCodes.get(code.toUpperCase()))
+          .filter((code): code is string => Boolean(code));
+        return { ...group, runs, normalized, matchedCodes: [...new Set(matchedCodes)] };
+      });
+    const countByCode = new Map<string, number>();
+    for (const group of analyzed) {
+      if (group.matchedCodes.length === 1) {
+        const code = group.matchedCodes[0];
+        countByCode.set(code, (countByCode.get(code) ?? 0) + 1);
+      }
+    }
+    const items = analyzed.map((group) => {
+      let problem_type = "no_number";
+      let problem_label = "群名没有 4/5 位连续客户号";
+      let candidate_customer_code: string | null = null;
+      if (group.normalized.length && group.matchedCodes.length === 0) {
+        problem_type = "customer_not_found";
+        problem_label = "群名号码找不到对应客户";
+        candidate_customer_code = group.normalized[0] ?? null;
+      } else if (group.matchedCodes.length > 1) {
+        problem_type = "multiple_numbers";
+        problem_label = "群名包含多个有效客户号";
+      } else if (group.matchedCodes.length === 1) {
+        const matchedCode = group.matchedCodes[0];
+        candidate_customer_code = matchedCode;
+        if (boundCodes.has(matchedCode)) {
+          problem_type = "customer_already_bound";
+          problem_label = "该客户号已经绑定其它群";
+        } else if ((countByCode.get(matchedCode) ?? 0) > 1) {
+          problem_type = "duplicate_customer_code";
+          problem_label = "多个群对应同一客户号";
+        } else {
+          problem_type = "unmatched";
+          problem_label = "尚未匹配";
+        }
+      }
+      return {
+        chat_id: group.chat_id,
+        name: group.name,
+        member_count: group.member_count,
+        synced_at: group.synced_at,
+        candidate_customer_code,
+        problem_type,
+        problem_label,
+      };
+    });
+    const order: Record<string, number> = {
+      duplicate_customer_code: 0,
+      customer_already_bound: 1,
+      customer_not_found: 2,
+      multiple_numbers: 3,
+      no_number: 4,
+      unmatched: 5,
+    };
+    items.sort((a, b) => (order[a.problem_type] ?? 99) - (order[b.problem_type] ?? 99));
+    return { items };
   });
 
 // 按客户号/姓名找客户，供绑定弹窗里的搜索框用。跟企业微信无关，纯本地查询。

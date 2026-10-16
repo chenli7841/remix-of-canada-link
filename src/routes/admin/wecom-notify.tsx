@@ -12,6 +12,8 @@ import {
   enrichWecomGroups,
   syncWecomGroups,
   listWecomBindings,
+  autoBindWecomGroupsByName,
+  listWecomProblemGroups,
   searchCustomersForBinding,
   bindCustomerGroup,
   unbindCustomerGroup,
@@ -27,7 +29,7 @@ import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, S
 
 export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
 
-type Tab = "bindings" | "groups" | "compose" | "history";
+type Tab = "bindings" | "groups" | "problems" | "compose" | "history";
 
 function WecomNotifyPage() {
   const [tab, setTab] = useState<Tab>("bindings");
@@ -87,6 +89,7 @@ function WecomNotifyPage() {
           [
             ["bindings", "客户 · 专属群绑定"],
             ["groups", "群列表"],
+            ["problems", "问题群"],
             ["compose", "新建群发"],
             ["history", "历史任务"],
           ] as [Tab, string][]
@@ -107,6 +110,7 @@ function WecomNotifyPage() {
 
       {tab === "bindings" && <BindingsTab enabled={!!status?.enabled} />}
       {tab === "groups" && <GroupsTab enabled={!!status?.configured} />}
+      {tab === "problems" && <ProblemGroupsTab />}
       {tab === "compose" && <ComposeTab />}
       {tab === "history" && <HistoryTab enabled={!!status?.enabled} />}
     </Page>
@@ -122,14 +126,19 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState("");
+  const [showAllGroups, setShowAllGroups] = useState(false);
+  const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
   const rows = ((groupsQ.data as any)?.items ?? []) as any[];
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((group) => {
+    const visibleRows = showAllGroups
+      ? [...rows].sort((a, b) => Number(Boolean(a.matched_customer_code)) - Number(Boolean(b.matched_customer_code)))
+      : rows.filter((group) => !group.matched_customer_code);
+    if (!keyword) return visibleRows;
+    return visibleRows.filter((group) => {
       const members = (group.wecom_notify_group_members ?? [])
         .flatMap((member: any) => [member.display_name, member.external_userid])
         .join(" ");
@@ -139,14 +148,14 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
         .toLocaleLowerCase()
         .includes(keyword);
     });
-  }, [rows, search]);
+  }, [rows, search, showAllGroups]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, showAllGroups]);
 
   const doSync = async () => {
     setSyncing(true);
@@ -221,32 +230,49 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             </button>
           )}
         </label>
-        <span className="text-xs text-slate-500">
-          {search ? `找到 ${filteredRows.length} 个群` : `共 ${rows.length} 个群`}
-        </span>
+        <div className="flex items-center gap-4">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={showAllGroups}
+              onChange={(event) => setShowAllGroups(event.target.checked)}
+              className="h-4 w-4 rounded border-white/20 bg-white/5 accent-blue-500"
+            />
+            显示全部群名
+          </label>
+          <span className="text-xs text-slate-500">
+            {search
+              ? `找到 ${filteredRows.length} 个群`
+              : showAllGroups
+                ? `全部 ${rows.length} 个群（未匹配优先）`
+                : `未匹配 ${filteredRows.length} 个群`}
+          </span>
+        </div>
       </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
               <th className="px-3 py-2">群名称</th>
+              <th>匹配客户号</th>
               <th>chat_id</th>
               <th>外部联系人（微信名 / external_userid）</th>
               <th>群成员数</th>
               <th>同步时间</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {groupsQ.isLoading && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-slate-500">
+                <td colSpan={7} className="py-8 text-center text-slate-500">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {groupsQ.isSuccess && filteredRows.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
+                <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
                   {rows.length
                     ? "没有找到符合条件的群"
                     : `尚未同步任何群${!enabled ? "（网关或企业微信凭证尚未配置）" : ""}`}
@@ -256,6 +282,9 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             {pageRows.map((g) => (
               <tr key={g.chat_id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{g.name || "—"}</td>
+                <td className="font-mono text-xs text-slate-300">
+                  {g.matched_customer_code || <span className="text-amber-400">未匹配</span>}
+                </td>
                 <td className="font-mono text-xs text-slate-400">{g.chat_id}</td>
                 <td className="max-w-md py-2 text-xs text-slate-400">
                   {g.member_count > 15 ? (
@@ -277,6 +306,19 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                 </td>
                 <td className="text-xs text-slate-400">{g.member_count}</td>
                 <td className="text-xs text-slate-400">{fmtDate(g.synced_at)}</td>
+                <td className="px-3 py-2 text-right">
+                  {g.matched_customer_code ? (
+                    <span className="text-xs text-emerald-400">已匹配</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setBindingGroup(g)}
+                      className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                    >
+                      匹配客户
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -288,6 +330,134 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
         total={filteredRows.length}
         onChange={setPage}
       />
+      {bindingGroup && (
+        <BindModal
+          initialChatId={bindingGroup.chat_id}
+          initialGroupName={bindingGroup.name || bindingGroup.chat_id}
+          onClose={() => setBindingGroup(null)}
+          onBound={() => {
+            setBindingGroup(null);
+            qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+            qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+// ============ 问题群：未能自动建立唯一绑定的群 ============
+function ProblemGroupsTab() {
+  const qc = useQueryClient();
+  const fetchProblems = useServerFn(listWecomProblemGroups);
+  const [search, setSearch] = useState("");
+  const [problemType, setProblemType] = useState("all");
+  const [page, setPage] = useState(1);
+  const [bindingGroup, setBindingGroup] = useState<any | null>(null);
+  const pageSize = 25;
+  const problemsQ = useQuery({
+    queryKey: ["wecom-notify-problem-groups"],
+    queryFn: () => fetchProblems(),
+  });
+  const rows = ((problemsQ.data as any)?.items ?? []) as any[];
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    return rows.filter((row) => {
+      if (problemType !== "all" && row.problem_type !== problemType) return false;
+      if (!keyword) return true;
+      return [row.name, row.chat_id, row.candidate_customer_code, row.problem_label]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword);
+    });
+  }, [rows, search, problemType]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [search, problemType]);
+
+  return (
+    <Card title="问题群 · 手动分配">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="relative block min-w-72 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索群名称、候选客户号或 chat_id"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
+          />
+        </label>
+        <select
+          value={problemType}
+          onChange={(event) => setProblemType(event.target.value)}
+          className="rounded-lg border border-white/10 bg-[#0B1220] px-3 py-2 text-sm text-slate-200"
+        >
+          <option value="all">全部问题</option>
+          <option value="duplicate_customer_code">多个群对应同一客户号</option>
+          <option value="customer_already_bound">客户号已绑定其它群</option>
+          <option value="customer_not_found">号码找不到客户</option>
+          <option value="multiple_numbers">群名包含多个客户号</option>
+          <option value="no_number">群名没有 4/5 位客户号</option>
+        </select>
+        <span className="text-xs text-slate-500">共 {filteredRows.length} 个问题群</span>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-white/5">
+        <ResponsiveTable className="w-full text-sm">
+          <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">群名称</th>
+              <th>候选客户号</th>
+              <th>问题</th>
+              <th>群成员数</th>
+              <th>chat_id</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {problemsQ.isLoading && (
+              <tr><td colSpan={6} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+            )}
+            {problemsQ.isSuccess && filteredRows.length === 0 && (
+              <tr><td colSpan={6} className="py-8 text-center text-xs text-slate-500">没有符合条件的问题群</td></tr>
+            )}
+            {pageRows.map((group) => (
+              <tr key={group.chat_id}>
+                <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
+                <td className="font-mono text-xs text-slate-300">{group.candidate_customer_code || "—"}</td>
+                <td className="text-xs text-amber-300">{group.problem_label}</td>
+                <td className="text-xs text-slate-400">{group.member_count}</td>
+                <td className="font-mono text-xs text-slate-500">{group.chat_id}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setBindingGroup(group)}
+                    className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                  >
+                    手动分配
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </ResponsiveTable>
+      </div>
+      <Pagination page={currentPage} pageSize={pageSize} total={filteredRows.length} onChange={setPage} />
+      {bindingGroup && (
+        <BindModal
+          initialChatId={bindingGroup.chat_id}
+          initialGroupName={bindingGroup.name || bindingGroup.chat_id}
+          onClose={() => setBindingGroup(null)}
+          onBound={() => {
+            setBindingGroup(null);
+            qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+            qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+            qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -297,15 +467,54 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
   const qc = useQueryClient();
   const fetchBindings = useServerFn(listWecomBindings);
   const unbind = useServerFn(unbindCustomerGroup);
+  const autoBind = useServerFn(autoBindWecomGroupsByName);
   const [showBind, setShowBind] = useState(false);
   const [unbindCode, setUnbindCode] = useState<string | null>(null);
+  const [autoBinding, setAutoBinding] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   const bindingsQ = useQuery({
     queryKey: ["wecom-notify-bindings"],
     queryFn: () => fetchBindings(),
   });
   const rows = ((bindingsQ.data as any)?.items ?? []) as any[];
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) =>
+      [row.customer_code, row.chat_id, row.wecom_notify_groups?.name]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword),
+    );
+  }, [rows, search]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [search]);
 
   const reload = () => qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] });
+
+  const doAutoBind = async () => {
+    setAutoBinding(true);
+    try {
+      const result: any = await autoBind();
+      toast.success(
+        `自动匹配完成：新增 ${result.matched} 个绑定${
+          result.ambiguous ? `，${result.ambiguous} 个客户号存在多个群已跳过` : ""
+        }`,
+        { duration: 8000 },
+      );
+      reload();
+    } catch (e: any) {
+      toast.error(e.message || "自动匹配失败");
+    } finally {
+      setAutoBinding(false);
+    }
+  };
 
   const doUnbind = async () => {
     if (!unbindCode) return;
@@ -323,21 +532,43 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
     <Card
       title="客户 ↔ 专属群绑定（一客户一群）"
       action={
-        <button
-          onClick={() => setShowBind(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          新建绑定
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={doAutoBind}
+            disabled={autoBinding}
+            className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-50"
+          >
+            {autoBinding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            按群名自动匹配
+          </button>
+          <button
+            onClick={() => setShowBind(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新建绑定
+          </button>
+        </div>
       }
     >
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="relative block w-full max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索客户号、客户群名称或 chat_id"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
+          />
+        </label>
+        <span className="text-xs text-slate-500">共 {filteredRows.length} 个已匹配群</span>
+      </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
-              <th className="px-3 py-2">客户号</th>
-              <th>专属群</th>
+              <th className="px-3 py-2">匹配客户号</th>
+              <th>客户群名称</th>
               <th>群成员数</th>
               <th>绑定时间</th>
               <th></th>
@@ -351,14 +582,14 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
                 </td>
               </tr>
             )}
-            {bindingsQ.isSuccess && rows.length === 0 && (
+            {bindingsQ.isSuccess && filteredRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
-                  尚无绑定
+                  {rows.length ? "没有找到符合条件的绑定" : "尚无绑定"}
                 </td>
               </tr>
             )}
-            {rows.map((b) => (
+            {pageRows.map((b) => (
               <tr key={b.id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{b.customer_code}</td>
                 <td className="text-xs text-slate-300">
@@ -382,6 +613,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
           </tbody>
         </ResponsiveTable>
       </div>
+      <Pagination page={currentPage} pageSize={pageSize} total={filteredRows.length} onChange={setPage} />
 
       {showBind && (
         <BindModal
@@ -423,14 +655,24 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
   );
 }
 
-function BindModal({ onClose, onBound }: { onClose: () => void; onBound: () => void }) {
+function BindModal({
+  onClose,
+  onBound,
+  initialChatId = "",
+  initialGroupName = "",
+}: {
+  onClose: () => void;
+  onBound: () => void;
+  initialChatId?: string;
+  initialGroupName?: string;
+}) {
   const search = useServerFn(searchCustomersForBinding);
   const fetchGroups = useServerFn(listWecomGroups);
   const bind = useServerFn(bindCustomerGroup);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<any[]>([]);
   const [customerCode, setCustomerCode] = useState<string | null>(null);
-  const [chatId, setChatId] = useState<string>("");
+  const [chatId, setChatId] = useState<string>(initialChatId);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
@@ -504,18 +746,24 @@ function BindModal({ onClose, onBound }: { onClose: () => void; onBound: () => v
         </div>
         <div>
           <label className="text-xs text-slate-400">目标群</label>
-          <select
-            value={chatId}
-            onChange={(e) => setChatId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
-          >
-            <option value="">请选择</option>
-            {groups.map((g) => (
-              <option key={g.chat_id} value={g.chat_id}>
-                {g.name || g.chat_id}
-              </option>
-            ))}
-          </select>
+          {initialChatId ? (
+            <div className="mt-1 rounded-md border border-white/10 bg-white/5 px-2 py-2 text-sm text-slate-100">
+              {initialGroupName}
+            </div>
+          ) : (
+            <select
+              value={chatId}
+              onChange={(e) => setChatId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
+            >
+              <option value="">请选择</option>
+              {groups.map((g) => (
+                <option key={g.chat_id} value={g.chat_id}>
+                  {g.name || g.chat_id}
+                </option>
+              ))}
+            </select>
+          )}
           {groups.length === 0 && (
             <div className="mt-1 text-[11px] text-amber-400/80">
               尚无同步过的群，请先到「群列表」同步
@@ -715,17 +963,13 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [confirmSendId, setConfirmSendId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   const messagesQ = useQuery({
     queryKey: ["wecom-notify-messages"],
     queryFn: () => fetchMessages(),
   });
-  const rows = ((messagesQ.data as any)?.items ?? []) as any[];
-  const detailQ = useQuery({
-    queryKey: ["wecom-notify-message-detail", detailId],
-    queryFn: () => fetchDetail({ data: { messageId: detailId! } }),
-    enabled: !!detailId,
-  });
-
   const STATUS_LABEL: Record<string, string> = {
     draft: "草稿",
     previewed: "待发送",
@@ -737,6 +981,27 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
     preview_only: "仅预览（未真实发送）",
     failed: "发送失败",
   };
+  const rows = ((messagesQ.data as any)?.items ?? []) as any[];
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) =>
+      [row.title, row.status, STATUS_LABEL[row.status], row.target_scope]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword),
+    );
+  }, [rows, search]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setPage(1), [search]);
+  const detailQ = useQuery({
+    queryKey: ["wecom-notify-message-detail", detailId],
+    queryFn: () => fetchDetail({ data: { messageId: detailId! } }),
+    enabled: !!detailId,
+  });
 
   const doRefreshStatus = async (messageId: string) => {
     try {
@@ -774,6 +1039,18 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
 
   return (
     <Card title="历史群发任务">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="relative block w-full max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索任务标题、状态或范围"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand"
+          />
+        </label>
+        <span className="text-xs text-slate-500">共 {filteredRows.length} 个任务</span>
+      </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
@@ -793,14 +1070,14 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
                 </td>
               </tr>
             )}
-            {messagesQ.isSuccess && rows.length === 0 && (
+            {messagesQ.isSuccess && filteredRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
-                  尚无群发任务
+                  {rows.length ? "没有找到符合条件的任务" : "尚无群发任务"}
                 </td>
               </tr>
             )}
-            {rows.map((m) => (
+            {pageRows.map((m) => (
               <tr key={m.id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{m.title || "(未命名)"}</td>
                 <td className="text-xs text-slate-400">
@@ -841,6 +1118,7 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
           </tbody>
         </ResponsiveTable>
       </div>
+      <Pagination page={currentPage} pageSize={pageSize} total={filteredRows.length} onChange={setPage} />
 
       {confirmSendId && (
         <ModalShell onClose={() => setConfirmSendId(null)}>
