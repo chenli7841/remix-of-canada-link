@@ -130,9 +130,12 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
     const groups = await getExternalGroupDetails(chatIds);
     const now = new Date().toISOString();
     for (const group of groups) {
+      // 企业微信会对部分历史群返回空 name。写入明确占位值，避免这些群
+      // 永远被下一批再次选中，导致后续有真实群名的群无法被处理。
+      const storedName = group.name.trim() || "（企业微信未返回群名）";
       const { error: groupError } = await supabaseAdmin
         .from("wecom_notify_groups")
-        .update({ name: group.name, member_count: group.member_count, synced_at: now })
+        .update({ name: storedName, member_count: Number(group.member_count) || 0, synced_at: now })
         .eq("chat_id", group.chat_id);
       if (groupError) throw new Error(groupError.message);
       await supabaseAdmin.from("wecom_notify_group_members").delete().eq("chat_id", group.chat_id);
