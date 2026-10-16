@@ -323,9 +323,9 @@ export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
     return { ok: true, customerCode, alreadyMatched: Boolean(byGroup) };
   });
 
-// 仅供管理员对明确勾选的「已屏蔽群」做小范围联调。它不会改变屏蔽状态，
-// 也不会被普通群发流程调用；页面在提交前还会再次展示群数和正文确认。
-export const sendBlockedWecomGroupsTest = createServerFn({ method: "POST" })
+// 管理员在各列表中明确勾选群后直接提交群发。屏蔽群也只有在管理员主动勾选、
+// 填写正文并通过最终确认时才能从这个入口发送，普通群发仍严格排除屏蔽群。
+export const sendSelectedWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { chatIds: string[]; content: string }) => d)
   .handler(async ({ data, context }) => {
@@ -335,7 +335,7 @@ export const sendBlockedWecomGroupsTest = createServerFn({ method: "POST" })
     const chatIds = [...new Set(data.chatIds.map((id) => id.trim()).filter(Boolean))];
     const content = data.content.trim();
     if (!chatIds.length) throw new Error("请至少选择一个测试群");
-    if (chatIds.length > 10) throw new Error("一次最多测试 10 个群");
+    if (chatIds.length > 50) throw new Error("一次最多发送 50 个群");
     if (!content) throw new Error("测试消息不能为空");
     if (content.length > 2000) throw new Error("测试消息不能超过 2000 个字符");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
@@ -346,9 +346,7 @@ export const sendBlockedWecomGroupsTest = createServerFn({ method: "POST" })
       .select("chat_id,name,owner_userid,is_blocked")
       .in("chat_id", chatIds);
     if (error) throw new Error(error.message);
-    if ((groups ?? []).length !== chatIds.length) throw new Error("部分测试群不存在，请刷新页面后重试");
-    if ((groups ?? []).some((group: any) => !group.is_blocked))
-      throw new Error("测试入口只允许发送到已屏蔽群");
+    if ((groups ?? []).length !== chatIds.length) throw new Error("部分群不存在，请刷新页面后重试");
     const withoutOwner = (groups ?? []).filter((group: any) => !group.owner_userid);
     if (withoutOwner.length)
       throw new Error(`这些群尚未取得群主信息，请先逐个刷新群名：${withoutOwner.map((g: any) => g.name || g.chat_id).join("、")}`);
@@ -368,10 +366,10 @@ export const sendBlockedWecomGroupsTest = createServerFn({ method: "POST" })
     await recordAdminLog(supabaseAdmin, {
       entity_type: "wecom_notify_test",
       entity_id: results.map((result) => result.msgid).filter(Boolean).join(",") || "submitted",
-      action: "send_blocked_groups_test",
+      action: "send_selected_groups",
       after: { chat_ids: chatIds, group_count: chatIds.length, content, results },
       operator_id: context.userId,
-      note: "管理员明确选择已屏蔽群进行群发联调",
+      note: "管理员在群列表中明确勾选群并确认群发",
     });
     return { ok: true, groupCount: chatIds.length, results };
   });
