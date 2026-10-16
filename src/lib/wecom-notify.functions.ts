@@ -95,9 +95,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
     };
     const now = new Date().toISOString();
     if (groups.length) {
-      // 企业微信的客户群列表接口主要用于发现 chat_id；部分群会在这个接口中
-      // 返回空群名和 0 人数。这里只插入尚不存在的群，避免页面刷新/重新同步时
-      // 把详情接口已经补全的群名和人数覆盖掉。
+      // 网关同步会同时拉取每个群的详情，所以新群与已有群都更新群名、群主和人数。
       const { error } = await supabaseAdmin.from("wecom_notify_groups").upsert(
         groups.map((g) => ({
           chat_id: g.chat_id,
@@ -106,9 +104,17 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
           member_count: g.member_count,
           synced_at: now,
         })),
-        { onConflict: "chat_id", ignoreDuplicates: true },
+        { onConflict: "chat_id" },
       );
       if (error) throw new Error(error.message);
+      const smallGroupIds = groups.filter((group) => group.member_count <= 15).map((group) => group.chat_id);
+      if (smallGroupIds.length) {
+        const { error: deleteError } = await supabaseAdmin
+          .from("wecom_notify_group_members")
+          .delete()
+          .in("chat_id", smallGroupIds);
+        if (deleteError) throw new Error(deleteError.message);
+      }
       const externalMembers = groups.flatMap((group) =>
         (group.member_count <= 15 ? group.external_members : []).map((member) => ({
           chat_id: group.chat_id,
