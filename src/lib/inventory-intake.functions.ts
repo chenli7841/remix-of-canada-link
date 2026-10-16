@@ -8,6 +8,7 @@
 //      并挂到新的集运订单下；原订单若已无任何运单则自动删除。
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { recordWecomDailyIntake } from "@/lib/wecom-daily-notify.server";
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -290,6 +291,8 @@ export const inventoryIntakeCommit = createServerFn({ method: "POST" })
       operator_name: operatorName,
       note: `库存发货入库: ${order.request_no} 共 ${rows.length} 箱，运单转为已到达集运仓${palletNo ? `；已直接成托 ${palletNo}` : ""}${deleted.length ? `；自动删除空订单 ${deleted.join(", ")}` : ""}`,
     });
+
+    await recordWecomDailyIntake(supabaseAdmin, rows, order.customer_code);
 
     return { ok: true, count: rows.length, requestNo: order.request_no, deletedOrders: deleted, palletNo };
   });

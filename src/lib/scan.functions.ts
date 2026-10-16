@@ -4,6 +4,7 @@ import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { detectScanKind, type ScanKind } from "@/lib/scan-detect";
+import { recordWecomDailyIntake } from "@/lib/wecom-daily-notify.server";
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -650,7 +651,7 @@ export const intakeScanReceiveOrder = createServerFn({ method: "POST" })
     }
     const { data: order } = await supabaseAdmin
       .from("orders")
-      .select("id, order_no, shipping_method, warehouse, pickup_warehouse, domestic_tracking_no")
+      .select("id, order_no, customer_code, shipping_method, warehouse, pickup_warehouse, domestic_tracking_no")
       .eq("id", data.orderId)
       .maybeSingle();
     if (!order) throw new Error("订单不存在");
@@ -696,6 +697,7 @@ export const intakeScanReceiveOrder = createServerFn({ method: "POST" })
         .eq("domestic_tracking_no", (order as any).domestic_tracking_no)
         .eq("status", "detained");
     }
+    await recordWecomDailyIntake(supabaseAdmin, wbs as any[], (order as any).customer_code);
     return { ok: true, waybills: wbs, parentNo: (order as any).order_no };
   });
 
@@ -808,6 +810,7 @@ export const intakeScanReceiveWaybill = createServerFn({ method: "POST" })
       .update({ status: newStatus })
       .eq("id", (wb as any).id);
     await writeReceivedEvent(supabaseAdmin, wb as any, warehouseName, operatorName, context.userId, isStorage);
+    await recordWecomDailyIntake(supabaseAdmin, [wb as any]);
     return { ok: true, waybill: wb };
   });
 
@@ -947,6 +950,7 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
       } catch (e) {
         console.error("persistWaybillItems failed (intakeScanCommit reuse)", e);
       }
+      await recordWecomDailyIntake(supabaseAdmin, existing as any[], (parent as any).customer_code);
       return {
         ok: true,
         waybills: existing,
@@ -1107,6 +1111,8 @@ export const intakeScanCommit = createServerFn({ method: "POST" })
     } catch (e) {
       console.error("persistWaybillItems failed (intakeScanCommit generate)", e);
     }
+
+    await recordWecomDailyIntake(supabaseAdmin, (ins ?? []) as any[], (parent as any).customer_code);
 
     return {
       ok: true,
