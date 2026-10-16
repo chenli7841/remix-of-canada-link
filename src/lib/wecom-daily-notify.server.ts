@@ -27,6 +27,23 @@ type IntakeWaybill = {
 
 type DailySections = {
   intake?: { pieces: number };
+  measurements?: Array<{
+    waybillId: string;
+    trackingNo: string;
+    lengthCm: number;
+    widthCm: number;
+    heightCm: number;
+    actualWeightKg: number;
+    volumetricWeightKg: number;
+    chargeableWeightKg: number;
+    freightCad: number;
+  }>;
+};
+
+type StoredDailyEvent = {
+  category: string;
+  payload: DailySections["measurements"] extends Array<infer Item> ? Item : never;
+  occurred_at: string;
 };
 
 function chineseDate(serviceDate: string): string {
@@ -47,10 +64,24 @@ function renderDailyContent(
   if (sections.intake && sections.intake.pieces > 0) {
     lines.push("", "【每日入库】", `今日入库：${sections.intake.pieces}件`);
   }
+  if (sections.measurements?.length) {
+    lines.push("", "【量尺称重】");
+    sections.measurements.forEach((item, index) => {
+      if (index > 0) lines.push("");
+      lines.push(
+        item.trackingNo,
+        `尺寸：${item.lengthCm}×${item.widthCm}×${item.heightCm}cm`,
+        `实重：${item.actualWeightKg}kg`,
+        `体积重：${item.volumetricWeightKg}kg`,
+        `计费重：${item.chargeableWeightKg}kg`,
+        `运费：CAD ${item.freightCad.toFixed(2)}`,
+      );
+    });
+  }
   return lines.join("\n");
 }
 
-async function refreshDailyIntakeDraft(
+async function refreshDailyDraft(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   serviceDate: string,
@@ -58,11 +89,11 @@ async function refreshDailyIntakeDraft(
 ) {
   const { data: events, error: eventError } = await admin
     .from("wecom_daily_notification_events")
-    .select("id")
+    .select("category,payload,occurred_at")
     .eq("service_date", serviceDate)
     .eq("customer_code", customerCode)
-    .eq("category", "intake");
-  if (eventError) throw new Error(`汇总每日入库微信通知失败: ${eventError.message}`);
+    .order("occurred_at", { ascending: true });
+  if (eventError) throw new Error(`汇总每日微信通知失败: ${eventError.message}`);
 
   const { data: existing, error: draftError } = await admin
     .from("wecom_daily_notification_drafts")
@@ -72,13 +103,20 @@ async function refreshDailyIntakeDraft(
     .maybeSingle();
   if (draftError) throw new Error(`读取每日微信预发送信息失败: ${draftError.message}`);
   if (existing && existing.status !== "draft") {
-    throw new Error("当天微信通知已经提交，不能再写入新的入库信息");
+    throw new Error("当天微信通知已经提交，不能再修改这份预发送信息");
   }
 
-  const sections: DailySections = {
-    ...(existing?.sections ?? {}),
-    intake: { pieces: events?.length ?? 0 },
-  };
+  const storedEvents = (events ?? []) as StoredDailyEvent[];
+  const intakeEvents = storedEvents.filter((event) => event.category === "intake");
+  const measurementEvents = storedEvents.filter((event) => event.category === "measurement");
+  const sections: DailySections = { ...(existing?.sections ?? {}) };
+  if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
+  else delete sections.intake;
+  if (measurementEvents.length) {
+    sections.measurements = measurementEvents.map((event) => event.payload);
+  } else {
+    delete sections.measurements;
+  }
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
     {
@@ -142,16 +180,109 @@ export async function recordWecomDailyIntake(
     category: "intake",
     source_type: "waybill",
     source_id: waybill.id,
+    event_key: `intake:waybill:${waybill.id}`,
     payload: {
       pieces: 1,
       waybill_no: waybill.waybill_no ?? null,
     },
   }));
   const { error } = await admin.from("wecom_daily_notification_events").upsert(rows, {
-    onConflict: "category,source_type,source_id",
+    onConflict: "event_key",
     ignoreDuplicates: true,
   });
   if (error) throw new Error(`生成每日入库微信通知失败: ${error.message}`);
-  const draft = await refreshDailyIntakeDraft(admin, serviceDate, resolvedCode);
+  const draft = await refreshDailyDraft(admin, serviceDate, resolvedCode);
   return { recorded: rows.length, serviceDate, customerCode: resolvedCode, ...draft };
+}
+
+export async function recordWecomDailyMeasurements(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  waybillIds: string[],
+) {
+  if (!waybillIds.length) return { recorded: 0 };
+  const serviceDate = nextTorontoSendDate();
+  const { data: waybills, error } = await admin
+    .from("waybills")
+    .select(
+      "id,waybill_no,order_id,forwarding_id,length_cm,width_cm,height_cm,weight_kg,freight_cad,weight_snapshot",
+    )
+    .in("id", [...new Set(waybillIds)]);
+  if (error) throw new Error(`读取量尺称重数据失败: ${error.message}`);
+
+  const parentCache = new Map<string, { customerCode: string; trackingNo: string }>();
+  const rows = [];
+  const incompleteEventKeys: string[] = [];
+  const affectedCustomerCodes = new Set<string>();
+  for (const waybill of waybills ?? []) {
+    const parentTable = waybill.order_id ? "orders" : "forwarding_orders";
+    const parentId = waybill.order_id ?? waybill.forwarding_id;
+    if (!parentId) throw new Error(`运单 ${waybill.waybill_no} 缺少所属订单`);
+    const cacheKey = `${parentTable}:${parentId}`;
+    let parent = parentCache.get(cacheKey);
+    if (!parent) {
+      const { data, error: parentError } = await admin
+        .from(parentTable)
+        .select("customer_code,domestic_tracking_no")
+        .eq("id", parentId)
+        .maybeSingle();
+      if (parentError) throw new Error(`读取量尺称重客户失败: ${parentError.message}`);
+      parent = {
+        customerCode: String(data?.customer_code ?? "").trim(),
+        trackingNo: String(data?.domestic_tracking_no ?? waybill.waybill_no ?? "").trim(),
+      };
+      parentCache.set(cacheKey, parent);
+    }
+    if (!parent.customerCode) throw new Error(`运单 ${waybill.waybill_no} 所属订单缺少客户号`);
+    affectedCustomerCodes.add(parent.customerCode);
+    const snapshot = waybill.weight_snapshot ?? {};
+    const eventKey = `measurement:waybill:${waybill.id}:${serviceDate}`;
+    const lengthCm = Number(waybill.length_cm ?? 0);
+    const widthCm = Number(waybill.width_cm ?? 0);
+    const heightCm = Number(waybill.height_cm ?? 0);
+    const actualWeightKg = Number(waybill.weight_kg ?? 0);
+    if (lengthCm <= 0 || widthCm <= 0 || heightCm <= 0 || actualWeightKg <= 0) {
+      incompleteEventKeys.push(eventKey);
+      continue;
+    }
+    rows.push({
+      service_date: serviceDate,
+      customer_code: parent.customerCode,
+      category: "measurement",
+      source_type: "waybill",
+      source_id: waybill.id,
+      event_key: eventKey,
+      payload: {
+        waybillId: waybill.id,
+        trackingNo: parent.trackingNo || waybill.waybill_no,
+        lengthCm,
+        widthCm,
+        heightCm,
+        actualWeightKg,
+        volumetricWeightKg: Number(snapshot.volumetric_weight ?? 0),
+        chargeableWeightKg: Number(snapshot.chargeable_weight ?? 0),
+        freightCad: Number(waybill.freight_cad ?? snapshot.freight_cad ?? 0),
+      },
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
+  if (rows.length) {
+    const { error: upsertError } = await admin
+      .from("wecom_daily_notification_events")
+      .upsert(rows, { onConflict: "event_key" });
+    if (upsertError) throw new Error(`生成量尺称重微信通知失败: ${upsertError.message}`);
+  }
+  if (incompleteEventKeys.length) {
+    const { error: deleteError } = await admin
+      .from("wecom_daily_notification_events")
+      .delete()
+      .in("event_key", incompleteEventKeys);
+    if (deleteError) throw new Error(`更新量尺称重微信通知失败: ${deleteError.message}`);
+  }
+
+  const customerCodes = [...affectedCustomerCodes];
+  for (const customerCode of customerCodes)
+    await refreshDailyDraft(admin, serviceDate, customerCode);
+  return { recorded: rows.length, serviceDate, customerCodes };
 }

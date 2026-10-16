@@ -4,7 +4,7 @@ import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { detectScanKind, type ScanKind } from "@/lib/scan-detect";
-import { recordWecomDailyIntake } from "@/lib/wecom-daily-notify.server";
+import { recordWecomDailyIntake, recordWecomDailyMeasurements } from "@/lib/wecom-daily-notify.server";
 
 async function assertStaff(supabase: any, userId: string) {
   const { data } = await supabase.rpc("is_staff", { _user_id: userId });
@@ -1890,6 +1890,7 @@ export const measureSaveDims = createServerFn({ method: "POST" })
       } catch (e) {
         console.error("markBatchFeesDirtyMany failed (measureSaveDims):", e);
       }
+      await recordWecomDailyMeasurements(supabaseAdmin, Array.from(touchedWaybillIds));
     }
 
     return { ok: true, updated: n, autoFees, autoOrderFees, snapshotWarnings };
