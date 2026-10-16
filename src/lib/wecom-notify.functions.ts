@@ -974,15 +974,37 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     }
     const { data: targets, error: tErr } = await supabaseAdmin
       .from("wecom_notify_message_targets")
-      .select("id, chat_id, rendered_content, wecom_notify_groups(owner_userid,is_blocked)")
+      .select("id, chat_id, rendered_content")
       .eq("message_id", data.messageId);
     if (tErr) throw new Error(tErr.message);
     if (!targets?.length) throw new Error("该消息没有任何目标，无法发送");
-    const blockedTargets = (targets as any[]).filter(
-      (target) => target.wecom_notify_groups?.is_blocked,
+
+    // message_targets.chat_id intentionally has no database foreign key to the group table.
+    // Fetch group metadata explicitly instead of asking PostgREST to expand a relationship
+    // that is not present in its schema cache.
+    const chatIds = [...new Set((targets as any[]).map((target) => target.chat_id))];
+    const { data: targetGroups, error: groupErr } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .select("chat_id,owner_userid,is_blocked")
+      .in("chat_id", chatIds);
+    if (groupErr) throw new Error(groupErr.message);
+    const groupByChatId = new Map(
+      ((targetGroups ?? []) as any[]).map((group) => [group.chat_id, group]),
     );
-    const activeTargets = (targets as any[]).filter(
-      (target) => !target.wecom_notify_groups?.is_blocked,
+    const targetsWithGroup = (targets as any[]).map((target) => ({
+      ...target,
+      group: groupByChatId.get(target.chat_id) ?? null,
+    }));
+    const missingGroups = targetsWithGroup.filter((target) => !target.group);
+    if (missingGroups.length) {
+      await supabaseAdmin
+        .from("wecom_notify_message_targets")
+        .update({ status: "failed", error: "目标群不存在，请刷新群列表后重试" })
+        .in("id", missingGroups.map((target) => target.id));
+    }
+    const blockedTargets = targetsWithGroup.filter((target) => target.group?.is_blocked);
+    const activeTargets = targetsWithGroup.filter(
+      (target) => target.group && !target.group.is_blocked,
     );
     if (blockedTargets.length) {
       await supabaseAdmin
@@ -1024,7 +1046,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       { senderUserId: string; content: string; chatIds: string[]; targetIds: string[] }
     >();
     for (const t of activeTargets) {
-      const owner = t.wecom_notify_groups?.owner_userid;
+      const owner = t.group?.owner_userid;
       if (!owner) {
         anyFail = true;
         await supabaseAdmin
