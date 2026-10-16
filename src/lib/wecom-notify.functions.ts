@@ -181,9 +181,15 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
       supabaseAdmin: any;
     };
     const now = new Date().toISOString();
+    const hasName = Boolean(group.name.trim());
     const { error } = await supabaseAdmin
       .from("wecom_notify_groups")
-      .update({ name: group.name || "（企业微信未返回群名）", member_count: group.member_count, synced_at: now })
+      .update({
+        name: group.name || "（企业微信未返回群名）",
+        member_count: group.member_count,
+        synced_at: now,
+        ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
+      })
       .eq("chat_id", chatId);
     if (error) throw new Error(error.message);
     if (group.member_count <= 15) {
@@ -284,9 +290,15 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
       // 企业微信会对部分历史群返回空 name。写入明确占位值，避免这些群
       // 永远被下一批再次选中，导致后续有真实群名的群无法被处理。
       const storedName = group.name.trim() || "（企业微信未返回群名）";
+      const hasName = Boolean(group.name.trim());
       const { error: groupError } = await supabaseAdmin
         .from("wecom_notify_groups")
-        .update({ name: storedName, member_count: Number(group.member_count) || 0, synced_at: now })
+        .update({
+          name: storedName,
+          member_count: Number(group.member_count) || 0,
+          synced_at: now,
+          ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
+        })
         .eq("chat_id", group.chat_id);
       if (groupError) throw new Error(groupError.message);
       await supabaseAdmin.from("wecom_notify_group_members").delete().eq("chat_id", group.chat_id);
@@ -462,7 +474,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
     const boundChats = new Set(bindings.map((row) => row.chat_id));
     const boundCodes = new Set(bindings.map((row) => row.customer_code));
     const analyzed = groups
-      .filter((group) => !boundChats.has(group.chat_id))
+      .filter((group) => !boundChats.has(group.chat_id) && !group.is_blocked)
       .map((group) => {
         const runs = [...new Set(String(group.name ?? "").match(/\d{4,}/g) ?? [])];
         const normalized = [...new Set(
