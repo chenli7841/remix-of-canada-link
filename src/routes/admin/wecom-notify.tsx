@@ -8,6 +8,7 @@ import {
   getWecomNotifyStatus,
   testWecomNotifyConnection,
   listWecomGroups,
+  enrichWecomGroups,
   syncWecomGroups,
   listWecomBindings,
   searchCustomersForBinding,
@@ -116,7 +117,9 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const qc = useQueryClient();
   const fetchGroups = useServerFn(listWecomGroups);
   const sync = useServerFn(syncWecomGroups);
+  const enrich = useServerFn(enrichWecomGroups);
   const [syncing, setSyncing] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
   const rows = ((groupsQ.data as any)?.items ?? []) as any[];
 
@@ -133,23 +136,44 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
     }
   };
 
+  const doEnrich = async () => {
+    setEnriching(true);
+    try {
+      const r: any = await enrich();
+      toast.success(
+        r.count ? `已补全 ${r.count} 个群，还剩 ${r.remaining} 个` : "所有群资料均已补全",
+      );
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+    } catch (e: any) {
+      toast.error(e.message || "补全失败");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   return (
     <Card
       title="企业微信客户群"
       action={
-        <button
-          onClick={doSync}
-          disabled={!enabled || syncing}
-          title={enabled ? undefined : "网关或企业微信凭证尚未配置"}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {syncing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          同步群列表
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={doEnrich}
+            disabled={!enabled || enriching}
+            className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          >
+            {enriching && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            补全下一批群资料（50）
+          </button>
+          <button
+            onClick={doSync}
+            disabled={!enabled || syncing}
+            title={enabled ? undefined : "网关或企业微信凭证尚未配置"}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            刷新群 ID 列表
+          </button>
+        </div>
       }
     >
       <div className="overflow-hidden rounded-xl border border-white/5">
@@ -158,8 +182,8 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             <tr>
               <th className="px-3 py-2">群名称</th>
               <th>chat_id</th>
-              <th>群主</th>
-              <th>成员数</th>
+              <th>外部联系人（微信名 / external_userid）</th>
+              <th>群成员数</th>
               <th>同步时间</th>
             </tr>
           </thead>
@@ -182,7 +206,24 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
               <tr key={g.chat_id}>
                 <td className="px-3 py-2 font-medium text-slate-100">{g.name || "—"}</td>
                 <td className="font-mono text-xs text-slate-400">{g.chat_id}</td>
-                <td className="text-xs text-slate-400">{g.owner_userid || "—"}</td>
+                <td className="max-w-md py-2 text-xs text-slate-400">
+                  {g.member_count > 15 ? (
+                    <span className="font-medium text-amber-300">大群，暂不处理</span>
+                  ) : g.wecom_notify_group_members?.length ? (
+                    <div className="space-y-1">
+                      {g.wecom_notify_group_members.map((member: any) => (
+                        <div key={member.external_userid}>
+                          <span className="text-slate-200">{member.display_name || "未提供名称"}</span>
+                          <span className="ml-2 font-mono text-[11px] text-slate-500">
+                            {member.external_userid}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="text-xs text-slate-400">{g.member_count}</td>
                 <td className="text-xs text-slate-400">{fmtDate(g.synced_at)}</td>
               </tr>

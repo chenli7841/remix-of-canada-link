@@ -8,6 +8,8 @@ import { getDefaultLabelSize, type LabelSize } from "./label-size";
 
 type WaybillEntry = {
   waybill_no: string;
+  domestic_tracking_no?: string | null;
+  piece_index?: number;
   weight_kg?: number | null;
   items_name?: string | null;
   mark_no?: string | null;
@@ -71,41 +73,36 @@ function barcodeSVG(text: string, m: SizeMeta, displayValue = true) {
 }
 
 function renderOrderOrForwarding(d: LabelData, m: SizeMeta): string {
-  const addr = d.address ?? {};
-  const u = d.user ?? {};
-  const recipient = addr.recipient ?? addr.name ?? u.full_name ?? "—";
-  const phone = addr.phone ?? u.phone ?? "—";
-  const addressLine =
-    [
-      addr.line1 ?? addr.address1,
-      addr.line2,
-      addr.city,
-      addr.province ?? addr.state,
-      addr.postal_code ?? addr.zip,
-      addr.country,
+    const addr = d.address ?? {};
+    const u = d.user ?? {};
+    const recipient = addr.recipient ?? addr.name ?? u.full_name ?? "—";
+    const phone = addr.phone ?? u.phone ?? "—";
+    const addressLine = [
+        addr.line1 ?? addr.address1,
+        addr.line2,
+        addr.city,
+        addr.province ?? addr.state,
+        addr.postal_code ?? addr.zip,
+        addr.country,
     ]
-      .filter(Boolean)
-      .join(", ") || "—";
-  // Destination on order/forwarding labels comes from the RECIPIENT ADDRESS,
-  // not from the shipping route (the route may be re-mapped later).
-  const destCode =
-    addr.destination_code ?? addr.destination ?? (d.meta as any)?.address_destination_code ?? "—";
-  const list = d.waybills?.length ? d.waybills : [{ waybill_no: "—" } as WaybillEntry];
-  const xx = String(d.total || list.length).padStart(2, "0");
-  const entityLabel = d.entityType === "order" ? "订单" : "集运单";
-
-  return list
-    .map((w, i) => {
-      const aa = String(i + 1).padStart(2, "0");
-      const markNo = w.mark_no ?? (d.parent as any)?.mark_no ?? null;
-      return `
+        .filter(Boolean)
+        .join(", ") || "—";
+    // Destination on order/forwarding labels comes from the RECIPIENT ADDRESS,
+    // not from the shipping route (the route may be re-mapped later).
+    const list: WaybillEntry[] = d.waybills?.length ? d.waybills : [{ waybill_no: "—" }];
+    const xx = String(d.total || list.length).padStart(2, "0");
+    const entityLabel = "国内单号";
+    m = { ...m, barcodeH: Math.min(m.barcodeH, 34) };
+    return list
+        .map((w, i) => {
+        const aa = String(w.piece_index ?? i + 1).padStart(2, "0");
+        return `
 <div class="label">
-  ${markNo ? `<div class="mark">唛头号 · ${markNo}</div>` : ""}
   <div class="stack">
     <div class="barcodes">
       <div class="block">
         <div class="muted">${entityLabel}</div>
-        <div class="bc-lg">${barcodeSVG(d.entityNo || "—", m)}</div>
+        <div class="bc-lg domestic-barcode">${barcodeSVG(w.domestic_tracking_no || d.parent?.domestic_tracking_no || d.parent?.tracking_no || "—", m, false)}</div><div class="domestic-number">${w.domestic_tracking_no || d.parent?.domestic_tracking_no || d.parent?.tracking_no || "—"}</div>
       </div>
       <div class="block">
         <div class="muted">运单号 · 箱号 ${aa}/${xx}</div>
@@ -114,24 +111,22 @@ function renderOrderOrForwarding(d: LabelData, m: SizeMeta): string {
     </div>
     <div class="info">
       <div class="colL">
-        <div class="row"><span class="muted">客户号</span><b class="mono">${u.customer_code ?? "—"}</b></div>
+
         <div class="row"><span class="muted">重量</span><b>${w.weight_kg ?? "—"} kg</b></div>
         <div class="row"><span class="muted">物品</span><b>${w.items_name ?? d.parent?.items_desc ?? "—"}</b></div>
       </div>
       <div class="colR">
-        <div class="row"><span class="muted">目的地</span><b>${destCode}</b></div>
+
         <div class="row"><span class="muted">收件人</span><b>${recipient}</b></div>
         <div class="row"><span class="muted">电话</span><b>${phone}</b></div>
-        <div class="row addr"><span class="muted">地址</span><b class="addr-body">${addressLine}</b></div>
-
       </div>
+      <div class="row addr full-address"><span class="muted">地址</span><b class="addr-body">${addressLine}</b></div>
     </div>
   </div>
 </div>`;
     })
-    .join("");
+        .join("");
 }
-
 function renderContainer(d: LabelData, m: SizeMeta): string {
   const meta = d.meta ?? {};
   const titleMap = { carton: "箱号", pallet: "托盘号", batch: "批次号" } as const;
@@ -264,11 +259,19 @@ function buildBody(list: LabelData[], size: LabelSize): string {
       const customer = isOrder ? item.user?.customer_code : item.meta?.customer_code;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
       const name = destination === "TOR" ? "多伦多" : "目的地";
-      const header = `<div class="destination-banner"><div class="destination-main"><strong>${escape(destination)}</strong><span>${name}</span></div>${customer ? `<div class="customer-main"><span>客户号</span><strong>${escape(customer)}</strong></div>` : ""}</div>`;
+      const markDate = String(item.parent?.created_at ?? "").slice(0, 10).replaceAll("-", "").slice(2);
+      const markSuffix = item.entityNo.match(/(\d{3})$/)?.[1] ?? "";
+      const mark = markDate.length === 6 && markSuffix ? markDate + markSuffix : "—";
+      const header = `<div class="destination-banner"><div class="destination-main"><strong>${escape(destination)}</strong><span>${name}</span></div>${isOrder ? `<div class="customer-main shipping-mark"><strong>${escape(mark)}</strong><b>__PIECE__</b></div>` : ""}${customer ? `<div class="customer-main"><span>客户号</span><strong>${escape(customer)}</strong></div>` : ""}</div>`;
       // Preserve a distinct shipping mark; the customer number already has a prominent header.
       const content = body.replace(/<div class="mark">唛头号 · ([\s\S]*?)<\/div>/g,
         (match, mark) => customer != null && mark === String(customer) ? "" : match);
-      return content.replaceAll('<div class="label">', '<div class="label">' + header);
+      let piece = 0;
+      return content.replaceAll('<div class="label">', () => {
+        const index = item.waybills?.[piece]?.piece_index ?? piece + 1;
+        piece++;
+        return '<div class="label' + (isOrder ? ' waybill-label' : '') + '">' + header.replace('__PIECE__', `${index}/${item.total || item.waybills?.length || 1}`);
+      });
     })
     .join("");
 }
@@ -384,8 +387,23 @@ export function renderLabel(d: LabelData | LabelData[], opts?: { size?: LabelSiz
   .mark { background:#fff; color:#000; border:1px solid #000; }
   body[data-size="150x100"] .mark { font-size:12px; padding:0; }
   body[data-size="100x80"] .mark { font-size:10px; padding:0; }
+  .domestic-number { text-align:center; font-family:Arial,sans-serif; font-size:19px; line-height:1.3; font-weight:700; letter-spacing:0.5px; overflow-wrap:anywhere; padding:1mm 0; flex-shrink:0; }
+  body[data-size="100x80"] .domestic-number { font-size:15px; padding:0.6mm 0; }
+  .domestic-barcode svg { max-width:100%; }
+.waybill-label .stack .info { flex:0 0 auto; grid-template-columns:1fr 1.2fr; align-content:start; }
+.full-address { grid-column:1 / -1; }
+.waybill-label .row b { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
+body[data-size] .waybill-label .row b.addr-body { display:block; -webkit-line-clamp:unset; overflow:visible; text-align:left; }
+body[data-size="150x100"] .waybill-label .stack .info { column-gap:3mm; row-gap:0; }
+body[data-size="150x100"] .waybill-label .row { font-size:14px; padding:0.4mm 0; }
+body[data-size="100x80"] .waybill-label .stack .info { column-gap:2mm; row-gap:0; }
+body[data-size="100x80"] .waybill-label .row { font-size:11px; padding:0.3mm 0; }
+body[data-size="100x80"] .waybill-label .muted { font-size:9px; }
+
+.waybill-label .shipping-mark strong { font-size:12px; font-weight:500; } .waybill-label .shipping-mark b { font-size:34px; line-height:1.05; font-weight:900; } body[data-size="100x80"] .waybill-label .shipping-mark strong { font-size:10px; } body[data-size="100x80"] .waybill-label .shipping-mark b { font-size:27px; }
+
 </style></head><body>
-<div class="count">共 ${list.length} 张面单</div>
+<div class="count">共 ${list.reduce((sum, item) => sum + (item.entityType === "order" || item.entityType === "forwarding" ? Math.max(1, item.waybills?.length || 0) : 1), 0)} 张面单</div>
 <div class="toolbar">
   <div class="seg">
     <button type="button" data-size-btn="150x100" onclick="window.__applyLabelSize('150x100')">150×100</button>

@@ -1202,12 +1202,12 @@ export const getWaybillsLabelData = createServerFn({ method: "POST" })
     const userIds = Array.from(new Set(wbs.map((w) => w.user_id).filter((v): v is string => !!v)));
     const [orders, fos, users] = await Promise.all([
       orderIds.length
-        ? supabaseAdmin.from("orders").select("id, order_no, customer_code, user_id").in("id", orderIds)
+        ? supabaseAdmin.from("orders").select("id, order_no, created_at, domestic_tracking_no, customer_code, user_id").in("id", orderIds)
         : Promise.resolve({ data: [] as any[] }),
       foIds.length
         ? supabaseAdmin
             .from("forwarding_orders")
-            .select("id, request_no, customer_code, items_desc, user_id")
+            .select("id, request_no, created_at, domestic_tracking_no, tracking_no, customer_code, items_desc, user_id")
             .in("id", foIds)
         : Promise.resolve({ data: [] as any[] }),
       userIds.length
@@ -1228,7 +1228,21 @@ export const getWaybillsLabelData = createServerFn({ method: "POST" })
       if (!cur || a.is_default) aMap.set(a.user_id, a);
     }
 
+    // Number each label against all siblings, even when printing only one selected waybill.
+    const siblingResults = await Promise.all([
+      orderIds.length ? supabaseAdmin.from("waybills").select("id, order_id, forwarding_id, created_at").in("order_id", orderIds).order("created_at").order("id") : Promise.resolve({ data: [], error: null }),
+      foIds.length ? supabaseAdmin.from("waybills").select("id, order_id, forwarding_id, created_at").in("forwarding_id", foIds).order("created_at").order("id") : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const result of siblingResults) if (result.error) throw new Error(result.error.message);
+    const siblings = new Map<string, string[]>();
+    for (const row of siblingResults.flatMap(result => result.data ?? [])) {
+      const key = row.order_id ? "order:" + row.order_id : "forwarding:" + row.forwarding_id;
+      const ids = siblings.get(key) ?? [];
+      if (!ids.includes(row.id)) ids.push(row.id);
+      siblings.set(key, ids);
+    }
     const items = wbs.map((w) => {
+      const ids = siblings.get(w.order_id ? "order:" + w.order_id : "forwarding:" + w.forwarding_id) ?? [w.id];
       const parent: any = w.order_id ? oMap.get(w.order_id) : w.forwarding_id ? fMap.get(w.forwarding_id) : null;
       const u = w.user_id ? uMap.get(w.user_id) : null;
       const a = w.user_id ? aMap.get(w.user_id) : null;
@@ -1239,6 +1253,8 @@ export const getWaybillsLabelData = createServerFn({ method: "POST" })
         waybills: [
           {
             waybill_no: w.waybill_no,
+            domestic_tracking_no: parent?.domestic_tracking_no || parent?.tracking_no || null,
+            piece_index: ids.indexOf(w.id) + 1,
             weight_kg: w.weight_kg,
             items_name: parent?.items_desc ?? null,
             mark_no: (w as any).mark_no ?? parent?.mark_no ?? null,
@@ -1246,7 +1262,7 @@ export const getWaybillsLabelData = createServerFn({ method: "POST" })
         ],
         user: u,
         address: a,
-        total: 1,
+        total: ids.length,
       };
     });
     return { items };

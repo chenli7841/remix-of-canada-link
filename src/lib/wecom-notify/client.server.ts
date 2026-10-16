@@ -137,23 +137,72 @@ export async function testWecomConnection(): Promise<{ ok: true }> {
 export type WecomExternalGroup = {
   chat_id: string;
   name: string;
-  owner_userid: string | null;
   member_count: number;
+  external_members: Array<{ external_userid: string; display_name: string }>;
 };
+
+function mapGatewayGroup(group: {
+  chatId: string;
+  name: string;
+  memberCount: number;
+  externalMembers?: Array<{ externalUserId: string; displayName: string }>;
+}): WecomExternalGroup {
+  return {
+    chat_id: group.chatId,
+    name: group.name,
+    member_count: group.memberCount,
+    external_members: (group.externalMembers ?? []).map((member) => ({
+      external_userid: member.externalUserId,
+      display_name: member.displayName,
+    })),
+  };
+}
+
+export async function getExternalGroupDetails(chatIds: string[]): Promise<WecomExternalGroup[]> {
+  if (!chatIds.length) return [];
+  const gateway = await gatewayCall<{
+    groups: Array<{
+      chatId: string;
+      name: string;
+      memberCount: number;
+      externalMembers?: Array<{ externalUserId: string; displayName: string }>;
+    }>;
+  }>("/v1/wecom/groups/details", { chat_ids: chatIds });
+  if (gateway) return gateway.groups.map(mapGatewayGroup);
+
+  const groups: WecomExternalGroup[] = [];
+  for (const chatId of chatIds) {
+    const detail = await callApi("/externalcontact/groupchat/get", { chat_id: chatId, need_name: 1 });
+    if (detail?.errcode) continue;
+    const info = detail?.group_chat ?? {};
+    groups.push({
+      chat_id: chatId,
+      name: String(info.name ?? ""),
+      member_count: Array.isArray(info.member_list) ? info.member_list.length : 0,
+      external_members: (Array.isArray(info.member_list) ? info.member_list : [])
+        .filter((member: any) => Number(member?.type) === 2 && member?.userid)
+        .map((member: any) => ({
+          external_userid: String(member.userid),
+          display_name: String(member.name ?? member.group_nickname ?? ""),
+        })),
+    });
+  }
+  return groups;
+}
 
 // 会发网络请求：调用方必须先确认 wecomNotifyEnabled()。
 // 客户群列表 + 详情：externalcontact/groupchat/list + externalcontact/groupchat/get。
 export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
   const gateway = await gatewayCall<{
-    groups: Array<{ chatId: string; name: string; ownerUserId: string | null; memberCount: number }>;
+    groups: Array<{
+      chatId: string;
+      name: string;
+      memberCount: number;
+      externalMembers?: Array<{ externalUserId: string; displayName: string }>;
+    }>;
   }>("/v1/wecom/groups/sync", {});
   if (gateway) {
-    return gateway.groups.map((group) => ({
-      chat_id: group.chatId,
-      name: group.name,
-      owner_userid: group.ownerUserId,
-      member_count: group.memberCount,
-    }));
+    return gateway.groups.map(mapGatewayGroup);
   }
   const groups: WecomExternalGroup[] = [];
   let cursor = "";
@@ -179,8 +228,13 @@ export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
       groups.push({
         chat_id: chatId,
         name: info.name ?? "",
-        owner_userid: info.owner ?? null,
         member_count: Array.isArray(info.member_list) ? info.member_list.length : 0,
+        external_members: (Array.isArray(info.member_list) ? info.member_list : [])
+          .filter((member: any) => Number(member?.type) === 2 && member?.userid)
+          .map((member: any) => ({
+            external_userid: String(member.userid),
+            display_name: String(member.name ?? member.group_nickname ?? ""),
+          })),
       });
     }
     if (!listRes?.next_cursor) break;

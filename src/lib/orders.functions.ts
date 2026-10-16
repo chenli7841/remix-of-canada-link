@@ -4587,7 +4587,7 @@ export const getLabelData = createServerFn({ method: "POST" })
         .from("waybills")
         .select("*")
         .eq("order_id", data.entityId)
-        .order("created_at");
+        .order("created_at").order("id");
       waybills = w ?? [];
       if (o.user_id) {
         const { data: u } = await supabaseAdmin
@@ -4614,7 +4614,7 @@ export const getLabelData = createServerFn({ method: "POST" })
         .from("waybills")
         .select("*")
         .eq("forwarding_id", data.entityId)
-        .order("created_at");
+        .order("created_at").order("id");
       waybills = w ?? [];
       if (f.user_id) {
         const { data: u } = await supabaseAdmin

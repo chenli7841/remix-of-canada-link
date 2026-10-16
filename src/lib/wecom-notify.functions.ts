@@ -51,7 +51,7 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_groups")
-      .select("chat_id, name, owner_userid, member_count, synced_at")
+      .select("chat_id, name, member_count, synced_at, wecom_notify_group_members(external_userid, display_name)")
       .order("name", { ascending: true });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
@@ -77,12 +77,25 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         groups.map((g) => ({
           chat_id: g.chat_id,
           name: g.name,
-          owner_userid: g.owner_userid,
           member_count: g.member_count,
           synced_at: now,
         })),
       );
       if (error) throw new Error(error.message);
+      const externalMembers = groups.flatMap((group) =>
+        (group.member_count <= 15 ? group.external_members : []).map((member) => ({
+          chat_id: group.chat_id,
+          external_userid: member.external_userid,
+          display_name: member.display_name,
+          synced_at: now,
+        })),
+      );
+      if (externalMembers.length) {
+        const { error: memberError } = await supabaseAdmin
+          .from("wecom_notify_group_members")
+          .upsert(externalMembers, { onConflict: "chat_id,external_userid" });
+        if (memberError) throw new Error(memberError.message);
+      }
     }
     await recordAdminLog(supabaseAdmin, {
       entity_type: "wecom_notify_group",
@@ -92,6 +105,54 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       operator_id: context.userId,
     });
     return { ok: true, count: groups.length };
+  });
+
+// 每次只补全一小批尚无群名的群，避免 1000+ 群详情请求触发超时。
+export const enrichWecomGroups = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!wecomNotifyConfigured()) throw new Error("企业微信网关或凭证尚未配置");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: pending, error: pendingError } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .select("chat_id")
+      .or("name.eq.,name.is.null")
+      .order("synced_at", { ascending: true })
+      .limit(50);
+    if (pendingError) throw new Error(pendingError.message);
+    const chatIds = (pending ?? []).map((row: any) => row.chat_id as string);
+    if (!chatIds.length) return { ok: true, count: 0, remaining: 0 };
+
+    const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
+    const groups = await getExternalGroupDetails(chatIds);
+    const now = new Date().toISOString();
+    for (const group of groups) {
+      const { error: groupError } = await supabaseAdmin
+        .from("wecom_notify_groups")
+        .update({ name: group.name, member_count: group.member_count, synced_at: now })
+        .eq("chat_id", group.chat_id);
+      if (groupError) throw new Error(groupError.message);
+      await supabaseAdmin.from("wecom_notify_group_members").delete().eq("chat_id", group.chat_id);
+      if (group.member_count <= 15 && group.external_members.length) {
+        const { error: memberError } = await supabaseAdmin.from("wecom_notify_group_members").insert(
+          group.external_members.map((member) => ({
+            chat_id: group.chat_id,
+            external_userid: member.external_userid,
+            display_name: member.display_name,
+            synced_at: now,
+          })),
+        );
+        if (memberError) throw new Error(memberError.message);
+      }
+    }
+    const { count: remaining } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .select("chat_id", { count: "exact", head: true })
+      .or("name.eq.,name.is.null");
+    return { ok: true, count: groups.length, remaining: remaining ?? 0 };
   });
 
 // ============ 客户 ↔ 专属群绑定（1:1） ============
