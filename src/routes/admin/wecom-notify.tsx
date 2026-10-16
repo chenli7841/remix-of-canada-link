@@ -1038,6 +1038,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
               <th className="px-3 py-2">选择</th>
               <th className="px-3 py-2">匹配客户号</th>
               <th>客户群名称</th>
+              <th>群主（企业微信账号）</th>
               <th>群成员数</th>
               <th>绑定时间</th>
               <th></th>
@@ -1046,14 +1047,14 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
           <tbody className="divide-y divide-white/5">
             {bindingsQ.isLoading && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-500">
+                <td colSpan={7} className="py-8 text-center text-slate-500">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {bindingsQ.isSuccess && filteredRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-xs text-slate-500">
+                <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
                   {rows.length ? "没有找到符合条件的绑定" : "尚无绑定"}
                 </td>
               </tr>
@@ -1064,6 +1065,9 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
                 <td className="px-3 py-2 font-medium text-slate-100">{b.customer_code}</td>
                 <td className="text-xs text-slate-300">
                   {b.wecom_notify_groups?.name || b.chat_id}
+                </td>
+                <td className="font-mono text-xs text-slate-300">
+                  {b.wecom_notify_groups?.owner_userid || "—"}
                 </td>
                 <td className="text-xs text-slate-400">
                   {b.wecom_notify_groups?.member_count ?? "—"}

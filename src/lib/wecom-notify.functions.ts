@@ -468,7 +468,7 @@ export const listWecomBindings = createServerFn({ method: "GET" })
     };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_bindings")
-      .select("id, customer_code, chat_id, bound_at, wecom_notify_groups(name, member_count)")
+      .select("id, customer_code, chat_id, bound_at, wecom_notify_groups(name, owner_userid, member_count)")
       .order("bound_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
