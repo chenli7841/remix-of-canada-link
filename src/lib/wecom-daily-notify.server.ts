@@ -39,6 +39,10 @@ type DailySections = {
     batchName: string;
     totalFeeCad: number;
   }>;
+  customerPayment?: {
+    dueCad: number;
+    balanceCad: number;
+  };
 };
 
 type StoredDailyEvent = {
@@ -52,6 +56,8 @@ type StoredDailyEvent = {
     batchId?: string;
     batchName?: string;
     totalFeeCad?: number;
+    dueCad?: number;
+    balanceCad?: number;
   };
   occurred_at: string;
 };
@@ -96,6 +102,15 @@ function renderDailyContent(
     });
     lines.push("价格已经确认，请前往“我的批次”查看账单并完成付款。");
   }
+  if (sections.customerPayment) {
+    lines.push(
+      "",
+      "【客户代付款】",
+      `需要付款：CAD ${sections.customerPayment.dueCad.toFixed(2)}`,
+      `账户余额：CAD ${sections.customerPayment.balanceCad.toFixed(2)}`,
+      `余额不足：CAD ${(sections.customerPayment.dueCad - sections.customerPayment.balanceCad).toFixed(2)}`,
+    );
+  }
   return lines.join("\n");
 }
 
@@ -128,6 +143,9 @@ async function refreshDailyDraft(
   const intakeEvents = storedEvents.filter((event) => event.category === "intake");
   const measurementEvents = storedEvents.filter((event) => event.category === "measurement");
   const batchPriceEvents = storedEvents.filter((event) => event.category === "batch_price");
+  const customerPaymentEvents = storedEvents.filter(
+    (event) => event.category === "customer_payment",
+  );
   const sections: DailySections = { ...(existing?.sections ?? {}) };
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
@@ -161,6 +179,15 @@ async function refreshDailyDraft(
     }));
   } else {
     delete sections.batchPrices;
+  }
+  const latestCustomerPayment = customerPaymentEvents.at(-1);
+  if (latestCustomerPayment) {
+    sections.customerPayment = {
+      dueCad: Number(latestCustomerPayment.payload.dueCad ?? 0),
+      balanceCad: Number(latestCustomerPayment.payload.balanceCad ?? 0),
+    };
+  } else {
+    delete sections.customerPayment;
   }
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
@@ -389,4 +416,47 @@ export async function removeWecomDailyBatchPrice(
   if (error) throw new Error(`取消批次价格微信通知失败: ${error.message}`);
   await refreshDailyDraft(admin, serviceDate, customerCode);
   return { removed: 1, serviceDate, customerCode };
+}
+
+export async function recordWecomDailyCustomerPayment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  customerCode: string,
+  dueCad: number,
+  balanceCad: number,
+) {
+  if (!(dueCad > 0)) throw new Error("该客户没有待付款账单");
+  if (balanceCad >= dueCad) throw new Error("客户余额充足，不需要发送余额不足通知");
+  const serviceDate = nextTorontoSendDate();
+  const eventKey = `customer_payment:${customerCode}:${serviceDate}`;
+  const { error } = await admin.from("wecom_daily_notification_events").upsert(
+    {
+      service_date: serviceDate,
+      customer_code: customerCode,
+      category: "customer_payment",
+      source_type: "customer",
+      source_id: customerCode,
+      event_key: eventKey,
+      payload: { dueCad, balanceCad },
+      occurred_at: new Date().toISOString(),
+    },
+    { onConflict: "event_key" },
+  );
+  if (error) throw new Error(`生成客户代付款微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, customerCode);
+  return { recorded: 1, serviceDate, customerCode };
+}
+
+export async function removeWecomDailyCustomerPayment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  customerCode: string,
+) {
+  const serviceDate = nextTorontoSendDate();
+  const { error } = await admin
+    .from("wecom_daily_notification_events")
+    .delete()
+    .eq("event_key", `customer_payment:${customerCode}:${serviceDate}`);
+  if (error) throw new Error(`清理客户代付款微信通知失败: ${error.message}`);
+  await refreshDailyDraft(admin, serviceDate, customerCode);
 }

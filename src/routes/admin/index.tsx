@@ -1,10 +1,15 @@
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { getOperationsDashboard } from "@/lib/operations-dashboard.functions";
+import {
+  deductCustomerReceivable,
+  getOperationsDashboard,
+  notifyCustomerReceivable,
+} from "@/lib/operations-dashboard.functions";
+import { toast } from "sonner";
 export const Route = createFileRoute("/admin/")({ component: AdminIndex });
 const money = (n: number) =>
   "CA$" + n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -13,12 +18,28 @@ const th = "whitespace-nowrap bg-[#182438] px-3 py-3 text-left text-xs font-norm
 const td = "px-3 py-4";
 function AdminIndex() {
   const fetchDashboard = useServerFn(getOperationsDashboard);
+  const notifyCustomer = useServerFn(notifyCustomerReceivable);
+  const deductCustomer = useServerFn(deductCustomerReceivable);
+  const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ["admin-operations-dashboard"],
     queryFn: () => fetchDashboard(),
     refetchInterval: 60_000,
   });
   const [search, setSearch] = useState("");
+  const notifyMutation = useMutation({
+    mutationFn: (userId: string) => notifyCustomer({ data: { userId } }),
+    onSuccess: () => toast.success("已加入微信预发送信息"),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const deductMutation = useMutation({
+    mutationFn: (userId: string) => deductCustomer({ data: { userId } }),
+    onSuccess: (result) => {
+      toast.success(`已按 ${result.invoiceCount} 张账单扣款 ${money(result.paidCad)}`);
+      queryClient.invalidateQueries({ queryKey: ["admin-operations-dashboard"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   if (q.isLoading)
     return (
       <div className="grid h-64 place-items-center">
@@ -119,6 +140,7 @@ function AdminIndex() {
                     "待付款总额（CAD）",
                     "客户余额（CAD）",
                     "余额不足金额（CAD）",
+                    "操作",
                   ].map((t) => (
                     <th className={th} key={t}>
                       {t}
@@ -143,11 +165,42 @@ function AdminIndex() {
                         <span className="text-slate-400">余额充足</span>
                       )}
                     </td>
+                    <td className={td}>
+                      <div className="flex gap-2">
+                        <button
+                          className="rounded-lg border border-blue-400/40 px-3 py-1.5 text-xs text-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={
+                            c.balance_cad >= c.due_cad ||
+                            notifyMutation.isPending ||
+                            deductMutation.isPending
+                          }
+                          onClick={() => notifyMutation.mutate(c.user_id)}
+                        >
+                          通知
+                        </button>
+                        <button
+                          className="rounded-lg border border-amber-400/40 px-3 py-1.5 text-xs text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={
+                            c.balance_cad < c.due_cad ||
+                            notifyMutation.isPending ||
+                            deductMutation.isPending
+                          }
+                          onClick={() => {
+                            if (
+                              window.confirm(`确认按照该客户的待付账单扣款 ${money(c.due_cad)}？`)
+                            )
+                              deductMutation.mutate(c.user_id);
+                          }}
+                        >
+                          扣款
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!customers.length && (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-400">
+                    <td colSpan={6} className="p-6 text-center text-slate-400">
                       {search ? "没有匹配的客户" : "暂无待付款客户"}
                     </td>
                   </tr>
