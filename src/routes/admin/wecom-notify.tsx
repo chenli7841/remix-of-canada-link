@@ -14,6 +14,7 @@ import {
   listWecomBindings,
   autoBindWecomGroupsByName,
   listWecomProblemGroups,
+  setWecomGroupBlocked,
   searchCustomersForBinding,
   bindCustomerGroup,
   unbindCustomerGroup,
@@ -25,7 +26,7 @@ import {
   refreshWecomMessageStatus,
 } from "@/lib/wecom-notify.functions";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
-import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, Search } from "lucide-react";
+import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, Search, Ban } from "lucide-react";
 
 export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
 
@@ -123,11 +124,13 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const fetchGroups = useServerFn(listWecomGroups);
   const sync = useServerFn(syncWecomGroups);
   const enrich = useServerFn(enrichWecomGroups);
+  const setBlocked = useServerFn(setWecomGroupBlocked);
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState("");
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
+  const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
@@ -182,6 +185,20 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
       toast.error(e.message || "补全失败");
     } finally {
       setEnriching(false);
+    }
+  };
+
+  const toggleBlocked = async (group: any) => {
+    setBlockingChatId(group.chat_id);
+    try {
+      await setBlocked({ data: { chatId: group.chat_id, blocked: !group.is_blocked } });
+      toast.success(group.is_blocked ? "已取消屏蔽" : "已屏蔽，该群以后不会收到群发消息");
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "更新屏蔽状态失败");
+    } finally {
+      setBlockingChatId(null);
     }
   };
 
@@ -281,7 +298,10 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             )}
             {pageRows.map((g) => (
               <tr key={g.chat_id}>
-                <td className="px-3 py-2 font-medium text-slate-100">{g.name || "—"}</td>
+                <td className="px-3 py-2 font-medium text-slate-100">
+                  {g.name || "—"}
+                  {g.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
+                </td>
                 <td className="font-mono text-xs text-slate-300">
                   {g.matched_customer_code || <span className="text-amber-400">未匹配</span>}
                 </td>
@@ -307,17 +327,32 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                 <td className="text-xs text-slate-400">{g.member_count}</td>
                 <td className="text-xs text-slate-400">{fmtDate(g.synced_at)}</td>
                 <td className="px-3 py-2 text-right">
-                  {g.matched_customer_code ? (
-                    <span className="text-xs text-emerald-400">已匹配</span>
-                  ) : (
+                  <div className="flex justify-end gap-2">
+                    {g.matched_customer_code ? (
+                      <span className="self-center text-xs text-emerald-400">已匹配</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setBindingGroup(g)}
+                        className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                      >
+                        匹配客户
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setBindingGroup(g)}
-                      className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                      disabled={blockingChatId === g.chat_id}
+                      onClick={() => toggleBlocked(g)}
+                      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+                        g.is_blocked
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                          : "border-rose-500/40 bg-rose-500/10 text-rose-300"
+                      }`}
                     >
-                      匹配客户
+                      {blockingChatId === g.chat_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                      {g.is_blocked ? "取消屏蔽" : "屏蔽"}
                     </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -350,10 +385,12 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
 function ProblemGroupsTab() {
   const qc = useQueryClient();
   const fetchProblems = useServerFn(listWecomProblemGroups);
+  const setBlocked = useServerFn(setWecomGroupBlocked);
   const [search, setSearch] = useState("");
   const [problemType, setProblemType] = useState("all");
   const [page, setPage] = useState(1);
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
+  const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
   const pageSize = 25;
   const problemsQ = useQuery({
     queryKey: ["wecom-notify-problem-groups"],
@@ -377,6 +414,20 @@ function ProblemGroupsTab() {
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   useEffect(() => setPage(1), [search, problemType]);
+
+  const toggleBlocked = async (group: any) => {
+    setBlockingChatId(group.chat_id);
+    try {
+      await setBlocked({ data: { chatId: group.chat_id, blocked: !group.is_blocked } });
+      toast.success(group.is_blocked ? "已取消屏蔽" : "已屏蔽，该群以后不会收到群发消息");
+      qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] });
+      qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "更新屏蔽状态失败");
+    } finally {
+      setBlockingChatId(null);
+    }
+  };
 
   return (
     <Card title="问题群 · 手动分配">
@@ -425,19 +476,37 @@ function ProblemGroupsTab() {
             )}
             {pageRows.map((group) => (
               <tr key={group.chat_id}>
-                <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
+                <td className="px-3 py-2 font-medium text-slate-100">
+                  {group.name || "—"}
+                  {group.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
+                </td>
                 <td className="font-mono text-xs text-slate-300">{group.candidate_customer_code || "—"}</td>
                 <td className="text-xs text-amber-300">{group.problem_label}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
                 <td className="font-mono text-xs text-slate-500">{group.chat_id}</td>
                 <td className="px-3 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setBindingGroup(group)}
-                    className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
-                  >
-                    手动分配
-                  </button>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBindingGroup(group)}
+                      className="whitespace-nowrap rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
+                    >
+                      手动分配
+                    </button>
+                    <button
+                      type="button"
+                      disabled={blockingChatId === group.chat_id}
+                      onClick={() => toggleBlocked(group)}
+                      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+                        group.is_blocked
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                          : "border-rose-500/40 bg-rose-500/10 text-rose-300"
+                      }`}
+                    >
+                      {blockingChatId === group.chat_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                      {group.is_blocked ? "取消屏蔽" : "屏蔽"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

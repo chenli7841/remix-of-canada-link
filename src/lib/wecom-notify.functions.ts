@@ -53,7 +53,7 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabaseAdmin
         .from("wecom_notify_groups")
-        .select("chat_id, name, member_count, synced_at, wecom_notify_group_members(external_userid, display_name)")
+        .select("chat_id, name, member_count, synced_at, is_blocked, wecom_notify_group_members(external_userid, display_name)")
         .order("synced_at", { ascending: false })
         .range(from, from + 999);
       if (error) throw new Error(error.message);
@@ -131,6 +131,39 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       operator_id: context.userId,
     });
     return { ok: true, count: groups.length };
+  });
+
+export const setWecomGroupBlocked = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { chatId: string; blocked: boolean }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const chatId = data.chatId.trim();
+    if (!chatId) throw new Error("群 ID 不能为空");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: group, error } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .update({
+        is_blocked: data.blocked,
+        blocked_at: data.blocked ? new Date().toISOString() : null,
+        blocked_by: data.blocked ? context.userId : null,
+      })
+      .eq("chat_id", chatId)
+      .select("chat_id,name,is_blocked")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!group) throw new Error("群不存在");
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "wecom_notify_group",
+      entity_id: chatId,
+      action: data.blocked ? "block" : "unblock",
+      after: { name: group.name, is_blocked: data.blocked },
+      operator_id: context.userId,
+      note: data.blocked ? "屏蔽群发消息" : "取消群发屏蔽",
+    });
+    return { ok: true, blocked: data.blocked };
   });
 
 // 每次只补全一小批尚无群名的群，避免 1000+ 群详情请求触发超时。
@@ -324,7 +357,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
       return rows;
     };
     const [groups, profiles, bindings] = await Promise.all([
-      fetchAll("wecom_notify_groups", "chat_id,name,member_count,synced_at"),
+      fetchAll("wecom_notify_groups", "chat_id,name,member_count,synced_at,is_blocked"),
       fetchAll("profiles", "customer_code"),
       fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
     ]);
@@ -387,6 +420,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
         name: group.name,
         member_count: group.member_count,
         synced_at: group.synced_at,
+        is_blocked: Boolean(group.is_blocked),
         candidate_customer_code,
         problem_type,
         problem_label,
@@ -531,21 +565,24 @@ async function resolveTargets(
 ) {
   let bindingsQuery = admin
     .from("wecom_notify_bindings")
-    .select("customer_code, chat_id, wecom_notify_groups(name, owner_userid)");
+    .select("customer_code, chat_id, wecom_notify_groups(name, owner_userid, is_blocked)");
   if (params.targetScope === "selected") {
     if (!params.targetCustomerCodes.length) return [];
     bindingsQuery = bindingsQuery.in("customer_code", params.targetCustomerCodes);
   }
   const { data: bindings, error } = await bindingsQuery;
   if (error) throw new Error(error.message);
-  const codes = ((bindings ?? []) as any[]).map((b) => b.customer_code);
+  const activeBindings = ((bindings ?? []) as any[]).filter(
+    (binding) => !(binding.wecom_notify_groups as any)?.is_blocked,
+  );
+  const codes = activeBindings.map((b) => b.customer_code);
   if (!codes.length) return [];
   const { data: profs } = await admin
     .from("profiles")
     .select("customer_code, full_name, username")
     .in("customer_code", codes);
   const profByCode = new Map(((profs ?? []) as any[]).map((p) => [p.customer_code, p]));
-  return ((bindings ?? []) as any[]).map((b) => {
+  return activeBindings.map((b) => {
     const prof = profByCode.get(b.customer_code);
     const customerName = prof?.full_name || prof?.username || b.customer_code;
     return {
@@ -695,10 +732,23 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     }
     const { data: targets, error: tErr } = await supabaseAdmin
       .from("wecom_notify_message_targets")
-      .select("id, chat_id, rendered_content, wecom_notify_groups(owner_userid)")
+      .select("id, chat_id, rendered_content, wecom_notify_groups(owner_userid,is_blocked)")
       .eq("message_id", data.messageId);
     if (tErr) throw new Error(tErr.message);
     if (!targets?.length) throw new Error("该消息没有任何目标，无法发送");
+    const blockedTargets = (targets as any[]).filter(
+      (target) => target.wecom_notify_groups?.is_blocked,
+    );
+    const activeTargets = (targets as any[]).filter(
+      (target) => !target.wecom_notify_groups?.is_blocked,
+    );
+    if (blockedTargets.length) {
+      await supabaseAdmin
+        .from("wecom_notify_message_targets")
+        .update({ status: "skipped_blocked", error: "该群已被管理员屏蔽" })
+        .in("id", blockedTargets.map((target) => target.id));
+    }
+    if (!activeTargets.length) throw new Error("该任务的目标群均已被屏蔽，未发送任何消息");
 
     if (!wecomNotifyEnabled()) {
       await supabaseAdmin
@@ -708,7 +758,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       await supabaseAdmin
         .from("wecom_notify_message_targets")
         .update({ status: "skipped_disabled" })
-        .eq("message_id", data.messageId);
+        .in("id", activeTargets.map((target) => target.id));
       await recordAdminLog(supabaseAdmin, {
         entity_type: "wecom_notify_message",
         entity_id: data.messageId,
@@ -731,7 +781,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       string,
       { senderUserId: string; content: string; chatIds: string[]; targetIds: string[] }
     >();
-    for (const t of targets as any[]) {
+    for (const t of activeTargets) {
       const owner = t.wecom_notify_groups?.owner_userid;
       if (!owner) {
         anyFail = true;
