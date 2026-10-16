@@ -133,6 +133,72 @@ async function readCustomerReceivable(admin: any, userId: string) {
   return { invoices: invoices ?? [], profile, summary };
 }
 
+async function readAllCustomerReceivables(admin: any) {
+  const invoices = await readAll(() =>
+    admin
+      .from("invoices")
+      .select("id,user_id,type,batch_no,status,total_cny,paid_cny,paid_cad,fx_rate")
+      .in("status", ["unpaid", "overdue"]),
+  );
+  const userIds = [...new Set(invoices.map((invoice: any) => invoice.user_id))];
+  const profiles: any[] = [];
+  const wallets: any[] = [];
+  for (let offset = 0; offset < userIds.length; offset += 100) {
+    const chunk = userIds.slice(offset, offset + 100);
+    const [profileRows, walletRows] = await Promise.all([
+      readAll(() => admin.from("profiles").select("id,customer_code,full_name").in("id", chunk)),
+      readAll(
+        () => admin.from("wallets").select("user_id,balance_cad").in("user_id", chunk),
+        "user_id",
+      ),
+    ]);
+    profiles.push(...profileRows);
+    wallets.push(...walletRows);
+  }
+  return summarizeReceivables(invoices, profiles, wallets);
+}
+
+async function deductOneCustomerReceivable(admin: any, userId: string, operatorId: string) {
+  const { invoices, profile, summary } = await readCustomerReceivable(admin, userId);
+  if (summary.balance_cad < summary.due_cad) throw new Error("客户余额不足，未执行任何扣款");
+  const unsupported = invoices.filter((invoice: any) => invoice.type !== "batch");
+  if (unsupported.length) throw new Error("客户存在非批次待付账单，请前往账单管理单独处理");
+
+  const batchNos = [...new Set(invoices.map((invoice: any) => invoice.batch_no).filter(Boolean))];
+  const { data: batches, error: batchError } = await admin
+    .from("batches")
+    .select("id,batch_no")
+    .in("batch_no", batchNos);
+  if (batchError) throw new Error(`读取账单批次失败: ${batchError.message}`);
+  const batchByNo = new Map((batches ?? []).map((batch: any) => [batch.batch_no, batch.id]));
+  let paidCad = 0;
+  for (const invoice of invoices as any[]) {
+    const batchId = batchByNo.get(invoice.batch_no);
+    if (!batchId) throw new Error(`账单 ${invoice.id} 关联批次不存在，未继续扣款`);
+    const amountCad = +(Number(invoice.total_cny) * Number(invoice.fx_rate)).toFixed(2);
+    const result = await settleBatchForCustomer(admin, {
+      batchId,
+      customerUserId: userId,
+      customerCode: profile.customer_code,
+      method: "wallet",
+      expectedCad: amountCad,
+      operatorId,
+      operatorName: operatorId,
+      enforceBalance: true,
+      awardPoints: true,
+    });
+    if (!result.ok)
+      throw new Error(
+        result.reason === "insufficient_balance"
+          ? "客户余额不足，扣款已停止"
+          : `账单扣款失败: ${result.reason}`,
+      );
+    paidCad += Number(result.paid_cad ?? amountCad);
+  }
+  await removeWecomDailyCustomerPayment(admin, profile.customer_code);
+  return { invoiceCount: invoices.length, paidCad: +paidCad.toFixed(2) };
+}
+
 export const notifyCustomerReceivable = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string }) => d)
@@ -156,42 +222,69 @@ export const deductCustomerReceivable = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertWalletManager(context.supabase, context.userId);
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
-    const { invoices, profile, summary } = await readCustomerReceivable(admin, data.userId);
-    if (summary.balance_cad < summary.due_cad) throw new Error("客户余额不足，未执行任何扣款");
-    const unsupported = invoices.filter((invoice: any) => invoice.type !== "batch");
-    if (unsupported.length) throw new Error("客户存在非批次待付账单，请前往账单管理单独处理");
+    return { ok: true, ...(await deductOneCustomerReceivable(admin, data.userId, context.userId)) };
+  });
 
-    const batchNos = [...new Set(invoices.map((invoice: any) => invoice.batch_no).filter(Boolean))];
-    const { data: batches, error: batchError } = await admin
-      .from("batches")
-      .select("id,batch_no")
-      .in("batch_no", batchNos);
-    if (batchError) throw new Error(`读取账单批次失败: ${batchError.message}`);
-    const batchByNo = new Map((batches ?? []).map((batch: any) => [batch.batch_no, batch.id]));
-    let paidCad = 0;
-    for (const invoice of invoices as any[]) {
-      const batchId = batchByNo.get(invoice.batch_no);
-      if (!batchId) throw new Error(`账单 ${invoice.id} 关联批次不存在，未继续扣款`);
-      const amountCad = +(Number(invoice.total_cny) * Number(invoice.fx_rate)).toFixed(2);
-      const result = await settleBatchForCustomer(admin, {
-        batchId,
-        customerUserId: data.userId,
-        customerCode: profile.customer_code,
-        method: "wallet",
-        expectedCad: amountCad,
-        operatorId: context.userId,
-        operatorName: context.userId,
-        enforceBalance: true,
-        awardPoints: true,
-      });
-      if (!result.ok)
-        throw new Error(
-          result.reason === "insufficient_balance"
-            ? "客户余额不足，扣款已停止"
-            : `账单扣款失败: ${result.reason}`,
+export const notifyAllInsufficientCustomers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertWalletManager(context.supabase, context.userId);
+    const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    const targets = (await readAllCustomerReceivables(admin)).filter(
+      (customer) => customer.balance_cad < customer.due_cad,
+    );
+    const failed: Array<{ customerCode: string; error: string }> = [];
+    let notified = 0;
+    for (const customer of targets) {
+      try {
+        await recordWecomDailyCustomerPayment(
+          admin,
+          customer.customer_code,
+          customer.due_cad,
+          customer.balance_cad,
         );
-      paidCad += Number(result.paid_cad ?? amountCad);
+        notified++;
+      } catch (error: any) {
+        failed.push({
+          customerCode: customer.customer_code,
+          error: error?.message ?? String(error),
+        });
+      }
     }
-    await removeWecomDailyCustomerPayment(admin, profile.customer_code);
-    return { ok: true, invoiceCount: invoices.length, paidCad: +paidCad.toFixed(2) };
+    return { ok: failed.length === 0, eligible: targets.length, notified, failed };
+  });
+
+export const deductAllFundedCustomers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertWalletManager(context.supabase, context.userId);
+    const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    const targets = (await readAllCustomerReceivables(admin)).filter(
+      (customer) => customer.balance_cad >= customer.due_cad,
+    );
+    const failed: Array<{ customerCode: string; error: string }> = [];
+    let deducted = 0;
+    let invoiceCount = 0;
+    let paidCad = 0;
+    for (const customer of targets) {
+      try {
+        const result = await deductOneCustomerReceivable(admin, customer.user_id, context.userId);
+        deducted++;
+        invoiceCount += result.invoiceCount;
+        paidCad += result.paidCad;
+      } catch (error: any) {
+        failed.push({
+          customerCode: customer.customer_code,
+          error: error?.message ?? String(error),
+        });
+      }
+    }
+    return {
+      ok: failed.length === 0,
+      eligible: targets.length,
+      deducted,
+      invoiceCount,
+      paidCad: +paidCad.toFixed(2),
+      failed,
+    };
   });

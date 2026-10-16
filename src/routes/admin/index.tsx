@@ -5,8 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
+  deductAllFundedCustomers,
   deductCustomerReceivable,
   getOperationsDashboard,
+  notifyAllInsufficientCustomers,
   notifyCustomerReceivable,
 } from "@/lib/operations-dashboard.functions";
 import { toast } from "sonner";
@@ -20,6 +22,8 @@ function AdminIndex() {
   const fetchDashboard = useServerFn(getOperationsDashboard);
   const notifyCustomer = useServerFn(notifyCustomerReceivable);
   const deductCustomer = useServerFn(deductCustomerReceivable);
+  const notifyAll = useServerFn(notifyAllInsufficientCustomers);
+  const deductAll = useServerFn(deductAllFundedCustomers);
   const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ["admin-operations-dashboard"],
@@ -36,6 +40,25 @@ function AdminIndex() {
     mutationFn: (userId: string) => deductCustomer({ data: { userId } }),
     onSuccess: (result) => {
       toast.success(`已按 ${result.invoiceCount} 张账单扣款 ${money(result.paidCad)}`);
+      queryClient.invalidateQueries({ queryKey: ["admin-operations-dashboard"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const notifyAllMutation = useMutation({
+    mutationFn: () => notifyAll(),
+    onSuccess: (result) => {
+      const suffix = result.failed.length ? `，失败 ${result.failed.length} 位` : "";
+      toast.success(`批量通知完成：已加入 ${result.notified} 位客户${suffix}`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const deductAllMutation = useMutation({
+    mutationFn: () => deductAll(),
+    onSuccess: (result) => {
+      const suffix = result.failed.length ? `，失败 ${result.failed.length} 位` : "";
+      toast.success(
+        `批量扣款完成：${result.deducted} 位客户、${result.invoiceCount} 张账单、${money(result.paidCad)}${suffix}`,
+      );
       queryClient.invalidateQueries({ queryKey: ["admin-operations-dashboard"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -122,13 +145,35 @@ function AdminIndex() {
                 汇总未付账单的剩余金额，不含尚未出账的费用 · {customers.length} 位客户
               </p>
             </div>
-            <input
-              aria-label="搜索客户号或姓名"
-              placeholder="搜索客户号 / 姓名"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 text-sm sm:w-60"
-            />
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+              <button
+                className="rounded-lg border border-blue-400/40 px-3 py-2 text-sm text-blue-300 disabled:opacity-40"
+                disabled={notifyAllMutation.isPending || deductAllMutation.isPending}
+                onClick={() => {
+                  if (window.confirm("为全部余额不足的客户生成微信预发送通知？"))
+                    notifyAllMutation.mutate();
+                }}
+              >
+                {notifyAllMutation.isPending ? "通知中…" : "批量通知"}
+              </button>
+              <button
+                className="rounded-lg border border-amber-400/40 px-3 py-2 text-sm text-amber-300 disabled:opacity-40"
+                disabled={notifyAllMutation.isPending || deductAllMutation.isPending}
+                onClick={() => {
+                  if (window.confirm("为全部余额充足的客户按照待付账单批量扣款？"))
+                    deductAllMutation.mutate();
+                }}
+              >
+                {deductAllMutation.isPending ? "扣款中…" : "批量扣款"}
+              </button>
+              <input
+                aria-label="搜索客户号或姓名"
+                placeholder="搜索客户号 / 姓名"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 text-sm sm:w-60"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <ResponsiveTable className="w-full whitespace-nowrap text-sm">
