@@ -17,6 +17,7 @@ import {
   setWecomGroupBlocked,
   refreshSingleWecomGroup,
   autoMatchSingleWecomGroup,
+  sendBlockedWecomGroupsTest,
   searchCustomersForBinding,
   bindCustomerGroup,
   unbindCustomerGroup,
@@ -639,15 +640,25 @@ function ProblemGroupsTab() {
 }
 
 // ============ 已屏蔽群 ============
+const INITIAL_TEST_CHAT_IDS = [
+  "wrkaU1XAAAWPtsD4pWkOhazZ-_ux5gDg",
+  "wrkaU1XAAAhIJlNpRgNkc76w4JzcG9OA",
+  "wrkaU1XAAAEiRaG7mwcdmk8UL2YOR6AA",
+];
+
 function BlockedGroupsTab() {
   const qc = useQueryClient();
   const fetchGroups = useServerFn(listWecomGroups);
   const setBlocked = useServerFn(setWecomGroupBlocked);
   const refreshOne = useServerFn(refreshSingleWecomGroup);
+  const sendTest = useServerFn(sendBlockedWecomGroupsTest);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [busyChatId, setBusyChatId] = useState<string | null>(null);
   const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
+  const [selectedChatIds, setSelectedChatIds] = useState<string[]>(INITIAL_TEST_CHAT_IDS);
+  const [testContent, setTestContent] = useState("【EPLUS群发测试】这是一条系统功能测试消息，请忽略。");
+  const [sendingTest, setSendingTest] = useState(false);
   const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
   const blockedRows = (((groupsQ.data as any)?.items ?? []) as any[]).filter((group) => group.is_blocked);
@@ -694,8 +705,43 @@ function BlockedGroupsTab() {
     }
   };
 
+  const submitTest = async () => {
+    const selected = blockedRows.filter((group) => selectedChatIds.includes(group.chat_id));
+    if (!selected.length) return toast.error("请先勾选测试群");
+    const names = selected.map((group) => group.name || group.chat_id).join("、");
+    if (!window.confirm(`将向 ${selected.length} 个已屏蔽群提交真实测试消息：\n${names}\n\n消息内容：\n${testContent}\n\n确认继续吗？`)) return;
+    setSendingTest(true);
+    try {
+      const result: any = await sendTest({ data: { chatIds: selected.map((group) => group.chat_id), content: testContent } });
+      toast.success(`已向企业微信提交 ${result.groupCount} 个测试群，等待群主确认发送`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "测试发送失败");
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
   return (
     <Card title="已屏蔽群 · 不参与任何群发">
+      <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+        <div className="mb-2 text-sm font-semibold text-amber-200">指定屏蔽群测试（不会取消屏蔽）</div>
+        <textarea
+          value={testContent}
+          onChange={(event) => setTestContent(event.target.value)}
+          rows={3}
+          className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-brand"
+        />
+        <button
+          type="button"
+          disabled={sendingTest || !selectedChatIds.length || !testContent.trim()}
+          onClick={submitTest}
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          {sendingTest ? "提交中…" : `测试发送到已勾选群（${selectedChatIds.length}）`}
+        </button>
+        <p className="mt-2 text-xs text-slate-500">仅允许已屏蔽群，点击后会再次显示群名和正文确认。</p>
+      </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <label className="relative block w-full max-w-xl">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -712,6 +758,7 @@ function BlockedGroupsTab() {
         <ResponsiveTable className="w-full text-sm">
           <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-slate-400">
             <tr>
+              <th className="px-3 py-2">测试</th>
               <th className="px-3 py-2">群名称</th>
               <th>匹配客户号</th>
               <th>群成员数</th>
@@ -721,13 +768,23 @@ function BlockedGroupsTab() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {groupsQ.isLoading && (
-              <tr><td colSpan={5} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+              <tr><td colSpan={6} className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
             )}
             {groupsQ.isSuccess && filteredRows.length === 0 && (
-              <tr><td colSpan={5} className="py-8 text-center text-xs text-slate-500">尚无已屏蔽群</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-xs text-slate-500">尚无已屏蔽群</td></tr>
             )}
             {pageRows.map((group) => (
               <tr key={group.chat_id}>
+                <td className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedChatIds.includes(group.chat_id)}
+                    onChange={(event) => setSelectedChatIds((current) => event.target.checked
+                      ? [...new Set([...current, group.chat_id])]
+                      : current.filter((id) => id !== group.chat_id))}
+                    aria-label={`选择测试群 ${group.name || group.chat_id}`}
+                  />
+                </td>
                 <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
                 <td className="font-mono text-xs text-slate-300">{group.matched_customer_code || "—"}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>

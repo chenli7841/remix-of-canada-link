@@ -102,6 +102,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         groups.map((g) => ({
           chat_id: g.chat_id,
           name: g.name,
+          owner_userid: g.owner_userid,
           member_count: g.member_count,
           synced_at: now,
         })),
@@ -186,6 +187,7 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
       .from("wecom_notify_groups")
       .update({
         name: group.name || "（企业微信未返回群名）",
+        ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
         member_count: group.member_count,
         synced_at: now,
         ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),
@@ -264,6 +266,59 @@ export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
     return { ok: true, customerCode, alreadyMatched: Boolean(byGroup) };
   });
 
+// 仅供管理员对明确勾选的「已屏蔽群」做小范围联调。它不会改变屏蔽状态，
+// 也不会被普通群发流程调用；页面在提交前还会再次展示群数和正文确认。
+export const sendBlockedWecomGroupsTest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { chatIds: string[]; content: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
+    if (!wecomNotifyEnabled()) throw new Error("WECOM_ENABLED 尚未开启，禁止真实发送");
+    const chatIds = [...new Set(data.chatIds.map((id) => id.trim()).filter(Boolean))];
+    const content = data.content.trim();
+    if (!chatIds.length) throw new Error("请至少选择一个测试群");
+    if (chatIds.length > 10) throw new Error("一次最多测试 10 个群");
+    if (!content) throw new Error("测试消息不能为空");
+    if (content.length > 2000) throw new Error("测试消息不能超过 2000 个字符");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: groups, error } = await supabaseAdmin
+      .from("wecom_notify_groups")
+      .select("chat_id,name,owner_userid,is_blocked")
+      .in("chat_id", chatIds);
+    if (error) throw new Error(error.message);
+    if ((groups ?? []).length !== chatIds.length) throw new Error("部分测试群不存在，请刷新页面后重试");
+    if ((groups ?? []).some((group: any) => !group.is_blocked))
+      throw new Error("测试入口只允许发送到已屏蔽群");
+    const withoutOwner = (groups ?? []).filter((group: any) => !group.owner_userid);
+    if (withoutOwner.length)
+      throw new Error(`这些群尚未取得群主信息，请先逐个刷新群名：${withoutOwner.map((g: any) => g.name || g.chat_id).join("、")}`);
+    const byOwner = new Map<string, string[]>();
+    for (const group of groups ?? []) {
+      const ids = byOwner.get(group.owner_userid) ?? [];
+      ids.push(group.chat_id);
+      byOwner.set(group.owner_userid, ids);
+    }
+    const { sendGroupMsgTemplate } = await import("@/lib/wecom-notify/client.server");
+    const results = [];
+    for (const [senderUserId, ownerChatIds] of byOwner) {
+      const result = await sendGroupMsgTemplate({ senderUserId, chatIds: ownerChatIds, content });
+      if (!result.ok) throw new Error(`企业微信提交失败：${JSON.stringify(result.raw)}`);
+      results.push({ senderUserId, chatIds: ownerChatIds, msgid: result.msgid ?? null });
+    }
+    await recordAdminLog(supabaseAdmin, {
+      entity_type: "wecom_notify_test",
+      entity_id: results.map((result) => result.msgid).filter(Boolean).join(",") || "submitted",
+      action: "send_blocked_groups_test",
+      after: { chat_ids: chatIds, group_count: chatIds.length, content, results },
+      operator_id: context.userId,
+      note: "管理员明确选择已屏蔽群进行群发联调",
+    });
+    return { ok: true, groupCount: chatIds.length, results };
+  });
+
 // 每次只补全一小批尚无群名的群，避免 1000+ 群详情请求触发超时。
 export const enrichWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -295,6 +350,7 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
         .from("wecom_notify_groups")
         .update({
           name: storedName,
+          ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
           member_count: Number(group.member_count) || 0,
           synced_at: now,
           ...(hasName ? {} : { is_blocked: true, blocked_at: now, blocked_by: null }),

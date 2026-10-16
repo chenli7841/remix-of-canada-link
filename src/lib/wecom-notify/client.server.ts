@@ -137,6 +137,7 @@ export async function testWecomConnection(): Promise<{ ok: true }> {
 export type WecomExternalGroup = {
   chat_id: string;
   name: string;
+  owner_userid: string | null;
   member_count: number;
   external_members: Array<{ external_userid: string; display_name: string }>;
 };
@@ -144,12 +145,14 @@ export type WecomExternalGroup = {
 function mapGatewayGroup(group: {
   chatId: string;
   name: string;
+  ownerUserId?: string | null;
   memberCount: number;
   externalMembers?: Array<{ externalUserId: string; displayName: string }>;
 }): WecomExternalGroup {
   return {
     chat_id: group.chatId,
     name: group.name,
+    owner_userid: group.ownerUserId ?? null,
     member_count: group.memberCount,
     external_members: (group.externalMembers ?? []).map((member) => ({
       external_userid: member.externalUserId,
@@ -164,6 +167,7 @@ export async function getExternalGroupDetails(chatIds: string[]): Promise<WecomE
     groups: Array<{
       chatId: string;
       name: string;
+      ownerUserId?: string | null;
       memberCount: number;
       externalMembers?: Array<{ externalUserId: string; displayName: string }>;
     }>;
@@ -178,6 +182,7 @@ export async function getExternalGroupDetails(chatIds: string[]): Promise<WecomE
     groups.push({
       chat_id: chatId,
       name: String(info.name ?? ""),
+      owner_userid: info.owner ? String(info.owner) : null,
       member_count: Array.isArray(info.member_list) ? info.member_list.length : 0,
       external_members: (Array.isArray(info.member_list) ? info.member_list : [])
         .filter((member: any) => Number(member?.type) === 2 && member?.userid)
@@ -197,6 +202,7 @@ export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
     groups: Array<{
       chatId: string;
       name: string;
+      ownerUserId?: string | null;
       memberCount: number;
       externalMembers?: Array<{ externalUserId: string; displayName: string }>;
     }>;
@@ -228,6 +234,7 @@ export async function listExternalGroups(): Promise<WecomExternalGroup[]> {
       groups.push({
         chat_id: chatId,
         name: info.name ?? "",
+        owner_userid: info.owner ? String(info.owner) : null,
         member_count: Array.isArray(info.member_list) ? info.member_list.length : 0,
         external_members: (Array.isArray(info.member_list) ? info.member_list : [])
           .filter((member: any) => Number(member?.type) === 2 && member?.userid)
