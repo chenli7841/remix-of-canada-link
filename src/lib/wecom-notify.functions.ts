@@ -315,11 +315,15 @@ export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
     };
     const { data: group, error: groupError } = await supabaseAdmin
       .from("wecom_notify_groups")
-      .select("chat_id,name")
+      .select("chat_id,name,owner_userid,member_count,is_blocked")
       .eq("chat_id", chatId)
       .maybeSingle();
     if (groupError) throw new Error(groupError.message);
     if (!group) throw new Error("群不存在");
+    if (!String(group.name ?? "").trim() || !group.owner_userid || Number(group.member_count ?? 0) <= 0) {
+      throw new Error("该群尚未取得有效群名、群主和成员资料，不能自动匹配");
+    }
+    if (group.is_blocked) throw new Error("该群已屏蔽，不能自动匹配");
     const runs = [...new Set(String(group.name ?? "").match(/\d{4,}/g) ?? [])]
       .filter((digits) => digits.length === 4 || digits.length === 5)
       .map((digits) => (digits.length === 4 ? `0${digits}` : digits));
@@ -504,7 +508,7 @@ export const autoBindWecomGroupsByName = createServerFn({ method: "POST" })
     };
 
     const [groups, profiles, existing] = await Promise.all([
-      fetchAll("wecom_notify_groups", "chat_id,name"),
+      fetchAll("wecom_notify_groups", "chat_id,name,owner_userid,member_count,is_blocked"),
       fetchAll("profiles", "customer_code"),
       fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
     ]);
@@ -523,6 +527,11 @@ export const autoBindWecomGroupsByName = createServerFn({ method: "POST" })
     for (const group of groups) {
       if (boundChats.has(group.chat_id)) continue;
       const name = String(group.name ?? "");
+      // 只有企业微信确实返回了完整、当前可访问的群资料，才允许自动建立绑定。
+      // 历史 chat_id、已退出/解散群或无权限群可能只有 ID；这些记录不能占用客户号。
+      if (!name.trim() || !group.owner_userid || Number(group.member_count ?? 0) <= 0 || group.is_blocked) {
+        continue;
+      }
       const digitRuns = [...new Set(name.match(/\d{4,}/g) ?? [])];
       if (!digitRuns.length) {
         groupsWithoutNumber += 1;
