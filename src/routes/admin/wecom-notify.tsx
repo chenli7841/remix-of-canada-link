@@ -29,6 +29,7 @@ import {
   listDailyWecomDraftDates,
   listDailyWecomDrafts,
   updateDailyWecomDraft,
+  sendDailyWecomDraftsNow,
 } from "@/lib/wecom-notify.functions";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
 import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Link2, Unlink, Search, Ban } from "lucide-react";
@@ -1268,12 +1269,14 @@ function ComposeTab() {
   const fetchDates = useServerFn(listDailyWecomDraftDates);
   const fetchDrafts = useServerFn(listDailyWecomDrafts);
   const saveDraft = useServerFn(updateDailyWecomDraft);
+  const sendNow = useServerFn(sendDailyWecomDraftsNow);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sendingDate, setSendingDate] = useState<string | null>(null);
   const pageSize = 20;
   const datesQ = useQuery({
     queryKey: ["wecom-daily-draft-dates"],
@@ -1324,10 +1327,25 @@ function ComposeTab() {
       setSaving(false);
     }
   };
+  const submitDateNow = async (serviceDate: string) => {
+    if (!window.confirm(`确认立即提交 ${serviceDate} 的全部待发送信息？提交后内容不能再修改。`)) return;
+    setSendingDate(serviceDate);
+    try {
+      const result: any = await sendNow({ data: { serviceDate } });
+      if (result.failed) toast.warning(`成功提交 ${result.submitted} 条，失败 ${result.failed} 条`);
+      else toast.success(`已提交 ${result.submitted} 条客户信息`);
+      await qc.invalidateQueries({ queryKey: ["wecom-daily-draft-dates"] });
+      await qc.invalidateQueries({ queryKey: ["wecom-daily-drafts", serviceDate] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "提交失败");
+    } finally {
+      setSendingDate(null);
+    }
+  };
 
   if (!selectedDate) {
     return (
-      <Card title="每日预发送信息（加拿大时间 08:00 自动发送）">
+      <Card title="每日预发送信息（加拿大时间 10:00 自动发送）">
         <p className="mb-4 text-xs text-slate-400">
           入库、量尺称重、价格确认、付款通知和派送操作会自动汇总到对应日期。点击日期查看每个客户的实际发送内容。
         </p>
@@ -1338,18 +1356,20 @@ function ComposeTab() {
         ) : (
           <div className="space-y-2">
             {dateRows.map((row) => (
-              <button key={row.service_date} type="button" onClick={() => setSelectedDate(row.service_date)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 text-left hover:border-brand/50 hover:bg-brand/5">
+              <div key={row.service_date} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4">
                 <div>
-                  <div className="font-semibold text-slate-100">{row.service_date}</div>
-                  <div className="mt-1 text-xs text-slate-500">发送时间：加拿大多伦多时间上午 8:00</div>
+                  <button type="button" onClick={() => setSelectedDate(row.service_date)} className="font-semibold text-slate-100 hover:text-brand">{row.service_date}</button>
+                  <div className="mt-1 text-xs text-slate-500">发送时间：加拿大多伦多时间上午 10:00</div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full bg-brand/15 px-2.5 py-1 text-brand">{row.customer_count} 个客户</span>
                   {row.editable_count > 0 && <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300">{row.editable_count} 条待发送</span>}
                   {row.sent_count > 0 && <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-300">{row.sent_count} 条已提交/发送</span>}
                   {row.failed_count > 0 && <span className="rounded-full bg-rose-500/15 px-2.5 py-1 text-rose-300">{row.failed_count} 条异常</span>}
+                  {row.editable_count > 0 && <button type="button" onClick={() => submitDateNow(row.service_date)} disabled={sendingDate === row.service_date} className="rounded-md border border-brand/40 px-2.5 py-1 text-brand disabled:opacity-40">{sendingDate === row.service_date ? "提交中…" : "立即补发"}</button>}
+                  <button type="button" onClick={() => setSelectedDate(row.service_date)} className="rounded-md border border-white/10 px-2.5 py-1 text-slate-300">查看详情</button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}

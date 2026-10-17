@@ -14,7 +14,7 @@ function nextTorontoSendDate(value = new Date()): string {
   const month = Number(byType.month);
   const day = Number(byType.day);
   const hour = Number(byType.hour);
-  const scheduled = new Date(Date.UTC(year, month - 1, day + (hour >= 8 ? 1 : 0)));
+  const scheduled = new Date(Date.UTC(year, month - 1, day + (hour >= 10 ? 1 : 0)));
   return scheduled.toISOString().slice(0, 10);
 }
 
@@ -323,8 +323,8 @@ export async function recordWecomDailyIntake(
   }
   if (!resolvedCode) throw new Error("入库成功，但无法生成微信通知：订单缺少客户号");
 
-  // Before 08:00 Toronto time the draft belongs to today's run; after the
-  // cutoff, new intake rolls into tomorrow's 08:00 run.
+  // Before 10:00 Toronto time the draft belongs to today's run; after the
+  // cutoff, new intake rolls into tomorrow's 10:00 run.
   const serviceDate = nextTorontoSendDate();
   const rows = waybills.map((waybill) => ({
     service_date: serviceDate,

@@ -112,6 +112,7 @@ import { Route as ApiPublicHooksMarkOverdueRouteImport } from './routes/api/publ
 import { Route as ApiPublicHooksOttpayRouteImport } from './routes/api/public/hooks/ottpay'
 import { Route as ApiPublicHooksOttpayCardRouteImport } from './routes/api/public/hooks/ottpay-card'
 import { Route as ApiPublicHooksReconcileOttRouteImport } from './routes/api/public/hooks/reconcile-ott'
+import { Route as ApiPublicHooksWecomDailySendRouteImport } from './routes/api/public/hooks/wecom-daily-send'
 import { Route as ApiPublicWechatCallbackRouteImport } from './routes/api/public/wechat.callback'
 import { Route as ApiPublicWechatLoginRouteImport } from './routes/api/public/wechat.login'
 import { Route as ApiPublicWecomNotifyCallbackRouteImport } from './routes/api/public/wecom-notify.callback'
@@ -655,6 +656,12 @@ const ApiPublicHooksReconcileOttRoute =
     path: '/api/public/hooks/reconcile-ott',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksWecomDailySendRoute =
+  ApiPublicHooksWecomDailySendRouteImport.update({
+    id: '/api/public/hooks/wecom-daily-send',
+    path: '/api/public/hooks/wecom-daily-send',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWechatCallbackRoute = ApiPublicWechatCallbackRouteImport.update({
   id: '/api/public/wechat/callback',
   path: '/api/public/wechat/callback',
@@ -802,6 +809,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
+  '/api/public/hooks/wecom-daily-send': typeof ApiPublicHooksWecomDailySendRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
@@ -912,6 +920,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
+  '/api/public/hooks/wecom-daily-send': typeof ApiPublicHooksWecomDailySendRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
@@ -1026,6 +1035,7 @@ export interface FileRoutesById {
   '/api/public/hooks/ottpay': typeof ApiPublicHooksOttpayRoute
   '/api/public/hooks/ottpay-card': typeof ApiPublicHooksOttpayCardRoute
   '/api/public/hooks/reconcile-ott': typeof ApiPublicHooksReconcileOttRoute
+  '/api/public/hooks/wecom-daily-send': typeof ApiPublicHooksWecomDailySendRoute
   '/api/public/wechat/callback': typeof ApiPublicWechatCallbackRoute
   '/api/public/wechat/login': typeof ApiPublicWechatLoginRoute
   '/api/public/wecom-notify/callback': typeof ApiPublicWecomNotifyCallbackRoute
@@ -1140,6 +1150,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
     | '/api/public/hooks/reconcile-ott'
+    | '/api/public/hooks/wecom-daily-send'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/api/public/wecom-notify/callback'
@@ -1250,6 +1261,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
     | '/api/public/hooks/reconcile-ott'
+    | '/api/public/hooks/wecom-daily-send'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/api/public/wecom-notify/callback'
@@ -1363,6 +1375,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ottpay'
     | '/api/public/hooks/ottpay-card'
     | '/api/public/hooks/reconcile-ott'
+    | '/api/public/hooks/wecom-daily-send'
     | '/api/public/wechat/callback'
     | '/api/public/wechat/login'
     | '/api/public/wecom-notify/callback'
@@ -1413,6 +1426,7 @@ export interface RootRouteChildren {
   ApiPublicHooksOttpayRoute: typeof ApiPublicHooksOttpayRoute
   ApiPublicHooksOttpayCardRoute: typeof ApiPublicHooksOttpayCardRoute
   ApiPublicHooksReconcileOttRoute: typeof ApiPublicHooksReconcileOttRoute
+  ApiPublicHooksWecomDailySendRoute: typeof ApiPublicHooksWecomDailySendRoute
   ApiPublicWechatCallbackRoute: typeof ApiPublicWechatCallbackRoute
   ApiPublicWechatLoginRoute: typeof ApiPublicWechatLoginRoute
   ApiPublicWecomNotifyCallbackRoute: typeof ApiPublicWecomNotifyCallbackRoute
@@ -2144,6 +2158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksReconcileOttRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/wecom-daily-send': {
+      id: '/api/public/hooks/wecom-daily-send'
+      path: '/api/public/hooks/wecom-daily-send'
+      fullPath: '/api/public/hooks/wecom-daily-send'
+      preLoaderRoute: typeof ApiPublicHooksWecomDailySendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/wechat/callback': {
       id: '/api/public/wechat/callback'
       path: '/api/public/wechat/callback'
@@ -2429,6 +2450,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksOttpayRoute: ApiPublicHooksOttpayRoute,
   ApiPublicHooksOttpayCardRoute: ApiPublicHooksOttpayCardRoute,
   ApiPublicHooksReconcileOttRoute: ApiPublicHooksReconcileOttRoute,
+  ApiPublicHooksWecomDailySendRoute: ApiPublicHooksWecomDailySendRoute,
   ApiPublicWechatCallbackRoute: ApiPublicWechatCallbackRoute,
   ApiPublicWechatLoginRoute: ApiPublicWechatLoginRoute,
   ApiPublicWecomNotifyCallbackRoute: ApiPublicWecomNotifyCallbackRoute,

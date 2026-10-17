@@ -1024,6 +1024,16 @@ export const updateDailyWecomDraft = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const sendDailyWecomDraftsNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { serviceDate: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.serviceDate)) throw new Error("发送日期格式不正确");
+    const { sendDueDailyWecomDrafts } = await import("@/lib/wecom-daily-send.server");
+    return sendDueDailyWecomDrafts({ serviceDate: data.serviceDate, bypassHour: true });
+  });
+
 export const listWecomMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
