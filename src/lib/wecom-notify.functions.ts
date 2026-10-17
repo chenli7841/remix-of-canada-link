@@ -127,11 +127,12 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       );
       if (error) throw new Error(error.message);
       const smallGroupIds = groups.filter((group) => group.member_count <= 15).map((group) => group.chat_id);
-      if (smallGroupIds.length) {
+      for (let from = 0; from < smallGroupIds.length; from += 100) {
+        const chatIdBatch = smallGroupIds.slice(from, from + 100);
         const { error: deleteError } = await supabaseAdmin
           .from("wecom_notify_group_members")
           .delete()
-          .in("chat_id", smallGroupIds);
+          .in("chat_id", chatIdBatch);
         if (deleteError) throw new Error(deleteError.message);
       }
       const externalMembers = groups.flatMap((group) =>
@@ -142,10 +143,11 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
           synced_at: now,
         })),
       );
-      if (externalMembers.length) {
+      for (let from = 0; from < externalMembers.length; from += 500) {
+        const memberBatch = externalMembers.slice(from, from + 500);
         const { error: memberError } = await supabaseAdmin
           .from("wecom_notify_group_members")
-          .upsert(externalMembers, { onConflict: "chat_id,external_userid" });
+          .upsert(memberBatch, { onConflict: "chat_id,external_userid" });
         if (memberError) throw new Error(memberError.message);
       }
     }
