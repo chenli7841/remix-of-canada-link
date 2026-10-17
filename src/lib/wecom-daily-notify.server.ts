@@ -402,7 +402,9 @@ export async function recordWecomDailyMeasurements(
       customer_code: parent.customerCode,
       category: "measurement",
       source_type: "waybill",
-      source_id: waybill.id,
+      // Include the send date so this remains compatible with the legacy
+      // UNIQUE(category, source_type, source_id) constraint on older databases.
+      source_id: `${waybill.id}:${parent.customerCode}:${serviceDate}`,
       event_key: eventKey,
       payload: {
         waybillId: waybill.id,
@@ -465,7 +467,7 @@ export async function recordWecomDailyBatchPrice(
       customer_code: customerCode,
       category: "batch_price",
       source_type: "batch",
-      source_id: batchId,
+      source_id: `${batchId}:${customerCode}:${serviceDate}`,
       event_key: eventKey,
       payload: {
         batchId,
@@ -515,7 +517,7 @@ export async function recordWecomDailyCustomerPayment(
       customer_code: customerCode,
       category: "customer_payment",
       source_type: "customer",
-      source_id: customerCode,
+      source_id: `${customerCode}:${serviceDate}`,
       event_key: eventKey,
       payload: { dueCad, balanceCad },
       occurred_at: new Date().toISOString(),
@@ -568,7 +570,7 @@ export async function recordWecomDailyDeliveryReady(
       customer_code: input.customerCode,
       category: "delivery_ready",
       source_type: "receiving",
-      source_id: input.receivingId,
+      source_id: `${input.receivingId}:${input.customerCode}:${serviceDate}`,
       event_key: eventKey,
       payload: {
         receivingId: input.receivingId,
@@ -621,7 +623,7 @@ export async function recordWecomDailyDispatched(
       customer_code: customerCode,
       category: "dispatched",
       source_type: "batch",
-      source_id: batchId,
+      source_id: `${batchId}:${customerCode}:${serviceDate}`,
       event_key: eventKey,
       payload: {
         batchId,
