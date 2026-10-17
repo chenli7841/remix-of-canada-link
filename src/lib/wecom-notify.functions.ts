@@ -907,6 +907,123 @@ export const createWecomMessageDraft = createServerFn({ method: "POST" })
     return { ok: true, message_id: msg.id, count: targets.length };
   });
 
+// ============ 每日自动通知：按日期审核 / 修改 ============
+export const listDailyWecomDraftDates = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const rows: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabaseAdmin
+        .from("wecom_daily_notification_drafts")
+        .select("service_date,status,updated_at")
+        .order("service_date", { ascending: false })
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    const byDate = new Map<string, any>();
+    for (const row of rows) {
+      const item = byDate.get(row.service_date) ?? {
+        service_date: row.service_date,
+        customer_count: 0,
+        editable_count: 0,
+        sent_count: 0,
+        failed_count: 0,
+        updated_at: row.updated_at,
+      };
+      item.customer_count += 1;
+      if (row.status === "draft") item.editable_count += 1;
+      if (row.status === "sent" || row.status === "submitted") item.sent_count += 1;
+      if (row.status === "failed" || row.status === "partially_failed") item.failed_count += 1;
+      if (String(row.updated_at) > String(item.updated_at)) item.updated_at = row.updated_at;
+      byDate.set(row.service_date, item);
+    }
+    return { items: [...byDate.values()] };
+  });
+
+export const listDailyWecomDrafts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { serviceDate: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.serviceDate)) throw new Error("发送日期格式不正确");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: drafts, error } = await supabaseAdmin
+      .from("wecom_daily_notification_drafts")
+      .select("id,service_date,customer_code,rendered_content,edited_content,status,updated_at,submitted_at,sent_at")
+      .eq("service_date", data.serviceDate)
+      .order("customer_code", { ascending: true });
+    if (error) throw new Error(error.message);
+    const codes = [...new Set(((drafts ?? []) as any[]).map((row) => row.customer_code))];
+    const { data: bindings, error: bindingError } = codes.length
+      ? await supabaseAdmin
+          .from("wecom_notify_bindings")
+          .select("customer_code,chat_id")
+          .in("customer_code", codes)
+      : { data: [], error: null };
+    if (bindingError) throw new Error(bindingError.message);
+    const chatIds = [...new Set(((bindings ?? []) as any[]).map((row) => row.chat_id).filter(Boolean))];
+    const { data: groups, error: groupError } = chatIds.length
+      ? await supabaseAdmin
+          .from("wecom_notify_groups")
+          .select("chat_id,name,is_blocked")
+          .in("chat_id", chatIds)
+      : { data: [], error: null };
+    if (groupError) throw new Error(groupError.message);
+    const bindingByCode = new Map(((bindings ?? []) as any[]).map((row) => [row.customer_code, row]));
+    const groupByChat = new Map(((groups ?? []) as any[]).map((row) => [row.chat_id, row]));
+    return {
+      items: ((drafts ?? []) as any[]).map((row) => {
+        const binding: any = bindingByCode.get(row.customer_code);
+        const group: any = binding ? groupByChat.get(binding.chat_id) : null;
+        return {
+          ...row,
+          content: row.edited_content ?? row.rendered_content,
+          is_edited: row.edited_content != null,
+          chat_id: binding?.chat_id ?? null,
+          group_name: group?.name ?? null,
+          group_blocked: Boolean(group?.is_blocked),
+        };
+      }),
+    };
+  });
+
+export const updateDailyWecomDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { draftId: string; content: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (!UUID_RE.test(data.draftId)) throw new Error("预发送信息 ID 格式不正确");
+    const content = data.content.trim();
+    if (!content) throw new Error("发送内容不能为空");
+    if (content.length > 4000) throw new Error("发送内容不能超过 4000 个字符");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: draft, error: readError } = await supabaseAdmin
+      .from("wecom_daily_notification_drafts")
+      .select("id,status")
+      .eq("id", data.draftId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!draft) throw new Error("预发送信息不存在");
+    if (draft.status !== "draft") throw new Error("该信息已提交或发送，只能查看，不能修改");
+    const { error } = await supabaseAdmin
+      .from("wecom_daily_notification_drafts")
+      .update({ edited_content: content, updated_at: new Date().toISOString() })
+      .eq("id", data.draftId)
+      .eq("status", "draft");
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const listWecomMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

@@ -22,15 +22,16 @@ import {
   searchCustomersForBinding,
   bindCustomerGroup,
   unbindCustomerGroup,
-  previewWecomMessage,
-  createWecomMessageDraft,
   listWecomMessages,
   getWecomMessageDetail,
   sendWecomMessage,
   refreshWecomMessageStatus,
+  listDailyWecomDraftDates,
+  listDailyWecomDrafts,
+  updateDailyWecomDraft,
 } from "@/lib/wecom-notify.functions";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
-import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Eye, Link2, Unlink, Search, Ban } from "lucide-react";
+import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Link2, Unlink, Search, Ban } from "lucide-react";
 
 export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
 
@@ -1263,166 +1264,145 @@ function BindModal({
 
 // ============ 新建群发 ============
 function ComposeTab() {
-  const preview = useServerFn(previewWecomMessage);
-  const createDraft = useServerFn(createWecomMessageDraft);
-  const [title, setTitle] = useState("");
-  const [scope, setScope] = useState<"all_bound" | "selected">("all_bound");
-  const [codesText, setCodesText] = useState("");
-  const [template, setTemplate] = useState("");
-  const [previewRows, setPreviewRows] = useState<any[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const fetchDates = useServerFn(listDailyWecomDraftDates);
+  const fetchDrafts = useServerFn(listDailyWecomDrafts);
+  const saveDraft = useServerFn(updateDailyWecomDraft);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const pageSize = 20;
+  const datesQ = useQuery({
+    queryKey: ["wecom-daily-draft-dates"],
+    queryFn: () => fetchDates(),
+  });
+  const draftsQ = useQuery({
+    queryKey: ["wecom-daily-drafts", selectedDate],
+    queryFn: () => fetchDrafts({ data: { serviceDate: selectedDate! } }),
+    enabled: !!selectedDate,
+  });
+  const dateRows = ((datesQ.data as any)?.items ?? []) as any[];
+  const draftRows = ((draftsQ.data as any)?.items ?? []) as any[];
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return draftRows;
+    return draftRows.filter((row) =>
+      [row.customer_code, row.group_name, row.chat_id, row.content]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(keyword),
+    );
+  }, [draftRows, search]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setPage(1), [search, selectedDate]);
 
-  const targetCustomerCodes = useMemo(
-    () =>
-      codesText
-        .split(/[,\s，]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    [codesText],
-  );
-
-  const doPreview = async () => {
-    setErr(null);
-    setBusy(true);
+  const statusLabel: Record<string, string> = {
+    draft: "待发送（可修改）",
+    submitted: "已提交（只读）",
+    sent: "已发送（只读）",
+    partially_failed: "部分失败（只读）",
+    failed: "发送失败（只读）",
+  };
+  const save = async () => {
+    if (!editingId || !editingContent.trim()) return;
+    setSaving(true);
     try {
-      const r: any = await preview({
-        data: { targetScope: scope, targetCustomerCodes, contentTemplate: template },
-      });
-      setPreviewRows(r.items ?? []);
-      if (!r.items?.length) toast.info("没有匹配到任何已绑定专属群的客户");
-    } catch (e: any) {
-      setErr(e.message || "预览失败");
+      await saveDraft({ data: { draftId: editingId, content: editingContent } });
+      toast.success("预发送信息已保存");
+      setEditingId(null);
+      await qc.invalidateQueries({ queryKey: ["wecom-daily-drafts", selectedDate] });
+      await qc.invalidateQueries({ queryKey: ["wecom-daily-draft-dates"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
-  const doCreateDraft = async () => {
-    setErr(null);
-    setBusy(true);
-    try {
-      const r: any = await createDraft({
-        data: { title, targetScope: scope, targetCustomerCodes, contentTemplate: template },
-      });
-      toast.success(`已创建群发任务草稿，共 ${r.count} 个目标；请到「历史任务」查看并发送`);
-      setTitle("");
-      setTemplate("");
-      setCodesText("");
-      setPreviewRows(null);
-    } catch (e: any) {
-      setErr(e.message || "创建失败");
-    } finally {
-      setBusy(false);
-    }
-  };
+  if (!selectedDate) {
+    return (
+      <Card title="每日预发送信息（加拿大时间 08:00 自动发送）">
+        <p className="mb-4 text-xs text-slate-400">
+          入库、量尺称重、价格确认、付款通知和派送操作会自动汇总到对应日期。点击日期查看每个客户的实际发送内容。
+        </p>
+        {datesQ.isLoading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />读取中…</div>
+        ) : dateRows.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 px-4 py-10 text-center text-sm text-slate-500">目前没有预发送信息</div>
+        ) : (
+          <div className="space-y-2">
+            {dateRows.map((row) => (
+              <button key={row.service_date} type="button" onClick={() => setSelectedDate(row.service_date)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 text-left hover:border-brand/50 hover:bg-brand/5">
+                <div>
+                  <div className="font-semibold text-slate-100">{row.service_date}</div>
+                  <div className="mt-1 text-xs text-slate-500">发送时间：加拿大多伦多时间上午 8:00</div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-brand/15 px-2.5 py-1 text-brand">{row.customer_count} 个客户</span>
+                  {row.editable_count > 0 && <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300">{row.editable_count} 条待发送</span>}
+                  {row.sent_count > 0 && <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-300">{row.sent_count} 条已提交/发送</span>}
+                  {row.failed_count > 0 && <span className="rounded-full bg-rose-500/15 px-2.5 py-1 text-rose-300">{row.failed_count} 条异常</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+    );
+  }
 
   return (
-    <Card title="新建群发消息">
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs text-slate-400">标题（仅后台标识，不会发给客户）</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
-            placeholder="例如 9 月促销通知"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-slate-400">发送范围</label>
-          <div className="mt-1 flex gap-4 text-sm text-slate-200">
-            <label className="flex items-center gap-1.5">
-              <input
-                type="radio"
-                checked={scope === "all_bound"}
-                onChange={() => setScope("all_bound")}
-              />
-              全部已绑定专属群的客户
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input
-                type="radio"
-                checked={scope === "selected"}
-                onChange={() => setScope("selected")}
-              />
-              指定客户号
-            </label>
-          </div>
-          {scope === "selected" && (
-            <textarea
-              value={codesText}
-              onChange={(e) => setCodesText(e.target.value)}
-              placeholder="客户号，逗号或换行分隔"
-              rows={2}
-              className="mt-2 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
-            />
-          )}
-        </div>
-        <div>
-          <label className="text-xs text-slate-400">
-            消息内容（支持变量 <code className="text-slate-300">{"{{customer_name}}"}</code> /{" "}
-            <code className="text-slate-300">{"{{customer_code}}"}</code>）
-          </label>
-          <textarea
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            rows={5}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
-            placeholder={"您好 {{customer_name}}，..."}
-          />
-        </div>
-        {err && (
-          <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>
-        )}
-        <div className="flex gap-2">
-          <button
-            onClick={doPreview}
-            disabled={busy || !template.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 disabled:opacity-40"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            预览
-          </button>
-          <button
-            onClick={doCreateDraft}
-            disabled={busy || !template.trim() || !previewRows?.length}
-            title={!previewRows?.length ? "请先预览并确认目标不为空" : undefined}
-            className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-          >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            创建群发任务
-          </button>
-        </div>
-
-        {previewRows && (
-          <div className="mt-3 overflow-hidden rounded-xl border border-white/5">
-            <div className="border-b border-white/5 bg-white/[0.03] px-3 py-2 text-xs text-slate-400">
-              预览：共 {previewRows.length} 位客户 · 仅本地渲染，未调用企业微信任何接口
-            </div>
-            <ResponsiveTable className="w-full text-sm">
-              <thead className="bg-white/[0.02] text-left text-[11px] uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">客户号</th>
-                  <th>目标群</th>
-                  <th>渲染后内容</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {previewRows.map((r) => (
-                  <tr key={r.customer_code}>
-                    <td className="px-3 py-2 text-xs text-slate-300">{r.customer_code}</td>
-                    <td className="text-xs text-slate-400">{r.group_name || r.chat_id}</td>
-                    <td className="max-w-md whitespace-pre-wrap text-xs text-slate-300">
-                      {r.rendered_content}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </ResponsiveTable>
-          </div>
-        )}
+    <Card title={`${selectedDate} · 客户预发送信息`}>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => { setSelectedDate(null); setEditingId(null); }} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-200">← 返回日期列表</button>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索客户号、群名或消息内容" className="min-w-64 flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-brand" />
+        <span className="text-xs text-slate-400">共 {filteredRows.length} 个客户</span>
       </div>
+      {draftsQ.isLoading ? (
+        <div className="flex items-center gap-2 py-8 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />读取中…</div>
+      ) : (
+        <div className="space-y-3">
+          {pageRows.map((row) => {
+            const editable = row.status === "draft";
+            const editing = editingId === row.id;
+            return (
+              <div key={row.id} className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-slate-100">客户号：{row.customer_code}</div>
+                    <div className="mt-1 text-xs text-slate-400">目标群：{row.group_name || row.chat_id || "尚未绑定专属群"}{row.group_blocked ? "（已屏蔽）" : ""}</div>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs ${editable ? "bg-amber-500/15 text-amber-300" : "bg-slate-500/15 text-slate-300"}`}>{statusLabel[row.status] ?? row.status}</span>
+                </div>
+                {editing ? (
+                  <textarea value={editingContent} onChange={(event) => setEditingContent(event.target.value)} rows={12} maxLength={4000} className="w-full rounded-lg border border-brand/50 bg-slate-950/40 px-3 py-2 font-mono text-xs leading-5 text-slate-100 outline-none" />
+                ) : (
+                  <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-950/40 px-3 py-3 text-xs leading-5 text-slate-200">{row.content}</pre>
+                )}
+                {editable && (
+                  <div className="mt-3 flex gap-2">
+                    {editing ? <>
+                      <button type="button" onClick={save} disabled={saving || !editingContent.trim()} className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{saving ? "保存中…" : "保存修改"}</button>
+                      <button type="button" onClick={() => setEditingId(null)} disabled={saving} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300">取消</button>
+                    </> : (
+                      <button type="button" onClick={() => { setEditingId(row.id); setEditingContent(row.content); }} className="rounded-md border border-brand/40 px-3 py-1.5 text-xs text-brand">修改发送内容</button>
+                    )}
+                    {row.is_edited && <span className="self-center text-xs text-amber-300">已人工修改</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!pageRows.length && <div className="py-10 text-center text-sm text-slate-500">没有匹配的客户信息</div>}
+          <Pagination page={currentPage} pageSize={pageSize} total={filteredRows.length} onChange={setPage} />
+        </div>
+      )}
     </Card>
   );
 }
