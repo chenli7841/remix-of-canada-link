@@ -53,7 +53,7 @@ export const listWecomGroups = createServerFn({ method: "GET" })
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabaseAdmin
         .from("wecom_notify_groups")
-        .select("chat_id, name, owner_userid, member_count, synced_at, is_blocked, wecom_notify_group_members(external_userid, display_name)")
+        .select("chat_id, name, owner_userid, owner_name, member_count, synced_at, is_blocked, wecom_notify_group_members(external_userid, display_name)")
         .order("synced_at", { ascending: false })
         .range(from, from + 999);
       if (error) throw new Error(error.message);
@@ -99,7 +99,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       for (let from = 0; ; from += 1000) {
         const { data, error: existingError } = await supabaseAdmin
           .from("wecom_notify_groups")
-          .select("chat_id,name,owner_userid,member_count")
+          .select("chat_id,name,owner_userid,owner_name,member_count")
           .range(from, from + 999);
         if (existingError) throw new Error(existingError.message);
         existingRows.push(...(data ?? []));
@@ -118,6 +118,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
             // 企业微信偶尔会只返回 chat_id；不允许空响应覆盖已保存的群资料。
             name: g.name.trim() || existing?.name || "",
             owner_userid: g.owner_userid || existing?.owner_userid || null,
+            owner_name: g.owner_name || existing?.owner_name || null,
             member_count: hasValidDetails ? g.member_count : Number(existing?.member_count ?? 0),
             synced_at: now,
           };
@@ -214,6 +215,7 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
       .update({
         ...(group.name.trim() ? { name: group.name.trim() } : {}),
         ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
+        ...(group.owner_name ? { owner_name: group.owner_name } : {}),
         member_count: group.member_count,
         synced_at: now,
       })
@@ -264,6 +266,7 @@ export const refreshWecomGroupsBatch = createServerFn({ method: "POST" })
         .update({
           ...(hasName ? { name: group.name.trim() } : {}),
           ...(group.owner_userid ? { owner_userid: group.owner_userid } : {}),
+          ...(group.owner_name ? { owner_name: group.owner_name } : {}),
           member_count: group.member_count,
           synced_at: now,
         })
@@ -468,7 +471,7 @@ export const listWecomBindings = createServerFn({ method: "GET" })
     };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_bindings")
-      .select("id, customer_code, chat_id, bound_at, wecom_notify_groups(name, owner_userid, member_count)")
+      .select("id, customer_code, chat_id, bound_at, wecom_notify_groups(name, owner_userid, owner_name, member_count)")
       .order("bound_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
@@ -598,7 +601,7 @@ export const listWecomProblemGroups = createServerFn({ method: "GET" })
       return rows;
     };
     const [groups, profiles, bindings] = await Promise.all([
-      fetchAll("wecom_notify_groups", "chat_id,name,owner_userid,member_count,synced_at,is_blocked"),
+      fetchAll("wecom_notify_groups", "chat_id,name,owner_userid,owner_name,member_count,synced_at,is_blocked"),
       fetchAll("profiles", "customer_code"),
       fetchAll("wecom_notify_bindings", "customer_code,chat_id"),
     ]);
@@ -807,7 +810,7 @@ async function resolveTargets(
 ) {
   let bindingsQuery = admin
     .from("wecom_notify_bindings")
-    .select("customer_code, chat_id, wecom_notify_groups(name, owner_userid, is_blocked)");
+    .select("customer_code, chat_id, wecom_notify_groups(name, owner_userid, owner_name, is_blocked)");
   if (params.targetScope === "selected") {
     if (!params.targetCustomerCodes.length) return [];
     bindingsQuery = bindingsQuery.in("customer_code", params.targetCustomerCodes);
@@ -957,7 +960,7 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
     };
     const { data: drafts, error } = await supabaseAdmin
       .from("wecom_daily_notification_drafts")
-      .select("id,service_date,customer_code,rendered_content,edited_content,status,updated_at,submitted_at,sent_at")
+      .select("id,service_date,customer_code,rendered_content,edited_content,status,failure_reason,updated_at,submitted_at,sent_at")
       .eq("service_date", data.serviceDate)
       .order("customer_code", { ascending: true });
     if (error) throw new Error(error.message);
@@ -1031,7 +1034,7 @@ export const sendDailyWecomDraftsNow = createServerFn({ method: "POST" })
     await assertOwner(context.supabase, context.userId);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.serviceDate)) throw new Error("发送日期格式不正确");
     const { sendDueDailyWecomDrafts } = await import("@/lib/wecom-daily-send.server");
-    return sendDueDailyWecomDrafts({ serviceDate: data.serviceDate, bypassHour: true });
+    return sendDueDailyWecomDrafts({ serviceDate: data.serviceDate, bypassHour: true, retryFailed: true });
   });
 
 export const listWecomMessages = createServerFn({ method: "GET" })

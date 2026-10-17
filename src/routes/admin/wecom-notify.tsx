@@ -330,7 +330,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
             className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-40"
           >
             {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            批量刷新本页群名（{pageRows.length}）
+            批量刷新本页群名及群主（{pageRows.length}）
           </button>
           <button
             onClick={doEnrich}
@@ -431,7 +431,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                   {g.name || "—"}
                   {g.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
                 </td>
-                <td className="font-mono text-xs text-slate-300">{g.owner_userid || "—"}</td>
+                <td className="text-xs text-slate-300">{g.owner_name || g.owner_userid || "—"}{g.owner_name && g.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{g.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">
                   {g.matched_customer_code || <span className="text-amber-400">未匹配</span>}
                 </td>
@@ -486,7 +486,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3 w-3 ${refreshingChatId === g.chat_id ? "animate-spin" : ""}`} />
-                      刷新群名
+                      刷新群名及群主
                     </button>
                     <button
                       type="button"
@@ -662,7 +662,7 @@ function ProblemGroupsTab() {
           className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand disabled:opacity-40"
         >
           {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          批量刷新本页群名（{pageRows.length}）
+          批量刷新本页群名及群主（{pageRows.length}）
         </button>
       </div>
       <div className="overflow-hidden rounded-xl border border-white/5">
@@ -693,7 +693,7 @@ function ProblemGroupsTab() {
                   {group.name || "—"}
                   {group.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
                 </td>
-                <td className="font-mono text-xs text-slate-300">{group.owner_userid || "—"}</td>
+                <td className="text-xs text-slate-300">{group.owner_name || group.owner_userid || "—"}{group.owner_name && group.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{group.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">{group.candidate_customer_code || "—"}</td>
                 <td className="text-xs text-amber-300">{group.problem_label}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
@@ -722,7 +722,7 @@ function ProblemGroupsTab() {
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3 w-3 ${refreshingChatId === group.chat_id ? "animate-spin" : ""}`} />
-                      刷新群名
+                      刷新群名及群主
                     </button>
                     <button
                       type="button"
@@ -858,7 +858,7 @@ function BlockedGroupsTab() {
             className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand disabled:opacity-40"
           >
             {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            批量刷新本页群名（{pageRows.length}）
+            批量刷新本页群名及群主（{pageRows.length}）
           </button>
         </div>
       </div>
@@ -895,7 +895,7 @@ function BlockedGroupsTab() {
                   />
                 </td>
                 <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
-                <td className="font-mono text-xs text-slate-300">{group.owner_userid || "—"}</td>
+                <td className="text-xs text-slate-300">{group.owner_name || group.owner_userid || "—"}{group.owner_name && group.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{group.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">{group.matched_customer_code || "—"}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
                 <td className="font-mono text-xs text-slate-500">{group.chat_id}</td>
@@ -908,7 +908,7 @@ function BlockedGroupsTab() {
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3 w-3 ${refreshingChatId === group.chat_id ? "animate-spin" : ""}`} />
-                      刷新群名
+                      刷新群名及群主
                     </button>
                     <button
                       type="button"
@@ -1069,7 +1069,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
                   {b.wecom_notify_groups?.name || b.chat_id}
                 </td>
                 <td className="font-mono text-xs text-slate-300">
-                  {b.wecom_notify_groups?.owner_userid || "—"}
+                  {b.wecom_notify_groups?.owner_name || b.wecom_notify_groups?.owner_userid || "—"}
                 </td>
                 <td className="text-xs text-slate-400">
                   {b.wecom_notify_groups?.member_count ?? "—"}
@@ -1277,6 +1277,7 @@ function ComposeTab() {
   const [editingContent, setEditingContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingDate, setSendingDate] = useState<string | null>(null);
+  const [failureDate, setFailureDate] = useState<string | null>(null);
   const pageSize = 20;
   const datesQ = useQuery({
     queryKey: ["wecom-daily-draft-dates"],
@@ -1286,6 +1287,11 @@ function ComposeTab() {
     queryKey: ["wecom-daily-drafts", selectedDate],
     queryFn: () => fetchDrafts({ data: { serviceDate: selectedDate! } }),
     enabled: !!selectedDate,
+  });
+  const failuresQ = useQuery({
+    queryKey: ["wecom-daily-failures", failureDate],
+    queryFn: () => fetchDrafts({ data: { serviceDate: failureDate! } }),
+    enabled: !!failureDate,
   });
   const dateRows = ((datesQ.data as any)?.items ?? []) as any[];
   const draftRows = ((draftsQ.data as any)?.items ?? []) as any[];
@@ -1365,12 +1371,32 @@ function ComposeTab() {
                   <span className="rounded-full bg-brand/15 px-2.5 py-1 text-brand">{row.customer_count} 个客户</span>
                   {row.editable_count > 0 && <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300">{row.editable_count} 条待发送</span>}
                   {row.sent_count > 0 && <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-300">{row.sent_count} 条已提交/发送</span>}
-                  {row.failed_count > 0 && <span className="rounded-full bg-rose-500/15 px-2.5 py-1 text-rose-300">{row.failed_count} 条异常</span>}
-                  {row.editable_count > 0 && <button type="button" onClick={() => submitDateNow(row.service_date)} disabled={sendingDate === row.service_date} className="rounded-md border border-brand/40 px-2.5 py-1 text-brand disabled:opacity-40">{sendingDate === row.service_date ? "提交中…" : "立即补发"}</button>}
+                  {row.failed_count > 0 && <button type="button" onClick={() => setFailureDate(row.service_date)} className="rounded-full bg-rose-500/15 px-2.5 py-1 text-rose-300 hover:bg-rose-500/25">{row.failed_count} 条异常</button>}
+                  {(row.editable_count > 0 || row.failed_count > 0) && <button type="button" onClick={() => submitDateNow(row.service_date)} disabled={sendingDate === row.service_date} className="rounded-md border border-brand/40 px-2.5 py-1 text-brand disabled:opacity-40">{sendingDate === row.service_date ? "提交中…" : row.failed_count > 0 ? "补发异常" : "立即发送"}</button>}
                   <button type="button" onClick={() => setSelectedDate(row.service_date)} className="rounded-md border border-white/10 px-2.5 py-1 text-slate-300">查看详情</button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {failureDate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setFailureDate(null)}>
+            <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div><h3 className="font-semibold text-slate-100">{failureDate} 发送异常</h3><p className="mt-1 text-xs text-slate-500">修复群绑定或群主资料后，可返回日期列表点击“补发异常”。</p></div>
+                <button type="button" onClick={() => setFailureDate(null)} className="rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-300">关闭</button>
+              </div>
+              {failuresQ.isLoading ? <div className="py-8 text-center text-sm text-slate-400">读取中…</div> : (
+                <div className="space-y-2">
+                  {(((failuresQ.data as any)?.items ?? []) as any[]).filter((item) => item.status === "failed").map((item) => (
+                    <div key={item.id} className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-sm text-slate-100">{item.customer_code}</span><span className="text-xs text-slate-400">{item.group_name || "未绑定客户群"}</span></div>
+                      <div className="mt-2 text-sm text-rose-300">{item.failure_reason || (!item.chat_id ? "没有绑定客户群" : "发送失败，请刷新群资料后重试")}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Card>

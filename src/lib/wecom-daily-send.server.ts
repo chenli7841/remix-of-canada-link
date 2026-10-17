@@ -21,6 +21,7 @@ function torontoClock(value = new Date()) {
 export async function sendDueDailyWecomDrafts(options?: {
   serviceDate?: string;
   bypassHour?: boolean;
+  retryFailed?: boolean;
 }) {
   if (!wecomNotifyConfigured()) throw new Error("企业微信群发应用凭证尚未配置");
   if (!wecomNotifyEnabled()) throw new Error("WECOM_ENABLED=false，无法提交真实消息");
@@ -33,13 +34,13 @@ export async function sendDueDailyWecomDrafts(options?: {
   let query = (supabaseAdmin as any)
     .from("wecom_daily_notification_drafts")
     .select("id,service_date,customer_code,rendered_content,edited_content,status")
-    .eq("status", "draft")
     .order("service_date", { ascending: true })
     .order("customer_code", { ascending: true })
     .limit(500);
   query = options?.serviceDate
     ? query.eq("service_date", options.serviceDate)
     : query.eq("service_date", clock.date);
+  query = options?.retryFailed ? query.in("status", ["draft", "failed"]) : query.eq("status", "draft");
   const { data: drafts, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -50,11 +51,12 @@ export async function sendDueDailyWecomDrafts(options?: {
     // Claim each row before the network call. A concurrent cron invocation then
     // cannot submit the same customer message twice.
     const claimedAt = new Date().toISOString();
+    const previousStatus = draft.status;
     const { data: claimed, error: claimError } = await (supabaseAdmin as any)
       .from("wecom_daily_notification_drafts")
-      .update({ status: "submitted", submitted_at: claimedAt, updated_at: claimedAt })
+      .update({ status: "submitted", submitted_at: claimedAt, updated_at: claimedAt, failure_reason: null })
       .eq("id", draft.id)
-      .eq("status", "draft")
+      .eq("status", previousStatus)
       .select("id")
       .maybeSingle();
     if (claimError) throw new Error(claimError.message);
@@ -66,16 +68,16 @@ export async function sendDueDailyWecomDrafts(options?: {
         .eq("customer_code", draft.customer_code)
         .maybeSingle();
       if (bindingError) throw new Error(bindingError.message);
-      if (!binding?.chat_id) throw new Error("客户尚未绑定专属群");
+      if (!binding?.chat_id) throw new Error("没有绑定客户群");
       const { data: group, error: groupError } = await (supabaseAdmin as any)
         .from("wecom_notify_groups")
         .select("owner_userid,is_blocked,name")
         .eq("chat_id", binding.chat_id)
         .maybeSingle();
       if (groupError) throw new Error(groupError.message);
-      if (!group) throw new Error("企业微信群不存在");
-      if (group.is_blocked) throw new Error("企业微信群已屏蔽");
-      if (!group.owner_userid) throw new Error("企业微信群缺少群主 ID");
+      if (!group) throw new Error("绑定的企业微信群不存在");
+      if (group.is_blocked) throw new Error("客户群已屏蔽");
+      if (!group.owner_userid) throw new Error("已绑定群，但群主 ID 尚未获取");
       const content = String(draft.edited_content ?? draft.rendered_content ?? "").trim();
       if (!content) throw new Error("预发送内容为空");
       const result = await sendGroupMsgTemplate({
@@ -91,7 +93,7 @@ export async function sendDueDailyWecomDrafts(options?: {
       errors.push({ customerCode: draft.customer_code, error: message });
       await (supabaseAdmin as any)
         .from("wecom_daily_notification_drafts")
-        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .update({ status: "failed", failure_reason: message, updated_at: new Date().toISOString() })
         .eq("id", draft.id);
     }
   }
