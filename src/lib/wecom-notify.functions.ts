@@ -88,8 +88,8 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
     if (!wecomNotifyConfigured())
       throw new Error("尚未配置 WECOM_NOTIFY_CORP_ID / AGENT_ID / SECRET，无法同步");
     // 群同步是只读操作，允许在发送总开关关闭时执行。WECOM_ENABLED 只控制发送。
-    const { listExternalGroups } = await import("@/lib/wecom-notify/client.server");
-    const groups = await listExternalGroups();
+    const { listExternalGroups, getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
+    let groups = await listExternalGroups();
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
@@ -99,7 +99,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       for (let from = 0; ; from += 1000) {
         const { data, error: existingError } = await supabaseAdmin
           .from("wecom_notify_groups")
-          .select("chat_id,name,owner_userid,owner_name,member_count")
+          .select("chat_id,name,owner_userid,owner_name,member_count,is_blocked")
           .range(from, from + 999);
         if (existingError) throw new Error(existingError.message);
         existingRows.push(...(data ?? []));
@@ -108,7 +108,27 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       const existingByChatId = new Map(
         existingRows.map((row: any) => [String(row.chat_id), row]),
       );
-      // 网关同步会同时拉取每个群的详情，所以新群与已有群都更新群名、群主和人数。
+      // 网关的列表接口只负责分页返回 chat_id。对新群、以及尚未取得有效资料且未屏蔽的群，
+      // 再分批拉取详情；否则新群会以空名称写入，之后无法按客户号搜索或自动匹配。
+      const detailChatIds = groups
+        .filter((group) => {
+          const existing = existingByChatId.get(group.chat_id);
+          if (!existing) return true;
+          if (existing.is_blocked) return false;
+          return !String(existing.name ?? "").trim()
+            || !existing.owner_userid
+            || Number(existing.member_count ?? 0) <= 0;
+        })
+        .map((group) => group.chat_id);
+      const details = [];
+      for (let from = 0; from < detailChatIds.length; from += 50) {
+        details.push(...await getExternalGroupDetails(detailChatIds.slice(from, from + 50)));
+      }
+      if (details.length) {
+        const detailsByChatId = new Map(details.map((group) => [group.chat_id, group]));
+        groups = groups.map((group) => detailsByChatId.get(group.chat_id) ?? group);
+      }
+      // 使用补全后的详情更新新群与已有群的群名、群主和人数。
       const { error } = await supabaseAdmin.from("wecom_notify_groups").upsert(
         groups.map((g) => {
           const existing = existingByChatId.get(g.chat_id);
