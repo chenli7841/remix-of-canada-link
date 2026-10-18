@@ -116,6 +116,14 @@ function AdminIndex() {
       hint: "查看批次列表",
       color: "border-t-teal-400",
     },
+    {
+      label: "企业微信发送异常",
+      value: d.wecomFailureCount,
+      to: "/admin/wecom-notify",
+      search: { tab: "compose" },
+      hint: "查看每日遗留异常",
+      color: "border-t-fuchsia-400",
+    },
   ];
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6">
@@ -123,11 +131,12 @@ function AdminIndex() {
         <h1 className="text-2xl font-bold">运营概况</h1>
         <p className="mt-1 text-xs text-slate-400">待办、客户欠款与批次到件进度 · 每 60 秒刷新</p>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
         {cards.map((c) => (
           <Link
             key={c.label}
             to={c.to as any}
+            search={("search" in c ? c.search : undefined) as any}
             className={`${panel} border-t-2 ${c.color} hover:bg-slate-800`}
           >
             <div className="text-xs text-slate-300 sm:text-sm">{c.label}</div>

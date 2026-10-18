@@ -34,9 +34,16 @@ import {
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
 import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Link2, Unlink, Search, Ban } from "lucide-react";
 
-export const Route = createFileRoute("/admin/wecom-notify")({ component: WecomNotifyPage });
-
 type Tab = "bindings" | "groups" | "problems" | "blocked" | "compose" | "history";
+
+const tabs: Tab[] = ["bindings", "groups", "problems", "blocked", "compose", "history"];
+
+export const Route = createFileRoute("/admin/wecom-notify")({
+  validateSearch: (search: Record<string, unknown>): { tab?: Tab } => ({
+    tab: tabs.includes(search.tab as Tab) ? (search.tab as Tab) : undefined,
+  }),
+  component: WecomNotifyPage,
+});
 
 function SelectedGroupsSendPanel({
   pageRows,
@@ -96,7 +103,8 @@ function SelectedGroupsSendPanel({
 }
 
 function WecomNotifyPage() {
-  const [tab, setTab] = useState<Tab>("bindings");
+  const routeSearch = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(routeSearch.tab ?? "bindings");
   const fetchStatus = useServerFn(getWecomNotifyStatus);
   const statusQ = useQuery({ queryKey: ["wecom-notify-status"], queryFn: () => fetchStatus() });
   const testConnection = useServerFn(testWecomNotifyConnection);
@@ -1388,7 +1396,7 @@ function ComposeTab() {
               </div>
               {failuresQ.isLoading ? <div className="py-8 text-center text-sm text-slate-400">读取中…</div> : (
                 <div className="space-y-2">
-                  {(((failuresQ.data as any)?.items ?? []) as any[]).filter((item) => item.status === "failed").map((item) => (
+                  {(((failuresQ.data as any)?.items ?? []) as any[]).filter((item) => item.status === "failed" || item.status === "partially_failed").map((item) => (
                     <div key={item.id} className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-3">
                       <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-sm text-slate-100">{item.customer_code}</span><span className="text-xs text-slate-400">{item.group_name || "未绑定客户群"}</span></div>
                       <div className="mt-2 text-sm text-rose-300">{item.failure_reason || (!item.chat_id ? "没有绑定客户群" : "发送失败，请刷新群资料后重试")}</div>

@@ -30,7 +30,7 @@ export const getOperationsDashboard = createServerFn({ method: "GET" })
     if (roles.some((r) => r.error)) throw new Error("权限读取失败");
     const canSeeWallet = roles.some((r) => r.data);
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
-    const [messages, wallet, batches] = await Promise.all([
+    const [messages, wallet, batches, wecomFailures] = await Promise.all([
       admin
         .from("contact_messages")
         .select("id", { count: "exact", head: true })
@@ -48,8 +48,13 @@ export const getOperationsDashboard = createServerFn({ method: "GET" })
             "id,batch_no,display_name,status,shipping_method,actual_ship_date,planned_ship_date",
           ),
       ),
+      admin
+        .from("wecom_daily_notification_drafts")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["failed", "partially_failed"]),
     ]);
-    if (messages.error || wallet?.error) throw new Error("待办数量读取失败");
+    if (messages.error || wallet?.error || wecomFailures.error)
+      throw new Error("待办数量读取失败");
     let unpaidBatches = 0;
     // Use the same payment status as the batch list; bound concurrent database calls.
     for (let offset = 0; offset < batches.length; offset += 10) {
@@ -93,6 +98,7 @@ export const getOperationsDashboard = createServerFn({ method: "GET" })
     return {
       unreadMessages: messages.count ?? 0,
       pendingWallet: wallet?.count ?? null,
+      wecomFailureCount: wecomFailures.count ?? 0,
       unpaidBatches,
       unconfirmedBatches: batches.filter((b) => b.status === "shipped").length,
       customers,
