@@ -99,7 +99,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       for (let from = 0; ; from += 1000) {
         const { data, error: existingError } = await supabaseAdmin
           .from("wecom_notify_groups")
-          .select("chat_id,name,owner_userid,owner_name,member_count,is_blocked")
+          .select("chat_id,name,owner_userid,owner_name,member_count,is_blocked,blocked_by")
           .range(from, from + 999);
         if (existingError) throw new Error(existingError.message);
         existingRows.push(...(data ?? []));
@@ -108,21 +108,20 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       const existingByChatId = new Map(
         existingRows.map((row: any) => [String(row.chat_id), row]),
       );
-      // 网关的列表接口只负责分页返回 chat_id。对新群、以及尚未取得有效资料且未屏蔽的群，
-      // 再分批拉取详情；否则新群会以空名称写入，之后无法按客户号搜索或自动匹配。
-      const detailChatIds = groups
-        .filter((group) => {
-          const existing = existingByChatId.get(group.chat_id);
-          if (!existing) return true;
-          if (existing.is_blocked) return false;
-          return !String(existing.name ?? "").trim()
-            || !existing.owner_userid
-            || Number(existing.member_count ?? 0) <= 0;
-        })
-        .map((group) => group.chat_id);
+      // 网关列表只返回 chat_id，因此每次同步都重新拉详情。屏蔽仅控制发送，
+      // 不能阻止群名、群主和成员资料更新；否则已改名的群永远无法被发现。
+      const detailChatIds = groups.map((group) => group.chat_id);
       const details = [];
+      const detailBatches = [];
       for (let from = 0; from < detailChatIds.length; from += 50) {
-        details.push(...await getExternalGroupDetails(detailChatIds.slice(from, from + 50)));
+        detailBatches.push(detailChatIds.slice(from, from + 50));
+      }
+      // 限制为 4 个并发批次，兼顾全量刷新速度与企业微信接口压力。
+      for (let from = 0; from < detailBatches.length; from += 4) {
+        const batchResults = await Promise.all(
+          detailBatches.slice(from, from + 4).map((chatIds) => getExternalGroupDetails(chatIds)),
+        );
+        details.push(...batchResults.flat());
       }
       if (details.length) {
         const detailsByChatId = new Map(details.map((group) => [group.chat_id, group]));
@@ -133,6 +132,11 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         groups.map((g) => {
           const existing = existingByChatId.get(g.chat_id);
           const hasValidDetails = Boolean(g.name.trim()) || g.member_count > 0 || g.external_members.length > 0;
+          const detailsChanged = Boolean(existing) && hasValidDetails && (
+            g.name.trim() !== String(existing?.name ?? "").trim()
+            || (g.owner_userid ?? null) !== (existing?.owner_userid ?? null)
+            || Number(g.member_count ?? 0) !== Number(existing?.member_count ?? 0)
+          );
           return {
             chat_id: g.chat_id,
             // 企业微信偶尔会只返回 chat_id；不允许空响应覆盖已保存的群资料。
@@ -141,6 +145,10 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
             owner_name: g.owner_name || existing?.owner_name || null,
             member_count: hasValidDetails ? g.member_count : Number(existing?.member_count ?? 0),
             synced_at: now,
+            // 屏蔽群只要在企业微信端发生群名、群主或成员变化，就自动恢复。
+            ...(existing?.is_blocked && detailsChanged
+              ? { is_blocked: false, blocked_at: null, blocked_by: null }
+              : {}),
           };
         }),
         { onConflict: "chat_id" },
