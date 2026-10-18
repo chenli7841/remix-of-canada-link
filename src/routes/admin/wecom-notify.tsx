@@ -195,16 +195,19 @@ function WecomNotifyPage() {
 function GroupsTab({ enabled }: { enabled: boolean }) {
   const qc = useQueryClient();
   const fetchGroups = useServerFn(listWecomGroups);
+  const fetchProblems = useServerFn(listWecomProblemGroups);
   const sync = useServerFn(syncWecomGroups);
   const enrich = useServerFn(enrichWecomGroups);
+  const autoBind = useServerFn(autoBindWecomGroupsByName);
   const setBlocked = useServerFn(setWecomGroupBlocked);
   const refreshOne = useServerFn(refreshSingleWecomGroup);
   const refreshBatch = useServerFn(refreshWecomGroupsBatch);
   const autoMatchOne = useServerFn(autoMatchSingleWecomGroup);
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [autoBinding, setAutoBinding] = useState(false);
   const [search, setSearch] = useState("");
-  const [showAllGroups, setShowAllGroups] = useState(false);
+  const [groupFilter, setGroupFilter] = useState<"unmatched" | "problems" | "all">("unmatched");
   const [bindingGroup, setBindingGroup] = useState<any | null>(null);
   const [blockingChatId, setBlockingChatId] = useState<string | null>(null);
   const [refreshingChatId, setRefreshingChatId] = useState<string | null>(null);
@@ -214,13 +217,28 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const groupsQ = useQuery({ queryKey: ["wecom-notify-groups"], queryFn: () => fetchGroups() });
+  const problemsQ = useQuery({
+    queryKey: ["wecom-notify-problem-groups"],
+    queryFn: () => fetchProblems(),
+  });
   const rows = ((groupsQ.data as any)?.items ?? []) as any[];
+  const problemRows = ((problemsQ.data as any)?.items ?? []) as any[];
+  const problemsByChatId = useMemo(
+    () => new Map(problemRows.map((row) => [row.chat_id, row])),
+    [problemRows],
+  );
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase();
     const unblockedRows = rows.filter((group) => !group.is_blocked);
-    const visibleRows = showAllGroups
-      ? [...unblockedRows].sort((a, b) => Number(Boolean(a.matched_customer_code)) - Number(Boolean(b.matched_customer_code)))
-      : unblockedRows.filter((group) => !group.matched_customer_code);
+    const visibleRows = (
+      groupFilter === "all"
+        ? unblockedRows
+        : groupFilter === "problems"
+          ? unblockedRows.filter((group) => problemsByChatId.has(group.chat_id))
+          : unblockedRows.filter((group) => !group.matched_customer_code)
+    )
+      .map((group) => ({ ...group, problem: problemsByChatId.get(group.chat_id) }))
+      .sort((a, b) => Number(Boolean(a.matched_customer_code)) - Number(Boolean(b.matched_customer_code)));
     if (!keyword) return visibleRows;
     return visibleRows.filter((group) => {
       const members = (group.wecom_notify_group_members ?? [])
@@ -232,14 +250,36 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
         .toLocaleLowerCase()
         .includes(keyword);
     });
-  }, [rows, search, showAllGroups]);
+  }, [rows, search, groupFilter, problemsByChatId]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [search, showAllGroups]);
+  }, [search, groupFilter]);
+
+  const doAutoBind = async () => {
+    setAutoBinding(true);
+    try {
+      const result: any = await autoBind();
+      toast.success(
+        `自动匹配完成：新增 ${result.matched} 个绑定${
+          result.ambiguous ? `，${result.ambiguous} 个客户号存在多个群已跳过` : ""
+        }`,
+        { duration: 8000 },
+      );
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] }),
+        qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] }),
+        qc.invalidateQueries({ queryKey: ["wecom-notify-bindings"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "自动匹配失败");
+    } finally {
+      setAutoBinding(false);
+    }
+  };
 
   const doSync = async () => {
     setSyncing(true);
@@ -333,6 +373,14 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
       action={
         <div className="flex gap-2">
           <button
+            onClick={doAutoBind}
+            disabled={autoBinding}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 disabled:opacity-40"
+          >
+            {autoBinding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            自动匹配可识别群
+          </button>
+          <button
             onClick={refreshCurrentPage}
             disabled={!enabled || refreshingPage || !pageRows.length}
             className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-40"
@@ -382,21 +430,23 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
           )}
         </label>
         <div className="flex items-center gap-4">
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-            <input
-              type="checkbox"
-              checked={showAllGroups}
-              onChange={(event) => setShowAllGroups(event.target.checked)}
-              className="h-4 w-4 rounded border-white/20 bg-white/5 accent-blue-500"
-            />
-            显示全部群名
-          </label>
+          <select
+            value={groupFilter}
+            onChange={(event) => setGroupFilter(event.target.value as "unmatched" | "problems" | "all")}
+            className="rounded-lg border border-white/10 bg-[#0B1220] px-3 py-2 text-sm text-slate-200"
+          >
+            <option value="unmatched">待匹配群</option>
+            <option value="problems">有问题的群</option>
+            <option value="all">全部未屏蔽群</option>
+          </select>
           <span className="text-xs text-slate-500">
             {search
               ? `找到 ${filteredRows.length} 个群`
-              : showAllGroups
-                ? `全部 ${rows.filter((group) => !group.is_blocked).length} 个未屏蔽群（未匹配优先）`
-                : `未匹配 ${filteredRows.length} 个群`}
+              : groupFilter === "all"
+                ? `全部 ${filteredRows.length} 个未屏蔽群（未匹配优先）`
+                : groupFilter === "problems"
+                  ? `发现 ${filteredRows.length} 个问题群`
+                  : `待匹配 ${filteredRows.length} 个群`}
           </span>
         </div>
       </div>
@@ -438,6 +488,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                 <td className="px-3 py-2 font-medium text-slate-100">
                   {g.name || "—"}
                   {g.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
+                  {g.problem && <div className="mt-1 text-[11px] font-normal text-amber-300">{g.problem.problem_label}</div>}
                 </td>
                 <td className="text-xs text-slate-300">{g.owner_name || g.owner_userid || "—"}{g.owner_name && g.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{g.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">
