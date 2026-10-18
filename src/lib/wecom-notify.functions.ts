@@ -99,7 +99,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       for (let from = 0; ; from += 1000) {
         const { data, error: existingError } = await supabaseAdmin
           .from("wecom_notify_groups")
-          .select("chat_id,name,owner_userid,owner_name,member_count,is_blocked,blocked_by")
+          .select("chat_id,name,owner_userid,owner_name,member_count,is_blocked,blocked_at,blocked_by")
           .range(from, from + 999);
         if (existingError) throw new Error(existingError.message);
         existingRows.push(...(data ?? []));
@@ -145,6 +145,10 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
             owner_name: g.owner_name || existing?.owner_name || null,
             member_count: hasValidDetails ? g.member_count : Number(existing?.member_count ?? 0),
             synced_at: now,
+            // Supabase upsert 会把缺失的非空字段视作 null；新群必须明确写入未屏蔽。
+            is_blocked: Boolean(existing?.is_blocked),
+            blocked_at: existing?.blocked_at ?? null,
+            blocked_by: existing?.blocked_by ?? null,
             // 屏蔽群只要在企业微信端发生群名、群主或成员变化，就自动恢复。
             ...(existing?.is_blocked && detailsChanged
               ? { is_blocked: false, blocked_at: null, blocked_by: null }
