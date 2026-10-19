@@ -1,5 +1,40 @@
 const TORONTO_TIME_ZONE = "America/Toronto";
 
+/** Called only after staff confirms that a recharge was unsuccessful. */
+export async function recordWecomRechargeFailure(admin: any, transactionId: string) {
+  const { data: tx, error } = await admin.from("wallet_transactions")
+    .select("id,user_id,type,status,created_at,amount_cad,channel,receipt_at")
+    .eq("id", transactionId).single();
+  if (error) throw new Error(error.message);
+  if (tx.type !== "recharge" || !["failed", "cancelled"].includes(tx.status)) throw new Error("仅已确认不成功的充值可以生成通知");
+  if (tx.amount_cad == null || !Number.isFinite(Number(tx.amount_cad))) throw new Error("充值金额缺失");
+  const { data: profile, error: profileError } = await admin.from("profiles").select("customer_code").eq("id", tx.user_id).single();
+  if (profileError || !profile?.customer_code) throw new Error("无法获取充值客户号");
+  const eventKey = `recharge_failed:${transactionId}`;
+  const { data: prior, error: priorError } = await admin.from("wecom_daily_notification_events").select("service_date")
+    .eq("event_key", eventKey).maybeSingle();
+  if (priorError) throw new Error(priorError.message);
+  let serviceDate = prior?.service_date ?? nextTorontoSendDate();
+  for (let day = 0; day < 8; day++) {
+    const { data: draft, error: draftError } = await admin.from("wecom_daily_notification_drafts").select("status")
+      .eq("customer_code", profile.customer_code).eq("service_date", serviceDate).maybeSingle();
+    if (draftError) throw new Error(draftError.message);
+    if (!draft || draft.status === "draft") break;
+    if (prior) return { serviceDate }; // Already queued/submitted; do not duplicate a notification.
+    if (day === 7) throw new Error("没有可写入的通知草稿日期");
+    serviceDate = new Date(Date.parse(serviceDate + "T00:00:00Z") + 86400000).toISOString().slice(0, 10);
+  }
+  const { error: eventError } = await admin.from("wecom_daily_notification_events").upsert({
+    service_date: serviceDate, customer_code: profile.customer_code, category: "recharge_failed",
+    source_type: "wallet_transaction", source_id: transactionId, event_key: eventKey,
+    payload: { transactionId, time: tx.created_at, amountCad: Number(tx.amount_cad), channel: tx.channel ?? "其他" },
+    occurred_at: tx.receipt_at ?? new Date().toISOString(),
+  }, { onConflict: "event_key", ignoreDuplicates: true });
+  if (eventError) throw new Error(eventError.message);
+  await refreshDailyDraft(admin, serviceDate, profile.customer_code);
+  return { serviceDate };
+}
+
 function nextTorontoSendDate(value = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TORONTO_TIME_ZONE,
@@ -26,6 +61,7 @@ type IntakeWaybill = {
 };
 
 type DailySections = {
+  rechargeFailures?: Array<{ transactionId: string; time: string; amountCad: number; channel: string }>;
   intake?: { pieces: number };
   measurements?: Array<{
     trackingNo: string;
@@ -62,6 +98,10 @@ type DailySections = {
 type StoredDailyEvent = {
   category: string;
   payload: {
+    transactionId?: string;
+    time?: string;
+    amountCad?: number;
+    channel?: string;
     trackingNo?: string;
     actualWeightKg?: number;
     volumetricWeightKg?: number;
@@ -142,6 +182,15 @@ function renderDailyContent(
       `余额不足：CAD ${(sections.customerPayment.dueCad - sections.customerPayment.balanceCad).toFixed(2)}`,
     );
   }
+  if (sections.rechargeFailures?.length) {
+    lines.push("", "【余额】");
+    for (const item of sections.rechargeFailures) {
+      const channels: Record<string, string> = { emt: "EMT", card: "信用卡", wechat: "微信支付", alipay: "支付宝", cash: "现金" };
+      lines.push(`充值时间：${torontoDateTime(item.time)}（多伦多时间）`,
+        `金额：CAD ${item.amountCad.toFixed(2)}`, `渠道：${channels[item.channel] ?? item.channel}`,
+        "结果：充值不成功", "");
+    }
+  }
   if (sections.deliveryReady?.length) {
     lines.push("", "【准备派送】");
     sections.deliveryReady.forEach((item, index) => {
@@ -205,6 +254,13 @@ async function refreshDailyDraft(
   const deliveryReadyEvents = storedEvents.filter((event) => event.category === "delivery_ready");
   const dispatchedEvents = storedEvents.filter((event) => event.category === "dispatched");
   const sections: DailySections = { ...(existing?.sections ?? {}) };
+  const rechargeFailures = storedEvents.filter(event => event.category === "recharge_failed");
+  if (rechargeFailures.length) {
+    sections.rechargeFailures = rechargeFailures.map(event => ({
+      transactionId: String(event.payload.transactionId), time: String(event.payload.time),
+      amountCad: Number(event.payload.amountCad), channel: String(event.payload.channel ?? "其他"),
+    }));
+  } else delete sections.rechargeFailures;
   if (intakeEvents.length) sections.intake = { pieces: intakeEvents.length };
   else delete sections.intake;
   if (measurementEvents.length) {

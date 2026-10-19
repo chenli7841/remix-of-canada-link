@@ -198,7 +198,15 @@ export const voidTopup = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     if (!res?.ok) throw new Error(`无法作废（当前状态：${res?.status}）`);
-    return res as { ok: true; status: string };
+    if (!["failed", "cancelled"].includes(res.status)) throw new Error(`充值状态已变化（${res.status}），未生成失败通知，请刷新核对`);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { recordWecomRechargeFailure } = await import("@/lib/wecom-daily-notify.server");
+    try {
+      await recordWecomRechargeFailure(supabaseAdmin, data.txId);
+      return { ...res, notificationQueued: true, notificationError: null };
+    } catch (e: any) {
+      return { ...res, notificationQueued: false, notificationError: e?.message ?? "微信通知生成失败" };
+    }
   });
 
 // EMT 付款凭证：签名 URL

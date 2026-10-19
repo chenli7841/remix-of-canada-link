@@ -422,13 +422,15 @@ function RechargeApplications() {
   };
 
   const onVoid = async (r: any) => {
-    const reason = window.prompt("标记无效的原因？（必填，会记入操作日志）");
+    const reason = window.prompt("确认充值不成功的原因？（必填，会记录日志，并加入微信预发送通知的余额部分）");
     if (!reason?.trim()) return;
     setBusyId(r.id);
     setMsg(null);
     try {
-      await doVoid({ data: { txId: r.id, reason: reason.trim(), voidStatus: "cancelled" } });
-      setMsg({ kind: "ok", text: "已标记为无效（未改动钱包余额）" });
+      const result = await doVoid({ data: { txId: r.id, reason: reason.trim(), voidStatus: "cancelled" } });
+      setMsg(result.notificationQueued
+        ? { kind: "ok", text: "已确认充值不成功，微信通知已加入预发送的余额部分（钱包余额未变）" }
+        : { kind: "warn", text: `已确认充值不成功，但微信通知未生成：${result.notificationError}。请在无效记录中点击重试微信通知。` });
       await refresh();
     } catch (e: any) {
       setMsg({ kind: "err", text: e?.message ?? "操作失败" });
@@ -672,13 +674,13 @@ function RechargeApplications() {
                           {busy ? "查询中…" : "向 OTT 查询"}
                         </button>
                       )}
-                      {(pending || r.status === "failed") && (
+                      {(pending || r.status === "failed" || r.status === "cancelled") && (
                         <button
                           disabled={busy}
                           onClick={() => onVoid(r)}
                           className="rounded border border-rose-500/40 px-2 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
                         >
-                          标记无效
+                          {r.status === "cancelled" ? "重试微信通知" : "确认充值不成功"}
                         </button>
                       )}
                       {!pending && r.status !== "failed" && (
