@@ -1,4 +1,5 @@
 import { AssignDriverTrip } from "@/components/admin/AssignDriverTrip";
+import { ExpressDispatchList, type ExpressDispatchListHandle } from '@/components/admin/ExpressDispatchList';
 import { ResponsiveTable, useNarrowAdminLayout } from "@/components/admin/ResponsiveTable";
 import { groupDeliveriesByCity, groupDeliveriesByCustomerAddress } from '@/lib/delivery-city-groups';
 import { DeliveryAddressEditor } from '@/components/admin/DeliveryAddressEditor';
@@ -9,7 +10,7 @@ import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import {
   listDeliveryByCustomer,
   bulkUpdateCustomerDelivery,
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/admin/delivery-queue/")({ component: Deli
 const STATUS_LABEL: Record<string, string> = { pending: "待派送", dispatched: "已派送", cancelled: "已取消" };
 
 function DeliveryQueuePage() {
+  const expressListRef = useRef<ExpressDispatchListHandle>(null);
   const narrowLayout = useNarrowAdminLayout();
   const qc = useQueryClient();
   const fetchList = useServerFn(listDeliveryByCustomer);
@@ -256,6 +258,18 @@ function DeliveryQueuePage() {
                         >
                           <Check className="inline h-3 w-3" /> 派送
                         </button>
+                        <button
+                          type="button"
+                          disabled={busyKey !== null}
+                          onClick={async () => {
+                            if (busyKey || !expressListRef.current) return;
+                            setBusyKey(g.key);
+                            try { await expressListRef.current.prepareRow(g.key); }
+                            finally { setBusyKey(null); }
+                          }}
+                          title="打开当前客户批次的快递资料卡片"
+                          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/20 disabled:opacity-40"
+                        >生成快递单</button>
                       </>
                     )}
                     <Link
@@ -275,6 +289,7 @@ function DeliveryQueuePage() {
           </tbody>
         </ResponsiveTable>
       </div>
+      <ExpressDispatchList ref={expressListRef}/>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
       {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}
       {tripKeys && <AssignDriverTrip keys={tripKeys} onClose={()=>setTripKeys(null)} onDone={()=>{setTripKeys(null);setSelectedBatches(new Set());void refresh();alert("已生成，司机可在司机派送页面查看");}}/>}
