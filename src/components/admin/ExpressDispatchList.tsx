@@ -19,8 +19,8 @@ import {
   type ExpressRate,
 } from "@/lib/express";
 import { CameraScanButton } from "./CameraScanButton";
-import { listWarehouses } from "@/lib/settings.functions";
-import { warehouseExpressAddress } from "@/lib/express-warehouse";
+import { getPartnerSettings } from "@/lib/partner-quote.functions";
+import { dispatchWarehouseExpressAddress } from "@/lib/express-warehouse";
 
 const input = "w-full min-w-0 rounded border border-slate-600 bg-slate-950 p-2 text-sm text-white";
 const button = "rounded bg-sky-700 px-3 py-2 text-sm text-white disabled:opacity-40";
@@ -290,15 +290,13 @@ function ExpressEditor({
   onSaved: (draft: ExpressDraft) => Promise<unknown>;
   onSelectUnit: (code: string) => Promise<void>;
 }) {
-  const fetchWarehouses = useServerFn(listWarehouses);
+  const fetchWarehouses = useServerFn(getPartnerSettings);
   const warehouseQuery = useQuery({
-    queryKey: ["express-origin-warehouses"],
+    queryKey: ["express-dispatch-warehouses"],
     queryFn: () => fetchWarehouses(),
   });
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
-  const originWarehouses = (warehouseQuery.data?.warehouses ?? []).filter(
-    (w) => w.is_active && w.can_origin,
-  );
+  const originWarehouses = warehouseQuery.data?.warehouses ?? [];
   const workspace = useServerFn(getExpressWorkspace),
     save = useServerFn(expressDispatch),
     quote = useServerFn(quoteExpress),
@@ -406,7 +404,7 @@ function ExpressEditor({
           <div className="grid gap-3 md:grid-cols-2">
             <div className="min-w-0 space-y-2">
               <label className="block text-sm">
-                选择系统发货仓
+                选择快递发货仓库
                 <select
                   className={input}
                   value={selectedWarehouse}
@@ -414,7 +412,7 @@ function ExpressEditor({
                   onChange={(e) => {
                     setSelectedWarehouse(e.target.value);
                     const warehouse = originWarehouses.find((w) => w.id === e.target.value);
-                    if (warehouse) change({ ...draft, from: warehouseExpressAddress(warehouse) });
+                    if (warehouse) change({ ...draft, from: dispatchWarehouseExpressAddress(warehouse) });
                   }}
                 >
                   <option value="">
@@ -422,7 +420,7 @@ function ExpressEditor({
                   </option>
                   {originWarehouses.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.code} · {w.name_zh} · {w.country}
+                      {w.label} · {w.city} · {w.province}
                     </option>
                   ))}
                 </select>
@@ -434,12 +432,12 @@ function ExpressEditor({
               )}
               {warehouseQuery.isSuccess && !originWarehouses.length && (
                 <p className="text-xs text-amber-300">
-                  没有启用的发货仓，请在仓库管理中设置“起点”仓库。
+                  尚未配置快递发货仓库，请在同行线路设置的仓库设置中添加。
                 </p>
               )}
               {selectedWarehouse && (
                 <p className="text-xs text-slate-400">
-                  已带入仓库地址、联系人和电话。请核对省市、邮编；缺失的信息可在下方补充。
+                  已带入快递发货仓库的联系人、电话、街道、省市和邮编，请核对后出单。
                 </p>
               )}
               <AddressFields

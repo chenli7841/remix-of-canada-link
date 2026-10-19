@@ -12,7 +12,11 @@ function load(file, mocks={}) {
 }
 const core=load('src/lib/express.ts');
 const multi=load('src/lib/express-multipiece.ts');
-const {warehouseExpressAddress}=load('src/lib/express-warehouse.ts',{'./express':core,'./canada-address':{canadaLocations:[{code:'ON',cities:['Toronto','Markham']}]}});
+const {warehouseExpressAddress,dispatchWarehouseExpressAddress}=load('src/lib/express-warehouse.ts',{'./express':core,'./canada-address':{canadaLocations:[{code:'ON',cities:['Toronto','Markham']}]}});
+test('courier origin uses structured dispatch warehouse fields including company and unit',()=>{
+ const a=dispatchWarehouseExpressAddress({name:'Dispatch',company:'EPLUS',phone:'4161234567',street:'123 Main St',unit:'Unit 8',city:'Markham',province:'ON',postal:'L3R 1A1'});
+ assert.equal(a.name,'Dispatch');assert.equal(a.company,'EPLUS');assert.equal(a.mobile_phone,'4161234567');assert.equal(a.address,'123 Main St');assert.equal(a.address2,'Unit 8');assert.equal(a.city,'Markham');assert.equal(a.province,'ON');assert.equal(a.postalcode,'L3R 1A1');assert.equal(a.region_id,'CA');assert.equal(a.type,'commercial');
+});
 test('warehouse selection fills contact and parses an explicit Canadian address',()=>{
  const a=warehouseExpressAddress({name_zh:'多伦多仓',name_en:'Toronto depot',contact:'Dispatch',phone:'4161234567',country:'CA',address:'123 Main Street, Markham, ON L3R 1A1'});
  assert.equal(a.name,'Dispatch');assert.equal(a.mobile_phone,'4161234567');assert.equal(a.address,'123 Main Street');assert.equal(a.city,'Markham');assert.equal(a.province,'ON');assert.equal(a.postalcode,'L3R 1A1');assert.equal(a.type,'commercial');

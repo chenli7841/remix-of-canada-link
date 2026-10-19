@@ -1,5 +1,22 @@
 import { emptyAddress, type ExpressAddress } from "./express";
 import { canadaLocations } from "./canada-address";
+import type { Warehouse } from "./partner-settings";
+
+export function dispatchWarehouseExpressAddress(w: Warehouse): ExpressAddress {
+  return {
+    ...emptyAddress,
+    name: w.name,
+    company: w.company,
+    mobile_phone: w.phone,
+    region_id: "CA",
+    province: w.province,
+    city: w.city,
+    postalcode: w.postal,
+    address: w.street,
+    address2: w.unit,
+    type: "commercial",
+  };
+}
 
 export function warehouseExpressAddress(w: {
   address?: string | null;
