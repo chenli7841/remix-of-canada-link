@@ -39,6 +39,7 @@ import { Route as AdminCargoTypesRouteImport } from './routes/admin/cargo-types'
 import { Route as AdminCustomerViewRouteImport } from './routes/admin/customer-view'
 import { Route as AdminDestinationsRouteImport } from './routes/admin/destinations'
 import { Route as AdminDetainedRouteImport } from './routes/admin/detained'
+import { Route as AdminExpressLabelsRouteImport } from './routes/admin/express-labels'
 import { Route as AdminForbiddenRouteImport } from './routes/admin/forbidden'
 import { Route as AdminHistoryRouteImport } from './routes/admin/history'
 import { Route as AdminHsCodesRouteImport } from './routes/admin/hs-codes'
@@ -272,6 +273,11 @@ const AdminDestinationsRoute = AdminDestinationsRouteImport.update({
 const AdminDetainedRoute = AdminDetainedRouteImport.update({
   id: '/detained',
   path: '/detained',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminExpressLabelsRoute = AdminExpressLabelsRouteImport.update({
+  id: '/express-labels',
+  path: '/express-labels',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminForbiddenRoute = AdminForbiddenRouteImport.update({
@@ -738,6 +744,7 @@ export interface FileRoutesByFullPath {
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
   '/admin/detained': typeof AdminDetainedRoute
+  '/admin/express-labels': typeof AdminExpressLabelsRoute
   '/admin/forbidden': typeof AdminForbiddenRoute
   '/admin/history': typeof AdminHistoryRoute
   '/admin/hs-codes': typeof AdminHsCodesRoute
@@ -849,6 +856,7 @@ export interface FileRoutesByTo {
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
   '/admin/detained': typeof AdminDetainedRoute
+  '/admin/express-labels': typeof AdminExpressLabelsRoute
   '/admin/forbidden': typeof AdminForbiddenRoute
   '/admin/history': typeof AdminHistoryRoute
   '/admin/hs-codes': typeof AdminHsCodesRoute
@@ -964,6 +972,7 @@ export interface FileRoutesById {
   '/admin/customer-view': typeof AdminCustomerViewRoute
   '/admin/destinations': typeof AdminDestinationsRoute
   '/admin/detained': typeof AdminDetainedRoute
+  '/admin/express-labels': typeof AdminExpressLabelsRoute
   '/admin/forbidden': typeof AdminForbiddenRoute
   '/admin/history': typeof AdminHistoryRoute
   '/admin/hs-codes': typeof AdminHsCodesRoute
@@ -1079,6 +1088,7 @@ export interface FileRouteTypes {
     | '/admin/customer-view'
     | '/admin/destinations'
     | '/admin/detained'
+    | '/admin/express-labels'
     | '/admin/forbidden'
     | '/admin/history'
     | '/admin/hs-codes'
@@ -1190,6 +1200,7 @@ export interface FileRouteTypes {
     | '/admin/customer-view'
     | '/admin/destinations'
     | '/admin/detained'
+    | '/admin/express-labels'
     | '/admin/forbidden'
     | '/admin/history'
     | '/admin/hs-codes'
@@ -1304,6 +1315,7 @@ export interface FileRouteTypes {
     | '/admin/customer-view'
     | '/admin/destinations'
     | '/admin/detained'
+    | '/admin/express-labels'
     | '/admin/forbidden'
     | '/admin/history'
     | '/admin/hs-codes'
@@ -1645,6 +1657,13 @@ declare module '@tanstack/react-router' {
       path: '/detained'
       fullPath: '/admin/detained'
       preLoaderRoute: typeof AdminDetainedRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/express-labels': {
+      id: '/admin/express-labels'
+      path: '/express-labels'
+      fullPath: '/admin/express-labels'
+      preLoaderRoute: typeof AdminExpressLabelsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/forbidden': {
@@ -2256,6 +2275,7 @@ interface AdminRouteRouteChildren {
   AdminCustomerViewRoute: typeof AdminCustomerViewRoute
   AdminDestinationsRoute: typeof AdminDestinationsRoute
   AdminDetainedRoute: typeof AdminDetainedRoute
+  AdminExpressLabelsRoute: typeof AdminExpressLabelsRoute
   AdminForbiddenRoute: typeof AdminForbiddenRoute
   AdminHistoryRoute: typeof AdminHistoryRoute
   AdminHsCodesRoute: typeof AdminHsCodesRoute
@@ -2316,6 +2336,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminCustomerViewRoute: AdminCustomerViewRoute,
   AdminDestinationsRoute: AdminDestinationsRoute,
   AdminDetainedRoute: AdminDetainedRoute,
+  AdminExpressLabelsRoute: AdminExpressLabelsRoute,
   AdminForbiddenRoute: AdminForbiddenRoute,
   AdminHistoryRoute: AdminHistoryRoute,
   AdminHsCodesRoute: AdminHsCodesRoute,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const sourceSchema = z.object({
-  kind: z.enum(["order", "forwarding", "waybill", "carton", "pallet", "batch"]),
+  kind: z.enum(["order", "forwarding", "waybill", "carton", "pallet", "batch", "dispatch"]),
   id: z.string().uuid(),
 });
 export type ExpressSource = z.infer<typeof sourceSchema>;
@@ -43,6 +43,7 @@ export const emptyAddress: ExpressAddress = {
   type: "resident",
 };
 export const packageSchema = z.object({
+  reference: z.string().max(200).optional(),
   weightKg: z.number().finite().positive().max(100000),
   lengthCm: z.number().finite().positive().max(10000),
   widthCm: z.number().finite().positive().max(10000),
@@ -117,6 +118,7 @@ export type ExpressRate = {
 };
 export const sourceKey = (s: ExpressSource) => `${s.kind}:${s.id}`;
 export const sourceNames: Record<ExpressSource["kind"], string> = {
+  dispatch: "一票多件",
   order: "订单",
   forwarding: "集运单",
   waybill: "运单",
@@ -140,12 +142,18 @@ function amount(value: unknown): number | null {
 }
 function chargeDetails(value: unknown): ExpressChargeDetail[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(row => row && typeof row === 'object').map(row => {
-    const raw = row.price;
-    // Credits may be negative; missing/invalid prices must not become zero.
-    const price = (typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')) && Number.isFinite(Number(raw)) ? Number(raw) : null;
-    return {code: String(row.code ?? ''), name: String(row.name ?? ''), price};
-  });
+  return value
+    .filter((row) => row && typeof row === "object")
+    .map((row) => {
+      const raw = row.price;
+      // Credits may be negative; missing/invalid prices must not become zero.
+      const price =
+        (typeof raw === "number" || (typeof raw === "string" && raw.trim() !== "")) &&
+        Number.isFinite(Number(raw))
+          ? Number(raw)
+          : null;
+      return { code: String(row.code ?? ""), name: String(row.name ?? ""), price };
+    });
 }
 export function normalizeRates(response: unknown): ExpressRate[] {
   if (!Array.isArray(response)) throw new Error("平台报价格式异常");

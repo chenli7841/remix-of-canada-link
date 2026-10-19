@@ -128,6 +128,7 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/admin/receivings", label: "收货管理", icon: PackageCheck },
       { to: "/admin/delivery-queue", label: "待派送列表", icon: Truck },
+      { to: "/admin/express-labels", label: "快递面单打印", icon: FileText },
       { to: "/admin/waybills", label: "集运单到货 / 派送", icon: Truck },
     ],
   },

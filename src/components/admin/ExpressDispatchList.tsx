@@ -19,12 +19,14 @@ import {
   type ExpressRate,
 } from "@/lib/express";
 import { CameraScanButton } from "./CameraScanButton";
+import { listWarehouses } from "@/lib/settings.functions";
+import { warehouseExpressAddress } from "@/lib/express-warehouse";
 
 const input = "w-full min-w-0 rounded border border-slate-600 bg-slate-950 p-2 text-sm text-white";
 const button = "rounded bg-sky-700 px-3 py-2 text-sm text-white disabled:opacity-40";
 export type ExpressDispatchListHandle = { prepareRow: (key: string) => Promise<void> };
-export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle>(
-  function ExpressDispatchList(_, ref) {
+export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle, { printOnly?: boolean }>(
+  function ExpressDispatchList({ printOnly = false }, ref) {
     const call = useServerFn(expressDispatch),
       overview = useServerFn(getExpressOverview),
       label = useServerFn(labelExpress);
@@ -36,7 +38,11 @@ export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle>(
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
     const lock = useRef(false);
-    const q = useQuery({ queryKey: ["express-print-records"], queryFn: () => overview() });
+    const q = useQuery({
+      queryKey: ["express-print-records"],
+      queryFn: () => overview(),
+      enabled: printOnly,
+    });
     async function run(task: () => Promise<void>) {
       if (lock.current) return;
       lock.current = true;
@@ -93,68 +99,77 @@ export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle>(
     }
     const records = (matches ?? q.data?.records ?? []).filter((r: any) => r.status === "created");
     return (
-      <section className="mt-8 min-w-0 rounded-xl border border-slate-700 p-3 sm:p-5">
-        <h2 className="text-lg font-bold">快递面单打印</h2>
-        <p className="my-2 text-xs text-slate-400">
-          仅查询和打印已生成的面单。生成新面单请使用上方每行的“生成快递单”按钮。
-        </p>
-        <form
-          className="my-3 flex flex-wrap gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (scan.trim()) void scanExisting(scan.trim());
-          }}
-        >
-          <input
-            aria-label="扫描已有快递面单"
-            className={`${input} flex-1 basis-56`}
-            value={scan}
-            onChange={(e) => setScan(e.target.value)}
-            placeholder="扫描箱号／订单号／运单号，查找已有面单"
-          />
-          <button className={button} disabled={busy || !scan.trim()}>
-            查找面单
-          </button>
-          <CameraScanButton continuous onScan={scanExisting} />
-          <button
-            type="button"
-            className={button}
-            disabled={busy}
-            onClick={() => {
-              setMatches(null);
-              void q.refetch();
-            }}
-          >
-            显示最近面单
-          </button>
-        </form>
-        {(message || q.error) && (
+      <>
+        {!printOnly && message && (
           <p role="status" className="my-3 text-amber-300">
-            {message || (q.error as Error).message}
+            {message}
           </p>
         )}
-        {q.isPending && <p>正在读取已生成面单…</p>}
-        {records.map((r: any) => (
-          <div
-            key={r.id}
-            className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-700 py-3"
-          >
-            <div className="min-w-0 break-all">
-              <b>{r.tracking_numbers?.join(" / ") || r.reference}</b>
-              <p className="text-xs text-slate-400">
-                {r.reference} · {r.rate?.carrier} {r.rate?.service} ·{" "}
-                {new Date(r.created_at).toLocaleString()}
+        {printOnly && (
+          <section className="min-w-0 rounded-xl border border-slate-700 p-3 sm:p-5">
+            <h2 className="text-lg font-bold">快递面单打印</h2>
+            <p className="my-2 text-xs text-slate-400">
+              仅查询和打印已生成的面单。生成新面单请返回“待派送列表”，点击行内的“生成快递单”。
+            </p>
+            <form
+              className="my-3 flex flex-wrap gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (scan.trim()) void scanExisting(scan.trim());
+              }}
+            >
+              <input
+                aria-label="扫描已有快递面单"
+                className={`${input} flex-1 basis-56`}
+                value={scan}
+                onChange={(e) => setScan(e.target.value)}
+                placeholder="扫描箱号／订单号／运单号，查找已有面单"
+              />
+              <button className={button} disabled={busy || !scan.trim()}>
+                查找面单
+              </button>
+              <CameraScanButton continuous onScan={scanExisting} />
+              <button
+                type="button"
+                className={button}
+                disabled={busy}
+                onClick={() => {
+                  setMatches(null);
+                  void q.refetch();
+                }}
+              >
+                显示最近面单
+              </button>
+            </form>
+            {(message || q.error) && (
+              <p role="status" className="my-3 text-amber-300">
+                {message || (q.error as Error).message}
               </p>
-            </div>
-            <button disabled={busy} className={button} onClick={() => void print(r.id)}>
-              打印快递面单
-            </button>
-          </div>
-        ))}
-        {!q.isPending && !records.length && (
-          <p className="py-4 text-slate-400">暂无已生成的快递面单。</p>
+            )}
+            {q.isPending && <p>正在读取已生成面单…</p>}
+            {records.map((r: any) => (
+              <div
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-700 py-3"
+              >
+                <div className="min-w-0 break-all">
+                  <b>{r.tracking_numbers?.join(" / ") || r.reference}</b>
+                  <p className="text-xs text-slate-400">
+                    {r.reference} · {r.rate?.carrier} {r.rate?.service} ·{" "}
+                    {new Date(r.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <button disabled={busy} className={button} onClick={() => void print(r.id)}>
+                  打印快递面单
+                </button>
+              </div>
+            ))}
+            {!q.isPending && !records.length && (
+              <p className="py-4 text-slate-400">暂无已生成的快递面单。</p>
+            )}
+          </section>
         )}
-        {cards.length > 1 && !active && (
+        {!printOnly && cards.length > 1 && !active && (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-3">
             <div
               role="dialog"
@@ -166,7 +181,9 @@ export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle>(
                 <h2 className="font-bold">查看并修改派送资料</h2>
                 <button onClick={() => setCards([])}>关闭</button>
               </div>
-              <p className="my-3 text-slate-400">请选择派送单位核对资料，确认后再生成快递面单。</p>
+              <p className="my-3 text-slate-400">
+                同一收发地址已合并为一票多件；不同地址或包装类型分别显示。请选择订单核对资料。
+              </p>
               {cards.map((d) => (
                 <div key={d.id} className="my-3 rounded border border-slate-700 p-3">
                   <b>
@@ -191,22 +208,23 @@ export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle>(
             </div>
           </div>
         )}
-        {active && (
+        {!printOnly && active && (
           <ExpressEditor
             key={active.id}
             record={active}
             onClose={() => {
               setActive(null);
-              void q.refetch();
             }}
             onSelectUnit={(code) => openCards(undefined, code)}
-            onSaved={async draft => {
-              setCards(previous => previous.map(card => card.id === active.id ? {...card, draft} : card));
+            onSaved={async (draft) => {
+              setCards((previous) =>
+                previous.map((card) => (card.id === active.id ? { ...card, draft } : card)),
+              );
               await qc.invalidateQueries({ queryKey: ["express-print-records"] });
             }}
           />
         )}
-      </section>
+      </>
     );
   },
 );
@@ -272,6 +290,15 @@ function ExpressEditor({
   onSaved: (draft: ExpressDraft) => Promise<unknown>;
   onSelectUnit: (code: string) => Promise<void>;
 }) {
+  const fetchWarehouses = useServerFn(listWarehouses);
+  const warehouseQuery = useQuery({
+    queryKey: ["express-origin-warehouses"],
+    queryFn: () => fetchWarehouses(),
+  });
+  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const originWarehouses = (warehouseQuery.data?.warehouses ?? []).filter(
+    (w) => w.is_active && w.can_origin,
+  );
   const workspace = useServerFn(getExpressWorkspace),
     save = useServerFn(expressDispatch),
     quote = useServerFn(quoteExpress),
@@ -377,11 +404,53 @@ function ExpressEditor({
         )}
         <fieldset disabled={busy} className="space-y-4 disabled:opacity-60">
           <div className="grid gap-3 md:grid-cols-2">
-            <AddressFields
-              title="发货地址"
-              value={draft.from}
-              onChange={(from) => change({ ...draft, from })}
-            />
+            <div className="min-w-0 space-y-2">
+              <label className="block text-sm">
+                选择系统发货仓
+                <select
+                  className={input}
+                  value={selectedWarehouse}
+                  disabled={warehouseQuery.isPending}
+                  onChange={(e) => {
+                    setSelectedWarehouse(e.target.value);
+                    const warehouse = originWarehouses.find((w) => w.id === e.target.value);
+                    if (warehouse) change({ ...draft, from: warehouseExpressAddress(warehouse) });
+                  }}
+                >
+                  <option value="">
+                    {warehouseQuery.isPending ? "正在读取仓库…" : "保留当前地址／手动填写"}
+                  </option>
+                  {originWarehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.code} · {w.name_zh} · {w.country}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {warehouseQuery.error && (
+                <p className="text-sm text-amber-300">
+                  仓库读取失败：{warehouseQuery.error.message}
+                </p>
+              )}
+              {warehouseQuery.isSuccess && !originWarehouses.length && (
+                <p className="text-xs text-amber-300">
+                  没有启用的发货仓，请在仓库管理中设置“起点”仓库。
+                </p>
+              )}
+              {selectedWarehouse && (
+                <p className="text-xs text-slate-400">
+                  已带入仓库地址、联系人和电话。请核对省市、邮编；缺失的信息可在下方补充。
+                </p>
+              )}
+              <AddressFields
+                title="发货地址"
+                value={draft.from}
+                onChange={(from) => {
+                  setSelectedWarehouse("");
+                  change({ ...draft, from });
+                }}
+              />
+            </div>
             <AddressFields
               title="收货地址"
               value={draft.to}
@@ -389,11 +458,15 @@ function ExpressEditor({
             />
           </div>
           <h3 className="font-bold">
-            派送单位 · {draft.packageType === "pallet" ? "托盘" : "包裹"}（尺寸 cm，重量 kg）
+            一张快递订单 · 共 {draft.packages.length}{" "}
+            {draft.packageType === "pallet" ? "个托盘" : "件包裹"}（尺寸 cm，重量 kg）
           </h3>
           {draft.packages.map((p, i) => (
             <div key={i} className="rounded border border-slate-700 p-3">
               <b>第 {i + 1} 件</b>
+              {p.reference && (
+                <p className="break-all text-sm text-sky-300">原单号：{p.reference}</p>
+              )}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {(
                   [

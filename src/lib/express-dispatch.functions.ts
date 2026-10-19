@@ -69,7 +69,12 @@ export const expressDispatch = createServerFn({ method: "POST" })
           updated_at: new Date().toISOString(),
           updated_by: context.userId,
         })
-        .eq("source_key", `${data.source.kind}:${data.source.id}`)
+        .eq(
+          data.source.kind === "dispatch" ? "id" : "source_key",
+          data.source.kind === "dispatch"
+            ? data.source.id
+            : `${data.source.kind}:${data.source.id}`,
+        )
         .select("id")
         .single();
       if (r.error) throw Error(r.error.message);
@@ -241,5 +246,53 @@ export const expressDispatch = createServerFn({ method: "POST" })
       .select("*")
       .in("source_key", [...new Set(ids)]);
     if (result.error) throw Error(result.error.message);
+    if (data.action === "prepare") {
+      const { groupExpressDrafts, mergedPackages } = await import("./express-multipiece");
+      const { fingerprint } = await import("./verykship.server");
+      const { randomUUID } = await import("node:crypto");
+      const drafts: any[] = [];
+      for (const group of groupExpressDrafts(result.data ?? [])) {
+        if (group.length === 1) {
+          drafts.push(group[0]);
+          continue;
+        }
+        group.sort((a, b) => a.source_key.localeCompare(b.source_key));
+        const packages = mergedPackages(group);
+        if (packages.length > 100) throw Error("一张快递单最多100件，请分批处理");
+        const key =
+          "dispatch:" +
+          fingerprint({
+            members: group.map((r) => r.source_key),
+            to: group[0].draft.to,
+            from: group[0].draft.from,
+          });
+        const id = randomUUID();
+        const source = { kind: "dispatch", id };
+        const number = `${group[0].customer_code || "客户"} · 一票${packages.length}件`;
+        const insert = await db
+          .from("express_dispatch_drafts")
+          .upsert(
+            {
+              id,
+              source_key: key,
+              source: { ...source, members: group.map((r) => r.source) },
+              number,
+              customer_code: group[0].customer_code,
+              draft: { ...group[0].draft, source, packages, description: number },
+              updated_by: context.userId,
+            },
+            { onConflict: "source_key", ignoreDuplicates: true },
+          );
+        if (insert.error) throw Error(insert.error.message);
+        const stored = await db
+          .from("express_dispatch_drafts")
+          .select("*")
+          .eq("source_key", key)
+          .single();
+        if (stored.error) throw Error(stored.error.message);
+        drafts.push(stored.data);
+      }
+      return { keys: drafts.map((d) => d.source_key), drafts };
+    }
     return { keys: [...new Set(ids)], drafts: result.data ?? [] };
   });

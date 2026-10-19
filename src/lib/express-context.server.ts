@@ -1,5 +1,12 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { mapAddress, sourceKey, type ExpressSource } from "./express";
+import {
+  mapAddress,
+  sourceKey,
+  sourceSchema,
+  type ExpressSource,
+  type ExpressAddress,
+  type ExpressDraft,
+} from "./express";
 import { fingerprint } from "./verykship.server";
 
 export const expressDb = supabaseAdmin as any;
@@ -10,6 +17,7 @@ const tables = {
   carton: "cartons",
   pallet: "pallets",
   batch: "batches",
+  dispatch: "express_dispatch_drafts",
 };
 export async function dbOne(table: string, id: string) {
   const { data, error } = await expressDb.from(table).select("*").eq("id", id).maybeSingle();
@@ -27,7 +35,58 @@ async function children(table: string, column: string, id: string) {
   if (count > 1000) throw new Error("货物超过一次处理范围，请按箱或托盘分开处理");
   return data ?? [];
 }
-export async function expressContext(source: ExpressSource, userId: string, staff: boolean) {
+type ShippingContext = {
+  source: ExpressSource;
+  number: string;
+  ownerId: string | null;
+  links: string[];
+  coverage: string[];
+  contextHash: string;
+  units: Array<{ source: ExpressSource; number: string }>;
+  allowedToShip: boolean;
+  destination: ExpressAddress;
+  packageType: "parcel" | "pallet";
+  packages: ExpressDraft["packages"];
+};
+export async function expressContext(
+  source: ExpressSource,
+  userId: string,
+  staff: boolean,
+): Promise<ShippingContext> {
+  if (source.kind === "dispatch") {
+    if (!staff) throw Error("仅员工可以管理合并派送单");
+    const group = await dbOne("express_dispatch_drafts", source.id);
+    const members = group.source?.members;
+    if (!Array.isArray(members) || !members.length || members.length > 100)
+      throw Error("合并派送单位无效");
+    const children: ShippingContext[] = [];
+    for (const value of members) {
+      const member = sourceSchema.parse(value);
+      if (["dispatch", "batch"].includes(member.kind)) throw Error("合并派送单不能嵌套");
+      children.push(await expressContext(member, userId, staff));
+    }
+    const coverage = children.flatMap((c) => c.coverage);
+    if (new Set(coverage).size !== coverage.length) throw Error("合并派送包含重复或相互包含的包裹");
+    if (new Set(children.map((c) => c.packageType)).size !== 1) throw Error("包裹和托盘需分别出单");
+    const owners = new Set(children.map((c) => c.ownerId));
+    if (owners.size !== 1 || owners.has(null)) throw Error("合并派送必须属于同一客户");
+    return {
+      source,
+      number: group.number,
+      ownerId: children[0].ownerId,
+      links: [...new Set([sourceKey(source), ...children.flatMap((c) => c.links)])].sort(),
+      coverage: coverage.sort(),
+      contextHash: fingerprint({
+        members: children.map((c) => [sourceKey(c.source), c.contextHash]),
+        draft: group.draft,
+      }),
+      units: [{ source, number: group.number }],
+      allowedToShip: children.every((c) => c.allowedToShip),
+      destination: mapAddress(group.draft.to),
+      packageType: children[0].packageType,
+      packages: group.draft.packages,
+    };
+  }
   const root = await dbOne(tables[source.kind], source.id);
   let address = root.address_snapshot;
   let owner = root.user_id ?? root.customer_user_id ?? null;
