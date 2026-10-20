@@ -60,7 +60,7 @@ export default defineTool({
       return { content: [{ type: "text", text: JSON.stringify({ currency: "CAD", month: month ?? null, match_count: batches.length, batches }, null, 2) }], structuredContent: { currency: "CAD", month: month ?? null, match_count: batches.length, batches } };
     } catch (error) {
       console.error("MCP list_my_batches failed", error);
-      return queryFailedResult();
+      return queryFailedResult(error as { code?: string; message?: string }, "list_my_batches");
     }
   },
 });

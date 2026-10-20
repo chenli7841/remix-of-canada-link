@@ -15,7 +15,7 @@ export default defineTool({
       .eq("id", draft_id).single();
     if (error) {
       console.error("MCP get_forwarding_draft failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "get_forwarding_draft");
     }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { currency: "CAD", draft: data } };
   },

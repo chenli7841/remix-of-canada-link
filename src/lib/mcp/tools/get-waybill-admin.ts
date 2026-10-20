@@ -8,6 +8,6 @@ export default defineTool({
   inputSchema:{waybill_no:z.string().min(1).max(100)}, annotations:{readOnlyHint:true,idempotentHint:true,openWorldHint:false, destructiveHint: false },
   handler:async({waybill_no},ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();
     const{data,error}=await supabaseForUser(ctx).rpc("chatgpt_admin_get_waybill",{_waybill_no:waybill_no});
-    if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();
+    if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult(error, "get_waybill_admin");
     return{content:[{type:"text",text:JSON.stringify(data,null,2)}],structuredContent:{result:data}};}
 });

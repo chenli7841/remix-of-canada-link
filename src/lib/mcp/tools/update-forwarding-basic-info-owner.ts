@@ -19,7 +19,7 @@ export default defineTool({
       _request_no: input.request_no, _expected_updated_at: input.expected_updated_at, _patch: input.patch,
       _reason: input.reason, _confirmation: input.confirmation,
     });
-    if (error) { console.error("MCP update_forwarding_basic_info_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(); }
+    if (error) { console.error("MCP update_forwarding_basic_info_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "update_forwarding_basic_info_owner"); }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

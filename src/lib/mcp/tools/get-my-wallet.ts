@@ -14,7 +14,7 @@ export default defineTool({
     if(transaction_type)tq=tq.eq("type",transaction_type as never);
     if(date_from)tq=tq.gte("created_at",`${date_from}T00:00:00.000Z`); if(date_to)tq=tq.lte("created_at",`${date_to}T23:59:59.999Z`);
     const[{data:w,error:we},{data:t,error:te}]=await Promise.all([sb.from("wallets").select("balance_cad,updated_at").maybeSingle(),tq.range(start,start+pageSize)]);
-    if(we||te){const e=we??te;return isPermissionError(e)?permissionDeniedResult():queryFailedResult();}
+    if(we||te){const e=we??te;return isPermissionError(e)?permissionDeniedResult():queryFailedResult(e, "get_my_wallet");}
     const hasMore=(t?.length??0)>pageSize;
     const result={currency:"CAD",balance_cad:Number(w?.balance_cad??0),updated_at:w?.updated_at??null,transactions:(t??[]).slice(0,pageSize),page:{offset:start,limit:pageSize,has_more:hasMore,next_offset:hasMore?start+pageSize:null},payment_available_here:false};
     return{content:[{type:"text",text:JSON.stringify(result,null,2)}],structuredContent:result};

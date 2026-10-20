@@ -11,7 +11,7 @@ export default defineTool({
   handler: async ({ order_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_order", { _order_no: order_no });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "get_order_admin");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

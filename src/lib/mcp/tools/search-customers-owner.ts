@@ -11,7 +11,7 @@ export default defineTool({
   handler: async ({ query, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_search_customers", { _query: query ?? "", _limit: limit ?? 20 });
-    if (error) { console.error("MCP search_customers_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(); }
+    if (error) { console.error("MCP search_customers_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "search_customers_owner"); }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

@@ -25,7 +25,7 @@ export default defineTool({
       _reason: input.reason,
       _confirmation: input.confirmation,
     });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "correct_my_pending_tracking");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

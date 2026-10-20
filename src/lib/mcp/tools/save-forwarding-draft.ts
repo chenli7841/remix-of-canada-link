@@ -39,7 +39,7 @@ export default defineTool({
         .maybeSingle();
       if (addressError) {
         console.error("MCP save_forwarding_draft default address lookup failed", { code: addressError.code });
-        return isPermissionError(addressError) ? permissionDeniedResult() : queryFailedResult();
+        return isPermissionError(addressError) ? permissionDeniedResult() : queryFailedResult(addressError, "save_forwarding_draft");
       }
       if (!defaultAddress) {
         return {
@@ -67,7 +67,7 @@ export default defineTool({
     const { data, error } = await query;
     if (error) {
       console.error("MCP save_forwarding_draft failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "save_forwarding_draft");
     }
     return {
       content: [{ type: "text", text: `Draft saved. No order has been created.\n${JSON.stringify(data, null, 2)}` }],

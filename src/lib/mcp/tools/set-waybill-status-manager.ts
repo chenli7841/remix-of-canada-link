@@ -12,6 +12,6 @@ export default defineTool({
   handler:async(input,ctx)=>{if(!ctx.isAuthenticated())return unauthenticatedResult();
     const{data,error}=await supabaseForUser(ctx).rpc("chatgpt_manager_set_waybill_status",{_waybill_no:input.waybill_no,
       _expected_updated_at:input.expected_updated_at,_status:input.status,_reason:input.reason,_confirmation:input.confirmation,_public_event:input.public_event??null});
-    if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();
+    if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult(error, "set_waybill_status_manager");
     return{content:[{type:"text",text:JSON.stringify(data,null,2)}],structuredContent:{result:data}};}
 });

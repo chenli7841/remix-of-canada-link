@@ -17,28 +17,18 @@ export function supabaseForUser(ctx: ToolContext) {
 
 export function unauthenticatedResult() {
   return {
-    content: [{ type: "text" as const, text: "Please connect your EPLUS account before using this tool." }],
+    content: [{ type: "text" as const, text: "当前未连接有效的 EPLUS 账号，请重新连接后再操作。" }],
+    structuredContent: { reason: "AUTH_REQUIRED" },
     isError: true,
   };
 }
 
-export function queryFailedResult(requestId?: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: requestId
-          ? `EPLUS could not complete the request. Reference: ${requestId}`
-          : "EPLUS could not complete the request. Please try again later.",
-      },
-    ],
-    isError: true,
-  };
-}
+export { queryFailedResult } from "./errors";
 
 export function permissionDeniedResult() {
   return {
     content: [{ type: "text" as const, text: "没有权限" }],
+    structuredContent: { reason: "PERMISSION_DENIED" },
     isError: true,
   };
 }

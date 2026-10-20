@@ -30,7 +30,7 @@ export default defineTool({
     const {data,error}=await query.range(start,start+pageSize);
     if (error) {
       console.error("MCP list_my_orders failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "list_my_orders");
     }
     const hasMore=(data?.length??0)>pageSize;
     const orders = (data ?? []).slice(0,pageSize).map(({ total_cny, fx_rate, ...order }) => ({

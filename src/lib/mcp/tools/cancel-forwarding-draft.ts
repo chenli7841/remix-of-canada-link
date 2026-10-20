@@ -16,7 +16,7 @@ export default defineTool({
     const { data, error } = await supabaseForUser(ctx).rpc("cancel_ai_forwarding_draft", { _draft_id: draft_id });
     if (error) {
       console.error("MCP cancel_forwarding_draft failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "cancel_forwarding_draft");
     }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },

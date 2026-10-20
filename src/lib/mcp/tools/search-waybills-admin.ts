@@ -17,7 +17,7 @@ export default defineTool({
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_search_waybills", {
       _query: query ?? "", _status: status ?? null, _limit: limit ?? 20,
     });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "search_waybills_admin");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

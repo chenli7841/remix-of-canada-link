@@ -11,7 +11,7 @@ export default defineTool({
   handler: async ({ invoice_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_admin_get_invoice", { _invoice_no: invoice_no });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "get_invoice_admin");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

@@ -18,7 +18,7 @@ export default defineTool({
     const pageSize=limit??5,start=offset??0; const { data, error } = await query.range(start,start+pageSize);
     if (error) {
       console.error("MCP list_my_addresses failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "list_my_addresses");
     }
     const hasMore=(data?.length??0)>pageSize; const result={addresses:(data??[]).slice(0,pageSize),page:{offset:start,limit:pageSize,has_more:hasMore,next_offset:hasMore?start+pageSize:null}};
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };

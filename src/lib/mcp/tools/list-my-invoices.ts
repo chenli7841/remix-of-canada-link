@@ -14,7 +14,7 @@ export default defineTool({
     let q=supabaseForUser(ctx).from("invoices").select("id,invoice_no,type,status,batch_no,due_date,total_cny,fx_rate,paid_cad,payment_method,paid_at,created_at").order("created_at",{ascending:false});
     if(invoice_no)q=q.ilike("invoice_no",`%${invoice_no}%`); if(status)q=q.eq("status",status as never);
     if(date_from)q=q.gte("created_at",`${date_from}T00:00:00.000Z`); if(date_to)q=q.lte("created_at",`${date_to}T23:59:59.999Z`);
-    const{data,error}=await q.range(start,start+pageSize); if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult();
+    const{data,error}=await q.range(start,start+pageSize); if(error)return isPermissionError(error)?permissionDeniedResult():queryFailedResult(error, "list_my_invoices");
     const hasMore=(data?.length??0)>pageSize;
     const invoices=(data??[]).slice(0,pageSize).map((x:any)=>({id:x.id,invoice_no:x.invoice_no,type:x.type,status:x.status,batch_no:x.batch_no,due_date:x.due_date,total_cad:cnyToCad(x.total_cny,x.fx_rate),paid_cad:Number(x.paid_cad??0),payment_method:x.payment_method,paid_at:x.paid_at,created_at:x.created_at}));
     const result={currency:"CAD",invoices,page:{offset:start,limit:pageSize,has_more:hasMore,next_offset:hasMore?start+pageSize:null}};

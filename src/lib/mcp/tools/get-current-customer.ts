@@ -23,7 +23,7 @@ export default defineTool({
     if (error || roleError) {
       const failure = error ?? roleError;
       console.error("MCP get_current_customer failed", { code: failure?.code });
-      return isPermissionError(failure) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(failure) ? permissionDeniedResult() : queryFailedResult(failure, "get_current_customer");
     }
     if (!data) {
       return {

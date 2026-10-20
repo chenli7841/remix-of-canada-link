@@ -13,7 +13,7 @@ export default defineTool({
   handler: async ({ tracking_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_diagnose_my_pending_intake", { _tracking_no: tracking_no });
-    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+    if (error) return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "diagnose_my_pending_intake");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { diagnosis: data } };
   },
 });

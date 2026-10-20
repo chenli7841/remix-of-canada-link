@@ -11,7 +11,7 @@ export default defineTool({
   handler: async ({ request_no }, ctx) => {
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("chatgpt_owner_get_forwarding", { _request_no: request_no });
-    if (error) { console.error("MCP get_forwarding_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(); }
+    if (error) { console.error("MCP get_forwarding_owner failed", { code: error.code }); return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "get_forwarding_owner"); }
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: { result: data } };
   },
 });

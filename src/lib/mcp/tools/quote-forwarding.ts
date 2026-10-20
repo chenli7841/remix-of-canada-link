@@ -27,7 +27,7 @@ export default defineTool({
     });
     if (error) {
       console.error("MCP quote_forwarding_cad failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "quote_forwarding");
     }
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],

@@ -23,7 +23,7 @@ export default defineTool({
       .maybeSingle();
     if (error) {
       console.error("MCP track_waybill failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult(error, "track_waybill");
     }
     if (!data) return { content: [{ type: "text", text: "Waybill not found or not accessible." }], isError: true };
     return {

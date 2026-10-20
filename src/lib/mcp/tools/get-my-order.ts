@@ -23,7 +23,7 @@ export default defineTool({
       .select("id,order_no,status,payment_status,created_at,shipping_method,tracking_no,domestic_tracking_no,intl_tracking_no,batch_no,eta,address_snapshot,note,customer_code,destination_code,route_code,company_code,box_no,pallet_no,box_count,subtotal_cny,shipping_cny,insurance_cny,customs_cny,total_cny,fx_rate")
       .eq("id", order_id)
       .maybeSingle();
-    if (orderError) return isPermissionError(orderError) ? permissionDeniedResult() : queryFailedResult();
+    if (orderError) return isPermissionError(orderError) ? permissionDeniedResult() : queryFailedResult(orderError, "get_my_order");
     if (!order) return permissionDeniedResult();
 
     const [{ data: itemRows, error: itemError }, { data: waybillRows, error: waybillError }] = await Promise.all([
@@ -31,7 +31,7 @@ export default defineTool({
       sb.from("waybills").select("id,waybill_no,status,shipping_method,weight_kg,length_cm,width_cm,height_cm,eta,intl_tracking_no,batch_no,box_no,pallet_no,items_summary,freight_cad,duty_cad,clearance_cad,insurance_cad,surcharge_cad,created_at,updated_at").eq("order_id", order_id).order("created_at"),
     ]);
     const childError = itemError ?? waybillError;
-    if (childError) return isPermissionError(childError) ? permissionDeniedResult() : queryFailedResult();
+    if (childError) return isPermissionError(childError) ? permissionDeniedResult() : queryFailedResult(childError, "get_my_order");
 
     const cad = (value: unknown) => cnyToCad(value, order.fx_rate);
     const { subtotal_cny, shipping_cny, insurance_cny, customs_cny, total_cny, fx_rate, ...safeOrder } = order;

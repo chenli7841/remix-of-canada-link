@@ -24,7 +24,7 @@ export default defineTool({
       .single();
     if (warehouseError || !warehouse) {
       console.error("MCP list_forwarding_routes warehouse lookup failed", { code: warehouseError?.code });
-      return warehouseError && isPermissionError(warehouseError) ? permissionDeniedResult() : queryFailedResult();
+      return warehouseError && isPermissionError(warehouseError) ? permissionDeniedResult() : queryFailedResult(warehouseError, "list_forwarding_routes");
     }
     const [{ data: profile, error: profileError }, { data, error }] = await Promise.all([
       sb.from("profiles").select("customer_code, vip_level").eq("id", authData.user.id).single(),
@@ -41,7 +41,7 @@ export default defineTool({
     if (profileError || error) {
       console.error("MCP list_forwarding_routes failed", { code: (profileError ?? error)?.code });
       const failure = profileError ?? error;
-      return failure && isPermissionError(failure) ? permissionDeniedResult() : queryFailedResult();
+      return failure && isPermissionError(failure) ? permissionDeniedResult() : queryFailedResult(failure, "list_forwarding_routes");
     }
     const customerCode = String(profile?.customer_code ?? "").trim().toUpperCase();
     const vip = String(profile?.vip_level ?? "");
