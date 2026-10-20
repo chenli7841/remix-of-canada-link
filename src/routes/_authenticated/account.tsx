@@ -316,14 +316,28 @@ function OverviewTab({
   onJump: (t: Tab) => void;
   setOrdersFilter: (f: OrderFilter) => void;
 }) {
+  const { user } = useAuth();
   const { lang } = useApp();
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
   const fetchMyBatches = useServerFn(listMyBatches);
   const [wallet, setWallet] = useState<WalletRow | null>(null);
-  const [customerCode, setCustomerCode] = useState<string | null>(null);
   const [totalOrders, setTotalOrders] = useState<number | null>(null);
   const [inTransit, setInTransit] = useState<number>(0);
   const [unwarehoused, setUnwarehoused] = useState<number>(0);
+  const { data: ownProfile } = useQuery({
+    queryKey: ["account-overview-profile", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("customer_code")
+        .eq("id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const customerCode = ownProfile?.customer_code ?? null;
 
   const { data: batchesData } = useQuery({
     queryKey: MY_BATCHES_QK,
@@ -344,10 +358,6 @@ function OverviewTab({
       .select("*")
       .maybeSingle()
       .then(({ data }: any) => setWallet(data ?? { balance_cad: 0 }));
-    sb.from("profiles")
-      .select("customer_code")
-      .maybeSingle()
-      .then(({ data }: any) => setCustomerCode(data?.customer_code ?? null));
     Promise.all([
       sb.from("orders").select("id,status,batch_no"),
       sb.from("forwarding_orders").select("id,status,batch_no"),
@@ -554,6 +564,25 @@ function OverviewTab({
           <ArrowRight className="h-4 w-4 text-ink-soft transition group-hover:translate-x-1 group-hover:text-brand" />
         </Link>
       </div>
+      {ownProfile?.customer_code === "09001" && (
+        <a
+          href="https://chatgpt.com/plugins/plugin_asdk_app_6ad47f4d3f8481919ba7351030b9a021"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center justify-between rounded-2xl border border-border bg-surface p-5 transition hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <div>
+            <div className="flex items-center gap-2 font-semibold">
+              <MessageCircle className="h-4 w-4 text-brand" />
+              {tr("EPLUS AI 客服", "EPLUS AI Support")}
+            </div>
+            <p className="mt-1 text-xs text-ink-soft">
+              {tr("在 ChatGPT 中打开 EPLUS 客服，连接账号后开始对话（新窗口）", "Open EPLUS in ChatGPT and connect your account to start chatting (new window)")}
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-ink-soft transition group-hover:translate-x-1 group-hover:text-brand" />
+        </a>
+      )}
     </div>
   );
 }
