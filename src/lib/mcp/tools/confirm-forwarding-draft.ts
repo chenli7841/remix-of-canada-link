@@ -17,8 +17,24 @@ export default defineTool({
     if (!ctx.isAuthenticated()) return unauthenticatedResult();
     const { data, error } = await supabaseForUser(ctx).rpc("confirm_ai_forwarding_draft", { _draft_id: draft_id, _expected_version: expected_version });
     if (error) {
-      console.error("MCP confirm_forwarding_draft failed", { code: error.code });
-      return isPermissionError(error) ? permissionDeniedResult() : queryFailedResult();
+      const reference = crypto.randomUUID();
+      // Keep raw database details in server logs, never in the tool response.
+      console.error("MCP confirm_forwarding_draft failed", {
+        reference, code: error.code, message: error.message,
+        details: error.details, hint: error.hint,
+      });
+      if (isPermissionError(error)) return permissionDeniedResult();
+      const databaseCode = /^(?:[A-Z0-9]{5}|PGRST\d{3})$/.test(error.code ?? "")
+        ? error.code : "UNKNOWN";
+      return {
+        ...queryFailedResult(reference),
+        structuredContent: {
+          error_code: "FORWARDING_CONFIRM_FAILED",
+          database_code: databaseCode,
+          reference,
+          next_step: "Read the draft status before retrying; use the reference to investigate server logs. Do not create a replacement draft.",
+        },
+      };
     }
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
