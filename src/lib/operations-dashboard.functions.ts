@@ -176,7 +176,7 @@ async function deductOneCustomerReceivable(admin: any, userId: string, operatorI
     .select("id,batch_no")
     .in("batch_no", batchNos);
   if (batchError) throw new Error(`读取账单批次失败: ${batchError.message}`);
-  const batchByNo = new Map((batches ?? []).map((batch: any) => [batch.batch_no, batch.id]));
+  const batchByNo = new Map<string, string>((batches ?? []).map((batch: any) => [batch.batch_no, batch.id]));
   let paidCad = 0;
   for (const invoice of invoices as any[]) {
     const batchId = batchByNo.get(invoice.batch_no);
