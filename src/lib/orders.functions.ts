@@ -4,6 +4,7 @@ import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal } from
 import { deliveryWeightsByCustomer } from "./bulk-delivery-weight";
 import { sumSurchargesCad } from "./surcharge-currency";
 import { loadBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
+import { syncBatchWaybillStatus } from "./batch-status-sync.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
 import { effectiveWaybillInsurance } from "./insurance.server";
@@ -4250,13 +4251,7 @@ export const updateBatchStatus = createServerFn({ method: "POST" })
     // Sync waybills under this batch: shipped → 'shipped', arrived → 'arrived'.
     // Skip terminal/downstream statuses so we don't regress 已签收 etc.
     const targetWb = data.status === "shipped" ? "shipped" : data.status === "arrived" ? "arrived" : null;
-    if (targetWb) {
-      await supabaseAdmin
-        .from("waybills")
-        .update({ status: targetWb })
-        .eq("assigned_batch_id", data.batchId)
-        .not("status", "in", "(delivered,cancelled,in_transit,ready_pickup)");
-    }
+    const syncedCount = await syncBatchWaybillStatus(supabaseAdmin, data.batchId, data.status);
     await recordLog(supabaseAdmin, {
       entity_type: "batch",
       entity_id: data.batchId,
@@ -4264,6 +4259,7 @@ export const updateBatchStatus = createServerFn({ method: "POST" })
       after: {
         status: data.status,
         waybills_synced: targetWb,
+        waybills_synced_count: syncedCount,
         grand_total_cny: update.grand_total_cny,
       },
       operator_id: context.userId,
