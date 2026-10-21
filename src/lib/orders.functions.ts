@@ -1703,7 +1703,10 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   const routeCodesInUse = Array.from(new Set(allWbs.map((w) => wbRoute(w).code).filter(Boolean) as string[]));
   // 清关费 / 最低收费只在批次级生效（运单级已取消）
   const clearanceByRoute = new Map<string, { fee: number; level: "waybill" | "batch"; route_id: string }>();
-  const minChargeBatchByRoute = new Map<string, number>();
+  // A configured waybill minimum is consumed only once after all of the
+  // customer's waybills in this batch have been pooled.  Keep the route value
+  // here so the final customer-level pass can apply one minimum in total.
+  const minChargeByRoute = new Map<string, number>();
   const deliveryRuleByRoute = new Map<
     string,
     {
@@ -1735,7 +1738,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       ? await admin
           .from("freight_rules")
           .select(
-            "route_id, clearance_fee_batch_cad, min_charge_batch_cad, delivery_light_max_kg, delivery_light_fee_cad, delivery_heavy_min_kg, delivery_unit_fee_cad, oversize_alert_length_cm, overweight_alert_ratio, remote_postal_prefixes",
+            "route_id, clearance_fee_batch_cad, min_charge_waybill_cad, min_charge_batch_cad, delivery_light_max_kg, delivery_light_fee_cad, delivery_heavy_min_kg, delivery_unit_fee_cad, oversize_alert_length_cm, overweight_alert_ratio, remote_postal_prefixes",
           )
           .in("route_id", routeIds)
           .eq("is_active", true)
@@ -1749,7 +1752,10 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
           level: "batch",
           route_id: r.id,
         });
-        minChargeBatchByRoute.set(r.code, Number(rule.min_charge_batch_cad ?? 0));
+        minChargeByRoute.set(
+          r.code,
+          Math.max(Number(rule.min_charge_waybill_cad ?? 0), Number(rule.min_charge_batch_cad ?? 0)),
+        );
         deliveryRuleByRoute.set(r.code, {
           light_max_kg: Number(rule.delivery_light_max_kg ?? 0),
           light_fee_cad: Number(rule.delivery_light_fee_cad ?? 0),
@@ -2185,7 +2191,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     }
   }
 
-  // === 9. Scheme A: recompute freight via route rate from aggregated weight/volume ===
+  // === 9. Recompute batch freight from pooled customer weights ===
   const fx = await getFxCadPerCny(admin);
   const mergedRouteIds = [...new Set([...buckets.values()]
     .filter((b) => b.customer_code && b.route_id).map((b) => b.route_id))];
@@ -2198,18 +2204,38 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   for (const rule of mergedRules.data ?? []) if (!mergedRuleMap.has(rule.route_id)) mergedRuleMap.set(rule.route_id, rule);
   for (const b of buckets.values()) {
     if (!b.customer_code) continue;
-    if (schemeOf(b.customer_code) !== "merged") continue;
     if (!b.route_id) continue;
-    const mode = mergedRuleMap.get(b.route_id)?.weight_mode;
-    for (const input of b.freight_weight_inputs) assertSnapshotNumbers(`计费对象 ${input.ref}`, {
-      ...(mode !== "volumetric" ? { 实重: input.weight } : {}),
-      ...(mode !== "actual" ? { 体积: input.volume } : {}),
-    });
-    // Only freight is consumed here; insurance and duty remain waybill-level values.
-    const snap = await computeFreight(admin, b.route_id, b.weight_kg, b.volume_m3 * 1_000_000, null, false,
-      { rule: mergedRuleMap.get(b.route_id), customs: null, fx, insuranceRate: 0 });
-    b.freight = snap ? +Number((snap as any).freight_cad ?? 0).toFixed(2) : 0;
-    b.freight_weight_snapshot = snap;
+    const rule = mergedRuleMap.get(b.route_id);
+    if (schemeOf(b.customer_code) === "merged") {
+      const mode = rule?.weight_mode;
+      for (const input of b.freight_weight_inputs) assertSnapshotNumbers(`计费对象 ${input.ref}`, {
+        ...(mode !== "volumetric" ? { 实重: input.weight } : {}),
+        ...(mode !== "actual" ? { 体积: input.volume } : {}),
+      });
+      // Scheme A pools the physical dimensions before deriving chargeable weight.
+      const snap = await computeFreight(admin, b.route_id, b.weight_kg, b.volume_m3 * 1_000_000, null, false,
+        { rule, customs: null, fx, insuranceRate: 0 });
+      b.freight = snap ? +Number((snap as any).freight_cad ?? 0).toFixed(2) : 0;
+      b.freight_weight_snapshot = snap;
+    } else {
+      // Scheme B preserves each waybill's saved chargeable weight, but prices
+      // their sum once.  Never sum freight snapshots that already contain a
+      // per-waybill minimum charge.
+      const weightOrders = buildWeightOrders(
+        allWbs.filter((w) => b.freight_waybill_ids.has(w.id)),
+        oMap,
+        fMap,
+      );
+      const chargeable = weightTotal(weightOrders);
+      assertSnapshotNumbers(`客户 ${b.customer_code} / ${b.route_code ?? "未指定线路"}`, {
+        合计计费重量: chargeable,
+        运费单价: rule?.unit_price_cad ?? rule?.unit_price_cny,
+      });
+      const unitCad = Number(rule?.unit_price_cad ?? 0);
+      const unitCny = Number(rule?.unit_price_cny ?? 0);
+      const rateCad = unitCad > 0 ? unitCad : unitCny * fx;
+      b.freight = +(Number(chargeable) * rateCad).toFixed(2);
+    }
   }
 
   // === 10. Customs items per (customer, route) — HS 明细统一口径 ===
@@ -2357,10 +2383,18 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     if (b) b.customs = +arr.reduce((s, r) => s + Number(r.duty_cad ?? 0), 0).toFixed(2);
   }
 
-  // 批次级最低收费：同线路同客户号在本批次内合并后判断一次
-  for (const b of buckets.values()) {
-    const minBatch = b.route_code ? (minChargeBatchByRoute.get(b.route_code) ?? 0) : 0;
-    if (minBatch > 0 && b.freight < minBatch) b.freight = +minBatch.toFixed(2);
+  // 最低收费按“客户 + 批次”只判断一次。即使客户在同一批次出现多张
+  // 运单（或多个线路分组），也不能把最低收费重复叠加。
+  for (const customerCode of new Set([...buckets.values()].map((b) => b.customer_code).filter(Boolean) as string[])) {
+    const customerBuckets = [...buckets.values()].filter((b) => b.customer_code === customerCode);
+    const minimum = Math.max(
+      0,
+      ...customerBuckets.map((b) => (b.route_code ? (minChargeByRoute.get(b.route_code) ?? 0) : 0)),
+    );
+    const freight = customerBuckets.reduce((sum, b) => sum + b.freight, 0);
+    if (minimum > freight && customerBuckets.length) {
+      customerBuckets[0]!.freight = +(customerBuckets[0]!.freight + minimum - freight).toFixed(2);
+    }
   }
 
   const unmatchedMapMerged = new Map<string, string[]>();
