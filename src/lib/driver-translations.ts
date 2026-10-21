@@ -24,6 +24,8 @@ export const driverEnglish: Record<string, string> = {
   "派送照片（{0}）": "Delivery photos ({0})",
   "已上车，原序号 {0}": "Already loaded, sequence {0}",
   "上车成功，序号 {0}": "Loaded, sequence {0}",
+  "扫描或输入箱号 / 运单号 / 订单号 / 国内单号":
+    "Scan or enter carton / waybill / order / domestic tracking number",
   "仅派送司机可以使用此页面，请联系管理员分配司机角色":
     "Driver access is required. Ask an administrator to assign the Delivery driver role.",
   清单不存在或不属于当前司机: "This trip does not exist or is not assigned to you.",

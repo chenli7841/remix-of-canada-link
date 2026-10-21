@@ -273,7 +273,7 @@ export function DriverWorkspace() {
                   className={input}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder={tr("扫描或输入箱号 / 运单号")}
+                  placeholder={tr("扫描或输入箱号 / 运单号 / 订单号 / 国内单号")}
                 />
                 <button disabled={busy || !code.trim()} className={btn}>
                   {tr("加入")}
