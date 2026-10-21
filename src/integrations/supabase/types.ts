@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -1219,6 +1219,123 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_trip_items: {
+        Row: {
+          created_at: string
+          id: string
+          queue_id: string
+          sequence: number | null
+          trip_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          queue_id: string
+          sequence?: number | null
+          trip_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          queue_id?: string
+          sequence?: number | null
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_trip_items_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: true
+            referencedRelation: "delivery_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_trip_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "driver_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_trips: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          driver_id: string
+          driver_name: string
+          generated_at: string | null
+          id: string
+          origin_id: string | null
+          revision: number
+          route: Json | null
+          route_revision: number | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          driver_id: string
+          driver_name: string
+          generated_at?: string | null
+          id?: string
+          origin_id?: string | null
+          revision?: number
+          route?: Json | null
+          route_revision?: number | null
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string
+          driver_name?: string
+          generated_at?: string | null
+          id?: string
+          origin_id?: string | null
+          revision?: number
+          route?: Json | null
+          route_revision?: number | null
+          source?: string
+        }
+        Relationships: []
+      }
+      express_dispatch_drafts: {
+        Row: {
+          created_at: string
+          customer_code: string
+          draft: Json
+          id: string
+          number: string
+          source: Json
+          source_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_code?: string
+          draft: Json
+          id?: string
+          number: string
+          source: Json
+          source_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_code?: string
+          draft?: Json
+          id?: string
+          number?: string
+          source?: Json
+          source_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       express_labels: {
         Row: {
           base64: string
@@ -2063,6 +2180,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      invoice_number_counters: {
+        Row: {
+          date_key: string
+          last_value: number
+        }
+        Insert: {
+          date_key: string
+          last_value: number
+        }
+        Update: {
+          date_key?: string
+          last_value?: number
+        }
+        Relationships: []
       }
       invoices: {
         Row: {
@@ -5333,6 +5465,101 @@ export type Database = {
         }
         Relationships: []
       }
+      wecom_daily_notification_drafts: {
+        Row: {
+          created_at: string
+          customer_code: string
+          edited_content: string | null
+          failure_reason: string | null
+          id: string
+          message_id: string | null
+          rendered_content: string
+          sections: Json
+          sent_at: string | null
+          service_date: string
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_code: string
+          edited_content?: string | null
+          failure_reason?: string | null
+          id?: string
+          message_id?: string | null
+          rendered_content?: string
+          sections?: Json
+          sent_at?: string | null
+          service_date: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_code?: string
+          edited_content?: string | null
+          failure_reason?: string | null
+          id?: string
+          message_id?: string | null
+          rendered_content?: string
+          sections?: Json
+          sent_at?: string | null
+          service_date?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_daily_notification_drafts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "wecom_notify_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wecom_daily_notification_events: {
+        Row: {
+          category: string
+          created_at: string
+          customer_code: string
+          event_key: string
+          id: string
+          occurred_at: string
+          payload: Json
+          service_date: string
+          source_id: string
+          source_type: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          customer_code: string
+          event_key: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          service_date: string
+          source_id: string
+          source_type: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          customer_code?: string
+          event_key?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          service_date?: string
+          source_id?: string
+          source_type?: string
+        }
+        Relationships: []
+      }
       wecom_notify_bindings: {
         Row: {
           bound_at: string
@@ -5372,32 +5599,81 @@ export type Database = {
           },
         ]
       }
-      wecom_notify_groups: {
+      wecom_notify_group_members: {
         Row: {
           chat_id: string
-          created_at: string
-          member_count: number
-          name: string
-          owner_userid: string | null
+          display_name: string
+          external_userid: string
           synced_at: string
         }
         Insert: {
           chat_id: string
-          created_at?: string
-          member_count?: number
-          name?: string
-          owner_userid?: string | null
+          display_name?: string
+          external_userid: string
           synced_at?: string
         }
         Update: {
           chat_id?: string
+          display_name?: string
+          external_userid?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_notify_group_members_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "wecom_notify_groups"
+            referencedColumns: ["chat_id"]
+          },
+        ]
+      }
+      wecom_notify_groups: {
+        Row: {
+          blocked_at: string | null
+          blocked_by: string | null
+          chat_id: string
+          created_at: string
+          is_blocked: boolean
+          member_count: number
+          name: string
+          owner_name: string | null
+          owner_userid: string | null
+          synced_at: string
+        }
+        Insert: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          chat_id: string
           created_at?: string
+          is_blocked?: boolean
           member_count?: number
           name?: string
+          owner_name?: string | null
           owner_userid?: string | null
           synced_at?: string
         }
-        Relationships: []
+        Update: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          chat_id?: string
+          created_at?: string
+          is_blocked?: boolean
+          member_count?: number
+          name?: string
+          owner_name?: string | null
+          owner_userid?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wecom_notify_groups_blocked_by_fkey"
+            columns: ["blocked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wecom_notify_message_targets: {
         Row: {
@@ -5581,6 +5857,17 @@ export type Database = {
         Args: { _payload: Json }
         Returns: Json
       }
+      admin_assign_delivery_trip: {
+        Args: {
+          _actor: string
+          _driver: string
+          _id: string
+          _ids: string[]
+          _origin: string
+          _route: Json
+        }
+        Returns: string
+      }
       admin_change_route: {
         Args: {
           _entity_id: string
@@ -5760,6 +6047,15 @@ export type Database = {
             Returns: Json
           }
       confirm_batch_invoice_v2: { Args: { _payload: Json }; Returns: Json }
+      confirm_receiving_atomic: {
+        Args: {
+          _batch_id: string
+          _location?: string
+          _operator_id: string
+          _receiving_id: string
+        }
+        Returns: Json
+      }
       current_fx_cny_to_cad: { Args: never; Returns: number }
       driver_delivery_action: {
         Args: {
@@ -5770,6 +6066,14 @@ export type Database = {
           _expected_cad?: number
           _note?: string
         }
+        Returns: Json
+      }
+      driver_dispatch_units: {
+        Args: { _actor: string; _ids: string[]; _trip: string }
+        Returns: undefined
+      }
+      driver_load_unit: {
+        Args: { _actor: string; _code: string; _trip: string }
         Returns: Json
       }
       find_by_any_no: { Args: { _input: string }; Returns: Json }
@@ -5963,6 +6267,18 @@ export type Database = {
       wechat_kf_try_lock: {
         Args: { _open_kfid: string; _ttl_seconds?: number }
         Returns: boolean
+      }
+      write_delivery_completion_events: {
+        Args: {
+          actor: string
+          actor_name: string
+          dispatched_time: string
+          entity: string
+          entity_id_value: string
+          queue_id: string
+          tracking: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
