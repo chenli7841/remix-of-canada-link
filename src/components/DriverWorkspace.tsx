@@ -1,4 +1,5 @@
 import { LoadingUnitList } from "@/components/LoadingUnitList";
+import { driverTripPrintHtml } from "@/lib/driver-trip-print";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -123,6 +124,25 @@ export function DriverWorkspace() {
       setMessage(tr("新一趟从 1 开始编号"));
       await trips.refetch();
     });
+  const printTrip = (t: any) => {
+    if (lock.current) return;
+    const popup = window.open('', '_blank');
+    if (!popup) { setError(tr('请允许弹出窗口后重试')); return; }
+    popup.opener = null;
+    popup.document.body.textContent = tr('正在准备打印…');
+    void run(async () => {
+      try {
+        const current = await read({ data: { tripId: t.id } });
+        if (current.route_revision !== current.revision) throw new Error(tr('上车清单已变化，请重新生成线路'));
+        const images = maps[t.id]?.length === current.route?.plans?.length && maps[t.id]?.every(Boolean)
+          ? maps[t.id] : await readMaps({ data: { tripId: t.id } });
+        setMaps(old => ({ ...old, [t.id]: images }));
+        const html = driverTripPrintHtml(current, images, tr, date(current.created_at));
+        if (popup.closed) return;
+        popup.document.open(); popup.document.write(html); popup.document.close();
+      } catch (error) { popup.close(); throw error; }
+    });
+  };
   const deleteEmpty = async (t: any) => {
     if (lock.current || !window.confirm(tr("确认删除这趟空派送清单？删除后无法恢复。"))) return;
     lock.current = true;
@@ -156,19 +176,14 @@ export function DriverWorkspace() {
     }
   };
   const complete = (t: any) => t.total > 0 && t.completed === t.total;
+  const matchesCustomer = (c: any) => !filter.trim() || String(c.customer_code || '').includes(filter.trim());
   const candidates = (trips.data || [])
     .filter((t) => page === "loading" ? !t.loading_trip_id : page !== "routes" || t.loading_trip_id || t.generated_at)
 
     .filter(
       (t) =>
-        page === "loading" || !filter ||
-        JSON.stringify([
-          t.driver_name,
-          date(t.created_at),
-          t.route?.plans?.flatMap((p: any) => p.stops),
-        ])
-          .toLowerCase()
-          .includes(filter.toLowerCase()),
+        page !== "routes" || !filter.trim() ||
+        t.route?.plans?.some((p: any) => p.stops.some((s: any) => s.customers.some(matchesCustomer))),
     );
   const shown = candidates.filter((t) => showDone || !complete(t));
   const units: any[] = detail.data?.items || [];
@@ -266,8 +281,8 @@ export function DriverWorkspace() {
           {page === "routes" && (
           <input
             className={input + " mb-3"}
-            aria-label={tr("搜索派送清单")}
-            placeholder={tr("搜索客户号 / 地址 / 日期 / 司机")}
+            aria-label={tr("按客户号筛选")}
+            placeholder={tr("输入客户号筛选下方列表")}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -390,34 +405,17 @@ export function DriverWorkspace() {
                     )
                   ) : (
                     <>
+                      <button className={btn + " bg-blue-600"} disabled={busy || !t.route?.plans?.length || t.route_revision !== t.revision} onClick={() => printTrip(t)}>
+                        {tr("打印地图和列表")}
+                      </button>
                       {t.route_revision !== t.revision && (
                         <p className="text-amber-300">
                           {tr("上车清单已变化，请回到货物上车重新生成线路。")}
                         </p>
                       )}
-                      {t.route?.plans?.map((plan: any, index: number) => (
+                      {t.route?.plans?.map((plan: any, index: number) => plan.stops.some((stop: any) => stop.customers.some(matchesCustomer)) && (
                         <div key={index} className="space-y-3">
                           <h3 className="font-bold">{tr("第 {0} 张派送线路", index + 1)}</h3>
-                          {maps[t.id]?.[index] ? (
-                            <img
-                              src={maps[t.id][index]!}
-                              alt={tr("Google 派送路线地图")}
-                              className="w-full rounded-xl"
-                            />
-                          ) : (
-                            <button
-                              disabled={busy || t.route_revision !== t.revision}
-                              className={btn}
-                              onClick={() =>
-                                void run(async () => {
-                                  const m = await readMaps({ data: { tripId: t.id } });
-                                  setMaps((old) => ({ ...old, [t.id]: m }));
-                                })
-                              }
-                            >
-                              {tr("加载地图")}
-                            </button>
-                          )}
                           <p className="text-xs text-slate-400">
                             {tr("出发：")}
                             {plan.origin}
@@ -441,12 +439,12 @@ export function DriverWorkspace() {
                               </a>
                             ))}
                           </div>
-                          {plan.stops.map((stop: any, i: number) => (
+                          {plan.stops.map((stop: any, i: number) => stop.customers.some(matchesCustomer) && (
                             <div key={i} className="rounded-xl border border-white/15 p-3">
                               <p className="text-sm text-amber-300">
                                 {tr("第 {0} 站", index * 21 + i + 1)}
                               </p>
-                              {stop.customers.map((c: any) => (
+                              {stop.customers.filter(matchesCustomer).map((c: any) => (
                                 <button
                                   key={c.customer_code}
                                   className="mr-3 min-h-11 text-2xl font-bold text-blue-300"
@@ -477,8 +475,31 @@ export function DriverWorkspace() {
                               >
                                 {tr("复制地址")}
                               </button>
+                              <a className={btn + " ml-2 inline-flex items-center text-blue-300"} href={'https://www.google.com/search?q=' + encodeURIComponent(stop.address)} target="_blank" rel="noopener noreferrer">
+                                {tr("Google搜索")} ↗
+                              </a>
                             </div>
                           ))}
+                          {maps[t.id]?.[index] ? (
+                            <img
+                              src={maps[t.id][index]!}
+                              alt={tr("Google 派送路线地图")}
+                              className="w-full rounded-xl"
+                            />
+                          ) : (
+                            <button
+                              disabled={busy || t.route_revision !== t.revision}
+                              className={btn}
+                              onClick={() =>
+                                void run(async () => {
+                                  const m = await readMaps({ data: { tripId: t.id } });
+                                  setMaps((old) => ({ ...old, [t.id]: m }));
+                                })
+                              }
+                            >
+                              {tr("加载地图")}
+                            </button>
+                          )}
                         </div>
                       ))}
                     </>
@@ -519,6 +540,7 @@ export function DriverWorkspace() {
               {customer.customer_code} · {customer.name}
             </strong>
             <p className="my-2 font-bold">{customer.address}</p>
+            {customer.address && <a className={btn + " mb-2 inline-flex items-center text-blue-300"} href={googlePlace(customer.address)} target="_blank" rel="noopener noreferrer">{tr("Google地图搜索")} ↗</a>}
             <a
               className="text-blue-300"
               href={"tel:" + String(customer.phone || "").replace(/[^+\d]/g, "")}
