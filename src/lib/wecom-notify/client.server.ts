@@ -18,6 +18,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 
 const REQUEST_TIMEOUT_MS = 12_000;
 const TOKEN_ROW_ID = "notify";
+const DYNAMIC_MESSAGE_OPT_OUT = "如果不希望接受到动态信息，可以联系客服";
 
 let memToken: { token: string; expiresAt: number } | null = null;
 
@@ -275,18 +276,22 @@ export async function sendGroupMsgTemplate(params: {
   chatIds: string[];
   content: string;
 }): Promise<{ ok: boolean; msgid?: string; raw: any }> {
+  const originalContent = params.content.trim();
+  const content = originalContent.includes(DYNAMIC_MESSAGE_OPT_OUT)
+    ? originalContent
+    : `${originalContent}\n\n${DYNAMIC_MESSAGE_OPT_OUT}`;
   const gateway = await gatewayCall<{ ok: boolean; msgid: string }>("/v1/wecom/messages", {
     request_id: randomUUID(),
     sender_user_id: params.senderUserId,
     chat_ids: params.chatIds,
-    content: params.content,
+    content,
   });
   if (gateway) return { ok: true, msgid: gateway.msgid, raw: gateway };
   const json = await callApi("/externalcontact/add_msg_template", {
     chat_type: "group",
     sender: params.senderUserId,
     chat_id_list: params.chatIds,
-    text: { content: params.content },
+    text: { content },
   });
   if (json?.errcode) return { ok: false, raw: json };
   return { ok: true, msgid: json?.msgid, raw: json };
