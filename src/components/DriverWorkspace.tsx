@@ -161,7 +161,7 @@ export function DriverWorkspace() {
 
     .filter(
       (t) =>
-        !filter ||
+        page === "loading" || !filter ||
         JSON.stringify([
           t.driver_name,
           date(t.created_at),
@@ -261,6 +261,7 @@ export function DriverWorkspace() {
       )}
       {(page === "routes" || page === "loading") && (
         <>
+          {page === "routes" && (
           <input
             className={input + " mb-3"}
             aria-label={tr("搜索派送清单")}
@@ -268,6 +269,7 @@ export function DriverWorkspace() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
+          )}
           <button className={btn + " mb-3"} onClick={() => setShowDone((v) => !v)}>
             {showDone ? tr("隐藏") : tr("显示")}
             {tr("已完成（")}

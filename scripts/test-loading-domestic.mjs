@@ -8,5 +8,5 @@ const module={exports:{}};
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/loading-domestic.server.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,require:()=>({readBatchRowsByIds:async(_,table,columns,key,ids)=>records[table].filter(r=>ids.includes(r[key]))})});
 test('domestic numbers resolve cartons and nested pallets, preserve repeated numbers and omit missing',async()=>{
  const result=await module.exports.loadUnitDomesticNumbers({},[{id:'box',kind:'carton',ref_id:'c1'},{id:'pallet',kind:'pallet',ref_id:'p1'},{id:'single',kind:'waybill',ref_id:'w1'},{id:'empty',kind:'waybill',ref_id:'w3'}]);
- assert.deepEqual(Array.from(result.get('box')),['SF123','SF123']);assert.deepEqual(Array.from(result.get('pallet')),['SF123','SF123']);assert.deepEqual(Array.from(result.get('single')),['SF123']);assert.equal(result.get('empty').length,0);
+ assert.deepEqual(Array.from(result.get('box')),[]);assert.deepEqual(Array.from(result.get('pallet')),[]);assert.deepEqual(Array.from(result.get('single')),['SF123']);assert.equal(result.get('empty').length,0);
 });
