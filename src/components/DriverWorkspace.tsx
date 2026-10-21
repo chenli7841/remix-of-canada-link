@@ -189,7 +189,8 @@ export function DriverWorkspace() {
   const openTrip = async (t: any) => {
     setTripId(t.id);setLoadingSelected(new Set());
     setLoadingSelected(new Set());
-    toggle(t.id);
+    if (page === "loading") setExpanded(old => old.has(t.id) ? new Set() : new Set([t.id]));
+    else toggle(t.id);
     if (page === "routes" && !maps[t.id] && !expanded.has(t.id) && t.route_revision === t.revision)
       await run(async () => {
         const m = await readMaps({ data: { tripId: t.id } });
@@ -258,86 +259,6 @@ export function DriverWorkspace() {
           )}
         </div>
       )}
-      {page === "loading" && (
-        <>
-
-          {tripId && (
-            <div className="mb-5 rounded-xl border border-white/10 p-4">
-              <p className="font-semibold">
-                {tr("当前趟次：")}
-                {detail.data
-                  ? `${date(detail.data.created_at)} · ${detail.data.driver_name}`
-                  : tr("读取中…")}
-              </p>
-              <p className="my-3 text-amber-300">
-                {tr("已上车 {0} 件 · 下一件 {1} 号", units.length, units.length + 1)}
-              </p>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void add(code).catch(() => {});
-                }}
-              >
-                <input
-                  aria-label={tr("上车条码")}
-                  className={input}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder={tr("扫描或输入箱号 / 运单号 / 订单号 / 国内单号")}
-                />
-                <button disabled={busy || !code.trim()} className={btn}>
-                  {tr("加入")}
-                </button>
-              </form>
-              <CameraScanButton continuous onScan={add} />
-              {message && (
-                <p role="status" className="my-3 text-emerald-300">
-                  {tr(message)}
-                </p>
-              )}
-
-              <select
-                aria-label={tr("司机起始点")}
-                className={input + " mt-4"}
-                value={originId}
-                onChange={(e) => setOriginId(e.target.value)}
-              >
-                <option value="">{tr("选择司机起始点")}</option>
-                {origins.data
-                  ?.filter((x) => x.active)
-                  .map((x) => (
-                    <option key={x.id} value={x.id}>
-                      {x.name} · {x.address}
-                    </option>
-                  ))}
-              </select>
-              <button
-                disabled={busy || !loadingSelected.size || !originId}
-                className={btn + " mt-3 w-full bg-blue-600"}
-                onClick={() =>
-                  void run(async () => {
-                    const r = await generate({ data: { tripId, originId, ids:[...loadingSelected],runId:runRequest.current } });
-                    setLoadingSelected(new Set());runRequest.current=crypto.randomUUID();
-                    setMaps((old) => ({ ...old, [r.id]: r.maps }));
-                    await refresh();
-                    setPage("routes");
-                    setExpanded(new Set([r.id]));
-                    setTripId(r.id);
-                    setFilter("");
-                  })
-                }
-              >
-                {tr("生成司机派送趟")}
-              </button>
-              <p className="mt-2 text-xs text-slate-400">
-                {tr("每张最多 21 个地点，沿用后台的 Google 月限额。新增包裹后需重新生成。")}
-              </p>
-              <div className="mt-3"><LoadingUnitList items={units} selected={loadingSelected} onSelect={selectLoading}/></div>
-            </div>
-          )}
-        </>
-      )}
       {(page === "routes" || page === "loading") && (
         <>
           <input
@@ -388,15 +309,81 @@ export function DriverWorkspace() {
               {expanded.has(t.id) && (
                 <div className="space-y-3 p-4">
                   {page === "loading" ? (
-                    <button
-                      className={btn}
-                      onClick={() => {
-                        setTripId(t.id);setLoadingSelected(new Set());
-                        window.scrollTo(0, 0);
-                      }}
-                    >
-                      {tr("继续扫描此趟")}
-                    </button>
+                    detail.isLoading || detail.data?.id !== t.id ? <p>{tr("读取中…")}</p> : (
+            <div className="space-y-3">
+              <select
+                aria-label={tr("司机起始点")}
+                className={input + " mt-4"}
+                value={originId}
+                onChange={(e) => setOriginId(e.target.value)}
+              >
+                <option value="">{tr("选择司机起始点")}</option>
+                {origins.data
+                  ?.filter((x) => x.active)
+                  .map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name} · {x.address}
+                    </option>
+                  ))}
+              </select>
+              <button
+                disabled={busy || !loadingSelected.size || !originId}
+                className={btn + " mt-3 w-full bg-blue-600"}
+                onClick={() =>
+                  void run(async () => {
+                    const r = await generate({ data: { tripId, originId, ids:[...loadingSelected],runId:runRequest.current } });
+                    setLoadingSelected(new Set());runRequest.current=crypto.randomUUID();
+                    setMaps((old) => ({ ...old, [r.id]: r.maps }));
+                    await refresh();
+                    setPage("routes");
+                    setExpanded(new Set([r.id]));
+                    setTripId(r.id);
+                    setFilter("");
+                  })
+                }
+              >
+                {tr("生成司机派送趟")}
+              </button>
+              <p className="mt-2 text-xs text-slate-400">
+                {tr("每张最多 21 个地点，沿用后台的 Google 月限额。新增包裹后需重新生成。")}
+              </p>
+              <p className="font-semibold">
+                {tr("当前趟次：")}
+                {detail.data
+                  ? `${date(detail.data.created_at)} · ${detail.data.driver_name}`
+                  : tr("读取中…")}
+              </p>
+              <p className="my-3 text-amber-300">
+                {tr("已上车 {0} 件 · 下一件 {1} 号", units.length, units.length + 1)}
+              </p>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void add(code).catch(() => {});
+                }}
+              >
+                <input
+                  aria-label={tr("上车条码")}
+                  className={input}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder={tr("扫描或输入箱号 / 运单号 / 订单号 / 国内单号")}
+                />
+                <button disabled={busy || !code.trim()} className={btn}>
+                  {tr("加入")}
+                </button>
+              </form>
+              <CameraScanButton continuous onScan={add} />
+              {message && (
+                <p role="status" className="my-3 text-emerald-300">
+                  {tr(message)}
+                </p>
+              )}
+
+              <div className="mt-3"><LoadingUnitList items={units} selected={loadingSelected} onSelect={selectLoading}/></div>
+            </div>
+                    )
                   ) : (
                     <>
                       {t.route_revision !== t.revision && (
