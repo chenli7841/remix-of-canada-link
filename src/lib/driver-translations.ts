@@ -1,4 +1,9 @@
 export const driverEnglish: Record<string, string> = {
+  "包裹选择列表": "Parcel selection list",
+  "清空勾选": "Clear selection",
+  "已选包裹": "Selected parcels",
+  "生成司机派送趟": "Create delivery trip",
+  "国内单号": "Domestic tracking number",
   "上车编号": "Loading number",
   "未填写城市": "City not provided",
   "仅司机可以扫码上车": "Only drivers can scan parcels for loading.",

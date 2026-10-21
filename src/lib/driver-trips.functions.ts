@@ -1,3 +1,4 @@
+import {canManageDriverTrips} from "./driver-trip-permissions";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -64,20 +65,23 @@ async function owned(admin: any, actor: string, id: string) {
     .single();
   if (r.error || !r.data) throw new Error("清单不存在或不属于当前司机");
   if (r.data.driver_id !== actor) {
-    const permission = await admin.rpc("is_staff", {_user_id:actor});
-    if (permission.error || !permission.data) throw new Error("无权访问其他司机的趟次");
+    if (!await canManageDriverTrips(admin,actor)) throw new Error("无权访问其他司机的趟次");
   }
   return r.data;
 }
 async function units(admin: any, tripId: string) {
+  const meta = await admin.from("driver_trips").select("loading_trip_id,delivery_unit_ids").eq("id",tripId).single();
+  if(meta.error) throw new Error(meta.error.message);
   const all: any[] = [];
   for (let offset = 0; ; offset += 500) {
-    const r = await admin
+    let query = admin
       .from("driver_trip_items")
       .select("*,unit:delivery_queue(*,batch:batches!source_batch_id(batch_no,display_name))")
-      .eq("trip_id", tripId)
+      .eq("trip_id", meta.data.loading_trip_id || tripId)
       .order("sequence")
       .range(offset, offset + 499);
+    if(meta.data.loading_trip_id) query = query.in("queue_id",meta.data.delivery_unit_ids || []);
+    const r = await query;
     if (r.error) throw new Error("上车清单读取失败：" + r.error.message);
     all.push(...r.data);
     if (r.data.length < 500) break;
@@ -119,6 +123,7 @@ export const deleteEmptyDriverTrip = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
+    if(trip.loading_trip_id) throw new Error("派送趟不能按空上车趟删除");
     const items = await admin.from("driver_trip_items").select("id").eq("trip_id", data.tripId).limit(1);
     if (items.error) throw new Error("派送单位读取失败，请稍后重试");
     if (items.data?.length) throw new Error("这趟已有派送单位，不能删除，请刷新列表");
@@ -139,8 +144,7 @@ export const createDriverTrip = createServerFn({ method: "POST" })
     const admin = await db(context);
     const driverId = data.driverId || context.userId;
     if (driverId !== context.userId) {
-      const access = await admin.rpc("is_staff", {_user_id:context.userId});
-      if (access.error || !access.data) throw new Error("无权替其他司机新建趟次");
+      if (!await canManageDriverTrips(admin,context.userId)) throw new Error("无权替其他司机新建趟次");
     }
     const role = await admin.rpc("has_role", {_user_id:driverId,_role:"driver"});
     if (role.error || !role.data) throw new Error("请选择有效司机");
@@ -171,6 +175,7 @@ export const scanDriverTrip = createServerFn({ method: "POST" })
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
 
+    if(trip.loading_trip_id) throw new Error("请在原上车趟扫码");
     const r = await admin.rpc("driver_load_unit", {
       _actor: trip.driver_id,
       _trip: data.tripId,
@@ -188,9 +193,11 @@ export const dispatchDriverUnits = createServerFn({ method: "POST" })
   .inputValidator(tripInput.extend({ ids: z.array(z.string().uuid()).min(1).max(1000) }))
   .handler(async ({ data, context }) => {
     const admin = await db(context);
+    const trip = await owned(admin,context.userId,data.tripId);
+    if(trip.loading_trip_id && data.ids.some(id=>!trip.delivery_unit_ids?.includes(id))) throw new Error("包裹不属于当前派送趟");
     const r = await admin.rpc("driver_dispatch_units", {
       _actor: context.userId,
-      _trip: data.tripId,
+      _trip: trip.loading_trip_id || data.tripId,
       _ids: data.ids,
     });
     if (r.error) throw new Error(r.error.message);
@@ -198,12 +205,14 @@ export const dispatchDriverUnits = createServerFn({ method: "POST" })
   });
 export const generateDriverRoute = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(tripInput.extend({ originId: z.string().uuid() }))
+  .inputValidator(tripInput.extend({ originId: z.string().uuid(), runId:z.string().uuid(), ids:z.array(z.string().uuid()).min(1).max(1000) }))
   .handler(async ({ data, context }) => {
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
-    const rows = await units(admin, trip.id);
-    if (!rows.length) throw new Error("请先扫码上车");
+    if(trip.loading_trip_id) throw new Error("请选择上车趟");
+    const selectedIds = [...new Set(data.ids)];
+    const rows = (await units(admin,trip.id)).filter(x=>selectedIds.includes(x.queue_id)&&x.unit?.status==="pending");
+    if(rows.length!==selectedIds.length) throw new Error("勾选包裹已派送或不属于此上车趟，请刷新");
     const origin = await admin
       .from("app_settings")
       .select("value")
@@ -271,15 +280,9 @@ export const generateDriverRoute = createServerFn({ method: "POST" })
     }
     // Persist our delivery manifest and chosen stop order, not Google map image data.
     const route = { origin: origin.data.value.address, plans };
-    const saved = await admin
-      .from("driver_trips")
-      .update({ route, route_revision: trip.revision, generated_at: new Date().toISOString() })
-      .eq("id", trip.id)
-      .eq("driver_id", trip.driver_id)
-      .eq("revision", trip.revision)
-      .select("id");
-    if (saved.error || !saved.data?.length) throw new Error("上车清单已变化，请重新生成线路");
-    return { route, maps };
+    const saved = await admin.rpc("create_driver_delivery_run",{_actor:context.userId,_id:data.runId,_loading:trip.id,_ids:selectedIds,_route:route,_revision:trip.revision});
+    if(saved.error) throw new Error(saved.error.message);
+    return { route, maps, id:data.runId };
   });
 export const loadDriverRouteMaps = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

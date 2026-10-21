@@ -9,7 +9,7 @@ import React from 'react';
 const require=createRequire(import.meta.url);
 function render(data,search=''){
  const module={exports:{}};
- const mocks={'@/components/LoadingUnitList':{LoadingUnitList:({items})=>React.createElement('div',null,items.map(i=>i.unit.code).join(' '))},'./LoadedTripActions':{NewLoadedTrip:()=>null,LoadedTripActions:()=>null},'@tanstack/react-start':{useServerFn:()=>()=>{}},'@tanstack/react-query':{useQuery:()=>({data,isLoading:false,isError:false})},'@tanstack/react-router':{Link:({children})=>React.createElement('a',null,children)},'@/lib/admin-driver-trips.functions':{listAdminLoadedTrips:()=>{}}};
+ const mocks={'@/components/LoadingUnitList':{LoadingUnitList:({items})=>React.createElement('div',null,items.map(i=>i.unit.code).join(' '))},'./LoadedTripActions':{NewLoadedTrip:()=>null,LoadedTripActions:({trip})=>React.createElement('div',null,trip.items.map(i=>i.unit.code).join(' '))},'@tanstack/react-start':{useServerFn:()=>()=>{}},'@tanstack/react-query':{useQuery:()=>({data,isLoading:false,isError:false})},'@tanstack/react-router':{Link:({children})=>React.createElement('a',null,children)},'@/lib/admin-driver-trips.functions':{listAdminLoadedTrips:()=>{}}};
  vm.runInNewContext(ts.transpileModule(readFileSync('src/components/admin/LoadedDeliveryTrips.tsx','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>mocks[id]??require(id)});
  return renderToStaticMarkup(React.createElement(module.exports.LoadedDeliveryTrips,{search}));
 }

@@ -31,7 +31,6 @@ export function LoadedDeliveryTrips({search}: {search:string}) {
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm"><span className="text-emerald-300">已派送 {trip.completed}</span><span className="text-amber-300">未派送 {trip.pending}</span><span>总单 {trip.total}</span>{trip.cancelled>0 && <span className="text-slate-400">已取消 {trip.cancelled}</span>}</div>
       </summary>
       <LoadedTripActions trip={trip}/>
-      <div className="border-t border-white/10 p-3"><LoadingUnitList items={trip.items} footer={item=>item.unit.customer_code && <Link to="/admin/delivery-queue/$customerKey" params={{customerKey:`code:${item.unit.customer_code}`}} search={{batchId:item.unit.source_batch_id || "unassigned"}} className="mt-2 inline-block text-sky-300">查看派送详情 →</Link>}/></div>
     </details>)}
   </section>;
 }

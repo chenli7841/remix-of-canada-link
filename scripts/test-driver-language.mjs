@@ -7,7 +7,7 @@ import {test} from 'node:test';
 const require=createRequire(import.meta.url);
 function load(path,mocks={}){
  const module={exports:{}};
- vm.runInNewContext(ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>mocks[id]??require(id)});
+ vm.runInNewContext(ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{crypto:globalThis.crypto,module,exports:module.exports,require:id=>mocks[id]??require(id)});
  return module.exports;
 }
 const dict=load('src/lib/driver-translations.ts');
@@ -49,7 +49,7 @@ test('driver home renders both languages without changing data-loading keys',()=
    '@tanstack/react-query':{useQuery:()=>({data:[]})},
    '@tanstack/react-start':{useServerFn:()=>async()=>[]},
    '@/lib/driver-trips.functions':{},'@/lib/delivery-route.functions':{},'@/lib/driver.functions':{},
-   '@/components/admin/CameraScanButton':{},'@/components/admin/DeliveryBatchPhotos':{},
+   '@/components/LoadingUnitList':{LoadingUnitList:()=>null},'@/components/admin/CameraScanButton':{},'@/components/admin/DeliveryBatchPhotos':{},
    '@/lib/delivery-sheet':{},'@/lib/auth':{useAuth:()=>({user:{id:'driver'}})},
    '@/lib/driver-language':{useDriverLanguage:()=>({t:(text,...args)=>t(language,text,...args),date:String,money:String})},
   });

@@ -42,6 +42,9 @@ export function DriverWorkspace() {
     originsFn = useServerFn(listDriverOrigins);
   const trips = useQuery({ queryKey: ["driver-trips", driverId], queryFn: () => list() });
   const origins = useQuery({ queryKey: ["driver-origins"], queryFn: () => originsFn() });
+  const [loadingSelected,setLoadingSelected] = useState<Set<string>>(new Set());
+  const runRequest=useRef(crypto.randomUUID());
+  const selectLoading=(ids:string[],checked:boolean)=>{runRequest.current=crypto.randomUUID();setLoadingSelected(old=>{const n=new Set(old);ids.forEach(id=>checked?n.add(id):n.delete(id));return n;});};
   const [page, setPage] = useState<"home" | "loading" | "routes" | "customer">("home"),
     [tripId, setTripId] = useState(""),
     [code, setCode] = useState(""),
@@ -114,7 +117,7 @@ export function DriverWorkspace() {
       if (!newId.current) newId.current = crypto.randomUUID();
       const t = await create({ data: { id: newId.current } });
       newId.current = null;
-      setTripId(t.id);
+      setTripId(t.id);setLoadingSelected(new Set());
       setPage("loading");
       setExpanded((s) => new Set([...s, t.id]));
       setMessage(tr("新一趟从 1 开始编号"));
@@ -154,7 +157,7 @@ export function DriverWorkspace() {
   };
   const complete = (t: any) => t.total > 0 && t.completed === t.total;
   const candidates = (trips.data || [])
-    .filter((t) => page !== "routes" || t.generated_at || t.total === 0)
+    .filter((t) => page === "loading" ? !t.loading_trip_id : page !== "routes" || t.loading_trip_id || t.generated_at)
 
     .filter(
       (t) =>
@@ -184,7 +187,8 @@ export function DriverWorkspace() {
       return n;
     });
   const openTrip = async (t: any) => {
-    setTripId(t.id);
+    setTripId(t.id);setLoadingSelected(new Set());
+    setLoadingSelected(new Set());
     toggle(t.id);
     if (page === "routes" && !maps[t.id] && !expanded.has(t.id) && t.route_revision === t.revision)
       await run(async () => {
@@ -193,7 +197,7 @@ export function DriverWorkspace() {
       });
   };
   const openCustomer = (t: any, c: any) => {
-    setTripId(t.id);
+    setTripId(t.id);setLoadingSelected(new Set());
     setCustomer(c);
     setSelected(new Set());
     setFilter(c.customer_code);
@@ -238,19 +242,25 @@ export function DriverWorkspace() {
           </button>
         </div>
       ) : (
-        <h2 className="mb-4 text-xl font-bold">
-          {page === "loading" ? tr("货物上车") : tr("司机派送")}
-        </h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold">
+            {page === "loading" ? tr("货物上车") : tr("司机派送")}
+          </h2>
+          {page === "loading" && (
+            <button
+              type="button"
+              disabled={busy}
+              className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+              onClick={() => void make()}
+            >
+              + {tr("新建上车趟次")}
+            </button>
+          )}
+        </div>
       )}
       {page === "loading" && (
         <>
-          <button
-            disabled={busy}
-            className={btn + " mb-4 w-full bg-blue-600"}
-            onClick={() => void make()}
-          >
-            {tr("新建上车趟次")}
-          </button>
+
           {tripId && (
             <div className="mb-5 rounded-xl border border-white/10 p-4">
               <p className="font-semibold">
@@ -286,7 +296,7 @@ export function DriverWorkspace() {
                   {tr(message)}
                 </p>
               )}
-              <div className="mt-3"><LoadingUnitList items={units}/></div>
+
               <select
                 aria-label={tr("司机起始点")}
                 className={input + " mt-4"}
@@ -303,24 +313,27 @@ export function DriverWorkspace() {
                   ))}
               </select>
               <button
-                disabled={busy || !units.length || !originId}
+                disabled={busy || !loadingSelected.size || !originId}
                 className={btn + " mt-3 w-full bg-blue-600"}
                 onClick={() =>
                   void run(async () => {
-                    const r = await generate({ data: { tripId, originId } });
-                    setMaps((old) => ({ ...old, [tripId]: r.maps }));
+                    const r = await generate({ data: { tripId, originId, ids:[...loadingSelected],runId:runRequest.current } });
+                    setLoadingSelected(new Set());runRequest.current=crypto.randomUUID();
+                    setMaps((old) => ({ ...old, [r.id]: r.maps }));
                     await refresh();
                     setPage("routes");
-                    setExpanded(new Set([tripId]));
+                    setExpanded(new Set([r.id]));
+                    setTripId(r.id);
                     setFilter("");
                   })
                 }
               >
-                {tr("生成并保存地图与派送线路")}
+                {tr("生成司机派送趟")}
               </button>
               <p className="mt-2 text-xs text-slate-400">
                 {tr("每张最多 21 个地点，沿用后台的 Google 月限额。新增包裹后需重新生成。")}
               </p>
+              <div className="mt-3"><LoadingUnitList items={units} selected={loadingSelected} onSelect={selectLoading}/></div>
             </div>
           )}
         </>
@@ -378,7 +391,7 @@ export function DriverWorkspace() {
                     <button
                       className={btn}
                       onClick={() => {
-                        setTripId(t.id);
+                        setTripId(t.id);setLoadingSelected(new Set());
                         window.scrollTo(0, 0);
                       }}
                     >

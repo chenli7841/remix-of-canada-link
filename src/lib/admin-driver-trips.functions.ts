@@ -1,3 +1,4 @@
+import {canManageDriverTrips} from "./driver-trip-permissions";
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
@@ -5,8 +6,8 @@ import { loadDeliveryGroups } from './delivery-queue.functions';
 import { deliveryStops } from './delivery-sheet';
 
 async function staff(context: any) {
-  const r = await context.supabase.rpc('is_staff', {_user_id: context.userId});
-  if (r.error || !r.data) throw new Error('没有分配司机派送趟的权限');
+  const allowed = await canManageDriverTrips(context.supabase,context.userId);
+  if (!allowed) throw new Error('没有分配司机派送趟的权限');
   const {supabaseAdmin} = await import('@/integrations/supabase/client.server');
   return supabaseAdmin as any;
 }
@@ -61,8 +62,8 @@ export const listAdminLoadedTrips = createServerFn({method:'GET'}).middleware([r
     const admin = await staff(context);
     const { readBatchRows } = await import('./batch-waybills.server');
     const [trips, items] = await Promise.all([
-      readBatchRows(admin, 'driver_trips', 'id,driver_name,created_at,source', q=>q),
-      readBatchRows(admin, 'driver_trip_items', 'id,trip_id,sequence,unit:delivery_queue(id,code,kind,customer_code,status,source_batch_id,batch:batches!source_batch_id(batch_no,display_name))', q=>q),
+      readBatchRows(admin, 'driver_trips', 'id,driver_name,created_at,source', q=>q.is('loading_trip_id',null)),
+      readBatchRows(admin, 'driver_trip_items', 'id,trip_id,sequence,unit:delivery_queue(id,code,kind,ref_id,customer_code,status,source_batch_id,batch:batches!source_batch_id(batch_no,display_name))', q=>q),
     ]);
     const {attachLoadingAddresses} = await import("./loading-addresses.server");
     const enrichedItems = await attachLoadingAddresses(items);
