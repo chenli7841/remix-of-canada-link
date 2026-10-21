@@ -1,3 +1,4 @@
+import { LoadedDeliveryTrips } from "@/components/admin/LoadedDeliveryTrips";
 import { AssignDriverTrip } from "@/components/admin/AssignDriverTrip";
 import { ExpressDispatchList, type ExpressDispatchListHandle } from '@/components/admin/ExpressDispatchList';
 import { ResponsiveTable, useNarrowAdminLayout } from "@/components/admin/ResponsiveTable";
@@ -21,7 +22,7 @@ import { Loader2, ArrowRight, Truck, Wallet, Check } from "lucide-react";
 
 export const Route = createFileRoute("/admin/delivery-queue/")({ component: DeliveryQueuePage });
 
-const STATUS_LABEL: Record<string, string> = { pending: "待派送", dispatched: "已派送", cancelled: "已取消" };
+const STATUS_LABEL: Record<string, string> = { pending: "待派送", loaded: "已上车", dispatched: "已派送", cancelled: "已取消" };
 
 function DeliveryQueuePage() {
   const expressListRef = useRef<ExpressDispatchListHandle>(null);
@@ -45,13 +46,14 @@ function DeliveryQueuePage() {
 
   const q = useQuery({
     queryKey: ["delivery-queue-groups", status],
+    enabled: status !== "loaded",
     queryFn: () => fetchList({ data: { status } }),
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
   });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["delivery-queue-groups"] });
+  const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: ["delivery-queue-groups"] }), qc.invalidateQueries({ queryKey: ["admin-loaded-trips"] })]); };
   const openSheet = async () => {
     if (sheetBusy) return;
     setSheetBusy(true);
@@ -151,11 +153,11 @@ function DeliveryQueuePage() {
   return (
     <Page
       title="待派送列表"
-      subtitle={`${new Set(groups.map((g: any) => g.customer_user_id || g.customer_code)).size} 个客户 · ${groups.length} 个客户批次 · 共 ${totals.count} 个派送单位`}
+      subtitle={status === "loaded" ? "按趟查看已上车及分配给司机的派送单位" : `${new Set(groups.map((g: any) => g.customer_user_id || g.customer_code)).size} 个客户 · ${groups.length} 个客户批次 · 共 ${totals.count} 个派送单位`}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-400">状态：</span>
-        {["pending", "dispatched", "cancelled"].map((s) => (
+        {["pending", "loaded", "dispatched", "cancelled"].map((s) => (
           <button
             key={s}
             onClick={() => {setStatus(s);setSelectedBatches(new Set());}}
@@ -170,11 +172,12 @@ function DeliveryQueuePage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索城市 / 客户号 / 姓名 / 电话 / 批次"
+          placeholder={status === "loaded" ? "搜索司机 / 客户号 / 单号 / 批次" : "搜索城市 / 客户号 / 姓名 / 电话 / 批次"}
           className="ml-3 w-80 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs placeholder:text-slate-500 focus:border-brand focus:outline-none"
         />
       </div>
 
+      {status === "loaded" ? <LoadedDeliveryTrips search={search}/> : <>
       {selectedBatches.size > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-sky-200"><span>已勾选 {selectedBatches.size} 个客户批次</span><button disabled={sheetBusy} className="rounded bg-brand px-3 py-2 text-white disabled:opacity-50" onClick={()=>void openSheet()}>{sheetBusy?'正在读取最新数据…':'生成派送单'}</button>{status === "pending" && <button className="rounded bg-brand px-3 py-2 text-white" onClick={()=>setTripKeys([...selectedBatches])}>生成司机派送趟</button>}<button className="text-xs underline" onClick={()=>setSelectedBatches(new Set())}>清空勾选</button></div>}
       <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
         <ResponsiveTable className="w-full text-sm">
@@ -289,6 +292,7 @@ function DeliveryQueuePage() {
           </tbody>
         </ResponsiveTable>
       </div>
+      </>}
       <ExpressDispatchList ref={expressListRef}/>
       {feeEdit && <DeliveryExtraFeeEditor group={feeEdit} onClose={()=>setFeeEdit(null)} onSaved={refresh}/>}
       {addressEdit && <DeliveryAddressEditor group={addressEdit} onClose={()=>setAddressEdit(null)} onSaved={refresh}/>}

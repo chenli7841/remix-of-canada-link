@@ -54,3 +54,21 @@ export const assignDeliveryTrip = createServerFn({method:'POST'}).middleware([re
     if(result.error) throw new Error(result.error.message);
     return {id:data.id};
   });
+
+// Staff overview uses the same trip membership and live delivery status as the driver page.
+export const listAdminLoadedTrips = createServerFn({method:'GET'}).middleware([requireSupabaseAuth])
+  .handler(async ({context}) => {
+    const admin = await staff(context);
+    const { readBatchRows } = await import('./batch-waybills.server');
+    const [trips, items] = await Promise.all([
+      readBatchRows(admin, 'driver_trips', 'id,driver_name,created_at,source', q=>q),
+      readBatchRows(admin, 'driver_trip_items', 'id,trip_id,sequence,unit:delivery_queue(id,code,kind,customer_code,status,source_batch_id,batch:batches!source_batch_id(batch_no,display_name))', q=>q),
+    ]);
+    return trips.map(trip=>{
+      const units = items.filter(item=>item.trip_id===trip.id && item.unit).sort((a,b)=>(a.sequence??0)-(b.sequence??0));
+      return {...trip,items:units,total:units.length,
+        completed:units.filter(x=>x.unit.status==='dispatched').length,
+        pending:units.filter(x=>x.unit.status==='pending').length,
+        cancelled:units.filter(x=>x.unit.status==='cancelled').length};
+    }).filter(t=>t.total>0).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
+  });
