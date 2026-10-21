@@ -50,7 +50,8 @@ export const saveDriverTripNote = createServerFn({ method: "POST" })
     return { ok: true };
   });
 async function db(context: any) {
-  await requireDriver(context);
+  const access = await context.supabase.rpc("is_staff", {_user_id:context.userId});
+  if (access.error || !access.data) await requireDriver(context);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as any;
 }
@@ -59,9 +60,13 @@ async function owned(admin: any, actor: string, id: string) {
     .from("driver_trips")
     .select("*")
     .eq("id", id)
-    .eq("driver_id", actor)
+
     .single();
   if (r.error || !r.data) throw new Error("清单不存在或不属于当前司机");
+  if (r.data.driver_id !== actor) {
+    const permission = await admin.rpc("is_staff", {_user_id:actor});
+    if (permission.error || !permission.data) throw new Error("无权访问其他司机的趟次");
+  }
   return r.data;
 }
 async function units(admin: any, tripId: string) {
@@ -118,7 +123,7 @@ export const deleteEmptyDriverTrip = createServerFn({ method: "POST" })
     if (items.error) throw new Error("派送单位读取失败，请稍后重试");
     if (items.data?.length) throw new Error("这趟已有派送单位，不能删除，请刷新列表");
     const result = await admin.from("driver_trips").delete().eq("id", data.tripId)
-      .eq("driver_id", context.userId).select("id");
+      .eq("driver_id", trip.driver_id).select("id");
     if (result.error?.code === "23503") throw new Error("这趟刚加入了派送单位，不能删除，请刷新列表");
     if (result.error || !result.data?.length) throw new Error("删除失败，请刷新列表后重试");
     const { recordAdminLog } = await import("@/lib/admin-log");
@@ -129,15 +134,22 @@ export const deleteEmptyDriverTrip = createServerFn({ method: "POST" })
   });
 export const createDriverTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(z.object({ id: z.string().uuid(), driverId: z.string().uuid().optional() }))
   .handler(async ({ data, context }) => {
     const admin = await db(context);
-    const p = await admin.from("profiles").select("full_name").eq("id", context.userId).single();
+    const driverId = data.driverId || context.userId;
+    if (driverId !== context.userId) {
+      const access = await admin.rpc("is_staff", {_user_id:context.userId});
+      if (access.error || !access.data) throw new Error("无权替其他司机新建趟次");
+    }
+    const role = await admin.rpc("has_role", {_user_id:driverId,_role:"driver"});
+    if (role.error || !role.data) throw new Error("请选择有效司机");
+    const p = await admin.from("profiles").select("full_name").eq("id", driverId).single();
     if (p.error) throw new Error("司机资料读取失败");
     const r = await admin
       .from("driver_trips")
       .upsert(
-        { id: data.id, driver_id: context.userId, driver_name: p.data.full_name || "司机" },
+        { id: data.id, driver_id: driverId, created_by: context.userId, driver_name: p.data.full_name || "司机" },
         { onConflict: "id", ignoreDuplicates: true },
       );
     if (r.error) throw new Error("新建趟次失败");
@@ -157,13 +169,17 @@ export const scanDriverTrip = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
-    if (trip.source === "admin") throw new Error("后台分配的派送趟不使用扫码上车编号");
+
     const r = await admin.rpc("driver_load_unit", {
-      _actor: context.userId,
+      _actor: trip.driver_id,
       _trip: data.tripId,
       _code: data.code,
     });
     if (r.error) throw new Error(r.error.message);
+    if (trip.driver_id !== context.userId) {
+      const { recordAdminLog } = await import("./admin-log");
+      await recordAdminLog(admin, {entity_type:"driver_trip",entity_id:trip.id,action:"后台代司机扫码上车",operator_id:context.userId,after:{driver_id:trip.driver_id,code:data.code,result:r.data}});
+    }
     return r.data as { sequence: number; duplicate: boolean };
   });
 export const dispatchDriverUnits = createServerFn({ method: "POST" })
@@ -258,7 +274,7 @@ export const generateDriverRoute = createServerFn({ method: "POST" })
       .from("driver_trips")
       .update({ route, route_revision: trip.revision, generated_at: new Date().toISOString() })
       .eq("id", trip.id)
-      .eq("driver_id", context.userId)
+      .eq("driver_id", trip.driver_id)
       .eq("revision", trip.revision)
       .select("id");
     if (saved.error || !saved.data?.length) throw new Error("上车清单已变化，请重新生成线路");

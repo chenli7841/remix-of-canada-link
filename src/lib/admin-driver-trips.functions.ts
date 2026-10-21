@@ -70,5 +70,5 @@ export const listAdminLoadedTrips = createServerFn({method:'GET'}).middleware([r
         completed:units.filter(x=>x.unit.status==='dispatched').length,
         pending:units.filter(x=>x.unit.status==='pending').length,
         cancelled:units.filter(x=>x.unit.status==='cancelled').length};
-    }).filter(t=>t.total>0).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
+    }).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
   });
