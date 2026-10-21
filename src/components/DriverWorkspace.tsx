@@ -172,6 +172,8 @@ export function DriverWorkspace() {
     );
   const shown = candidates.filter((t) => showDone || !complete(t));
   const units: any[] = detail.data?.items || [];
+  // Match driver_load_unit: gaps and hidden delivered parcels still reserve their sequence.
+  const nextLoadingSequence = units.reduce((max, item) => Math.max(max, item.sequence ?? 0), 0) + 1;
   const customerUnits = units
     .filter(
       (x) =>
@@ -356,7 +358,7 @@ export function DriverWorkspace() {
                   : tr("读取中…")}
               </p>
               <p className="my-3 text-amber-300">
-                {tr("已上车 {0} 件 · 下一件 {1} 号", units.length, units.length + 1)}
+                {tr("已上车 {0} 件 · 下一件 {1} 号", units.length, nextLoadingSequence)}
               </p>
               <form
                 className="flex gap-2"
