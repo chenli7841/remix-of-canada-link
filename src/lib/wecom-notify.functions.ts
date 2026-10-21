@@ -94,8 +94,10 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       supabaseAdmin: any;
     };
     const now = new Date().toISOString();
+    let skippedBound = 0;
     if (groups.length) {
       const existingRows: any[] = [];
+      const bindingRows: any[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error: existingError } = await supabaseAdmin
           .from("wecom_notify_groups")
@@ -105,12 +107,25 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         existingRows.push(...(data ?? []));
         if (!data || data.length < 1000) break;
       }
+      for (let from = 0; ; from += 1000) {
+        const { data, error: bindingError } = await supabaseAdmin
+          .from("wecom_notify_bindings")
+          .select("chat_id")
+          .range(from, from + 999);
+        if (bindingError) throw new Error(bindingError.message);
+        bindingRows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      const boundChatIds = new Set(bindingRows.map((row: any) => String(row.chat_id)));
       const existingByChatId = new Map(
         existingRows.map((row: any) => [String(row.chat_id), row]),
       );
       // 网关列表只返回 chat_id，因此每次同步都重新拉详情。屏蔽仅控制发送，
       // 不能阻止群名、群主和成员资料更新；否则已改名的群永远无法被发现。
-      const detailChatIds = groups.map((group) => group.chat_id);
+      const detailChatIds = groups
+        .map((group) => group.chat_id)
+        .filter((chatId) => !boundChatIds.has(chatId));
+      skippedBound = groups.length - detailChatIds.length;
       const details = [];
       const detailBatches = [];
       for (let from = 0; from < detailChatIds.length; from += 50) {
@@ -128,8 +143,9 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         groups = groups.map((group) => detailsByChatId.get(group.chat_id) ?? group);
       }
       // 使用补全后的详情更新新群与已有群的群名、群主和人数。
+      const refreshableGroups = groups.filter((group) => !boundChatIds.has(group.chat_id));
       const { error } = await supabaseAdmin.from("wecom_notify_groups").upsert(
-        groups.map((g) => {
+        refreshableGroups.map((g) => {
           const existing = existingByChatId.get(g.chat_id);
           const hasValidDetails = Boolean(g.name.trim()) || g.member_count > 0 || g.external_members.length > 0;
           const detailsChanged = Boolean(existing) && hasValidDetails && (
@@ -158,7 +174,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
         { onConflict: "chat_id" },
       );
       if (error) throw new Error(error.message);
-      const smallGroupIds = groups.filter((group) => group.member_count <= 15).map((group) => group.chat_id);
+      const smallGroupIds = refreshableGroups.filter((group) => group.member_count <= 15).map((group) => group.chat_id);
       for (let from = 0; from < smallGroupIds.length; from += 100) {
         const chatIdBatch = smallGroupIds.slice(from, from + 100);
         const { error: deleteError } = await supabaseAdmin
@@ -167,7 +183,7 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
           .in("chat_id", chatIdBatch);
         if (deleteError) throw new Error(deleteError.message);
       }
-      const externalMembers = groups.flatMap((group) =>
+      const externalMembers = refreshableGroups.flatMap((group) =>
         (group.member_count <= 15 ? group.external_members : []).map((member) => ({
           chat_id: group.chat_id,
           external_userid: member.external_userid,
@@ -187,10 +203,10 @@ export const syncWecomGroups = createServerFn({ method: "POST" })
       entity_type: "wecom_notify_group",
       entity_id: "sync",
       action: "sync",
-      after: { count: groups.length },
+      after: { count: groups.length, skipped_bound: skippedBound },
       operator_id: context.userId,
     });
-    return { ok: true, count: groups.length };
+    return { ok: true, count: groups.length, skippedBound };
   });
 
 export const setWecomGroupBlocked = createServerFn({ method: "POST" })
@@ -234,15 +250,22 @@ export const refreshSingleWecomGroup = createServerFn({ method: "POST" })
     if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
     const chatId = data.chatId.trim();
     if (!chatId) throw new Error("群 ID 不能为空");
+    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
+      supabaseAdmin: any;
+    };
+    const { data: binding, error: bindingError } = await supabaseAdmin
+      .from("wecom_notify_bindings")
+      .select("customer_code")
+      .eq("chat_id", chatId)
+      .maybeSingle();
+    if (bindingError) throw new Error(bindingError.message);
+    if (binding) throw new Error(`该群已绑定客户 ${binding.customer_code}，如需刷新请先解绑`);
     const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
     const [group] = await getExternalGroupDetails([chatId]);
     if (!group) throw new Error("企业微信未返回该群资料，群可能已经解散或无权限访问");
     if (!group.name.trim() && group.member_count === 0 && !group.external_members.length) {
       throw new Error("企业微信未返回有效群资料，已保留原群名");
     }
-    const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
-      supabaseAdmin: any;
-    };
     const now = new Date().toISOString();
     const { error } = await supabaseAdmin
       .from("wecom_notify_groups")
@@ -286,10 +309,17 @@ export const refreshWecomGroupsBatch = createServerFn({ method: "POST" })
     if (!chatIds.length) throw new Error("本页没有可刷新的群");
     if (chatIds.length > 50) throw new Error("一次最多刷新 50 个群");
     const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");
-    const groups = await getExternalGroupDetails(chatIds);
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
+    const { data: bindings, error: bindingError } = await supabaseAdmin
+      .from("wecom_notify_bindings")
+      .select("chat_id")
+      .in("chat_id", chatIds);
+    if (bindingError) throw new Error(bindingError.message);
+    const boundChatIds = new Set((bindings ?? []).map((row: any) => String(row.chat_id)));
+    const refreshableChatIds = chatIds.filter((chatId) => !boundChatIds.has(chatId));
+    const groups = await getExternalGroupDetails(refreshableChatIds);
     const now = new Date().toISOString();
     for (const group of groups) {
       const hasName = Boolean(group.name.trim());
@@ -329,10 +359,16 @@ export const refreshWecomGroupsBatch = createServerFn({ method: "POST" })
       entity_type: "wecom_notify_group",
       entity_id: "batch-refresh",
       action: "batch_refresh",
-      after: { requested: chatIds.length, refreshed: groups.length },
+      after: { requested: chatIds.length, refreshed: groups.length, skipped_bound: boundChatIds.size },
       operator_id: context.userId,
     });
-    return { ok: true, requested: chatIds.length, refreshed: groups.length, missing: chatIds.length - groups.length };
+    return {
+      ok: true,
+      requested: chatIds.length,
+      refreshed: groups.length,
+      skippedBound: boundChatIds.size,
+      missing: refreshableChatIds.length - groups.length,
+    };
   });
 
 export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
@@ -457,7 +493,16 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
       .order("synced_at", { ascending: true })
       .limit(50);
     if (pendingError) throw new Error(pendingError.message);
-    const chatIds = (pending ?? []).map((row: any) => row.chat_id as string);
+    const pendingChatIds = (pending ?? []).map((row: any) => row.chat_id as string);
+    const { data: bindings, error: bindingError } = pendingChatIds.length
+      ? await supabaseAdmin
+          .from("wecom_notify_bindings")
+          .select("chat_id")
+          .in("chat_id", pendingChatIds)
+      : { data: [], error: null };
+    if (bindingError) throw new Error(bindingError.message);
+    const boundChatIds = new Set((bindings ?? []).map((row: any) => String(row.chat_id)));
+    const chatIds = pendingChatIds.filter((chatId) => !boundChatIds.has(chatId));
     if (!chatIds.length) return { ok: true, count: 0, remaining: 0 };
 
     const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");

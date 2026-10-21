@@ -254,6 +254,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const refreshablePageRows = pageRows.filter((group) => !group.matched_customer_code);
 
   useEffect(() => {
     setPage(1);
@@ -286,7 +287,11 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
     try {
       const r: any = await sync();
       const matched: any = await autoBind();
-      toast.success(`已同步 ${r.count} 个群，并自动新增 ${matched.matched} 个客户绑定`);
+      toast.success(
+        `已同步 ${r.count} 个群，并自动新增 ${matched.matched} 个客户绑定${
+          r.skippedBound ? `；${r.skippedBound} 个已绑定群未刷新` : ""
+        }`,
+      );
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wecom-notify-groups"] }),
         qc.invalidateQueries({ queryKey: ["wecom-notify-problem-groups"] }),
@@ -358,10 +363,10 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
   };
 
   const refreshCurrentPage = async () => {
-    if (!pageRows.length) return toast.error("本页没有可刷新的群");
+    if (!refreshablePageRows.length) return toast.error("本页没有未绑定的可刷新群");
     setRefreshingPage(true);
     try {
-      const result: any = await refreshBatch({ data: { chatIds: pageRows.map((group) => group.chat_id) } });
+      const result: any = await refreshBatch({ data: { chatIds: refreshablePageRows.map((group) => group.chat_id) } });
       const matched: any = await autoBind();
       toast.success(`已刷新 ${result.refreshed} 个群资料并自动新增 ${matched.matched} 个绑定${result.missing ? `，${result.missing} 个未返回资料` : ""}`);
       await Promise.all([
@@ -406,11 +411,11 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
           </button>
           <button
             onClick={refreshCurrentPage}
-            disabled={!enabled || refreshingPage || !pageRows.length}
+            disabled={!enabled || refreshingPage || !refreshablePageRows.length}
             className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-40"
           >
             {refreshingPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            批量刷新资料并自动匹配（{pageRows.length}）
+            批量刷新资料并自动匹配（{refreshablePageRows.length}）
           </button>
           <button
             onClick={doEnrich}
@@ -562,15 +567,17 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                         </button>
                       </>
                     )}
-                    <button
-                      type="button"
-                      disabled={refreshingChatId === g.chat_id}
-                      onClick={() => refreshGroup(g)}
-                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`h-3 w-3 ${refreshingChatId === g.chat_id ? "animate-spin" : ""}`} />
-                      刷新资料并自动匹配
-                    </button>
+                    {!g.matched_customer_code && (
+                      <button
+                        type="button"
+                        disabled={refreshingChatId === g.chat_id}
+                        onClick={() => refreshGroup(g)}
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${refreshingChatId === g.chat_id ? "animate-spin" : ""}`} />
+                        刷新资料并自动匹配
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={blockingChatId === g.chat_id}
