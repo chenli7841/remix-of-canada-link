@@ -1,3 +1,4 @@
+import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -154,7 +155,7 @@ export function DriverWorkspace() {
   const complete = (t: any) => t.total > 0 && t.completed === t.total;
   const candidates = (trips.data || [])
     .filter((t) => page !== "routes" || t.generated_at || t.total === 0)
-    .filter((t) => page !== "loading" || t.source !== "admin")
+
     .filter(
       (t) =>
         !filter ||
@@ -285,25 +286,7 @@ export function DriverWorkspace() {
                   {tr(message)}
                 </p>
               )}
-              <ol className="mt-3 divide-y divide-white/10">
-                {units.map((x) => (
-                  <li key={x.id} className="flex items-center gap-3 py-3">
-                    <strong className="rounded-lg bg-amber-300 px-3 py-2 text-2xl text-slate-950">
-                      {x.sequence}
-                    </strong>
-                    <div className="min-w-0 flex-1">
-                      <p className="break-all">{x.unit.code}</p>
-                      <p className="text-xs text-slate-400">
-                        {tr("客户")}
-                        {x.unit.customer_code} · {x.unit.batch?.batch_no}
-                      </p>
-                    </div>
-                    <span className="text-xs">
-                      {x.unit.status === "dispatched" ? tr("已派送") : tr("待派送")}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <div className="mt-3"><LoadingUnitList items={units}/></div>
               <select
                 aria-label={tr("司机起始点")}
                 className={input + " mt-4"}

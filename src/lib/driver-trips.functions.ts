@@ -161,7 +161,8 @@ export const getDriverTrip = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
-    return { ...trip, items: await units(admin, trip.id) };
+    const {attachLoadingAddresses} = await import("./loading-addresses.server");
+    return { ...trip, items: await attachLoadingAddresses(await units(admin, trip.id)) };
   });
 export const scanDriverTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

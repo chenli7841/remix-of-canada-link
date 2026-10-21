@@ -1,3 +1,4 @@
+import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { NewLoadedTrip, LoadedTripActions } from "./LoadedTripActions";
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
@@ -30,12 +31,7 @@ export function LoadedDeliveryTrips({search}: {search:string}) {
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm"><span className="text-emerald-300">已派送 {trip.completed}</span><span className="text-amber-300">未派送 {trip.pending}</span><span>总单 {trip.total}</span>{trip.cancelled>0 && <span className="text-slate-400">已取消 {trip.cancelled}</span>}</div>
       </summary>
       <LoadedTripActions trip={trip}/>
-      <div className="grid gap-3 border-t border-white/10 p-3 md:grid-cols-2 xl:grid-cols-3">{trip.items.map((item:any)=><div key={item.id} className="min-w-0 rounded-lg border border-white/10 p-3 text-sm">
-        <div className="flex flex-wrap justify-between gap-2"><strong className="break-all">{item.sequence != null ? `${item.sequence}. ` : ""}{item.unit.code}</strong><span className={item.unit.status==='dispatched'?'text-emerald-300':'text-amber-300'}>{item.unit.status==='dispatched'?'已派送':item.unit.status==='cancelled'?'已取消':'未派送'}</span></div>
-        <p className="mt-2 text-slate-300">客户号 {item.unit.customer_code || '—'} · {item.unit.kind==='carton'?'箱号':item.unit.kind==='pallet'?'托盘':'运单'}</p>
-        <p className="break-words text-slate-400">{item.unit.batch?.display_name} {item.unit.batch?.batch_no}</p>
-        {item.unit.customer_code && <Link to="/admin/delivery-queue/$customerKey" params={{customerKey:`code:${item.unit.customer_code}`}} search={{batchId:item.unit.source_batch_id || 'unassigned'}} className="mt-2 inline-block text-sky-300">查看派送详情 →</Link>}
-      </div>)}</div>
+      <div className="border-t border-white/10 p-3"><LoadingUnitList items={trip.items} footer={item=>item.unit.customer_code && <Link to="/admin/delivery-queue/$customerKey" params={{customerKey:`code:${item.unit.customer_code}`}} search={{batchId:item.unit.source_batch_id || "unassigned"}} className="mt-2 inline-block text-sky-300">查看派送详情 →</Link>}/></div>
     </details>)}
   </section>;
 }

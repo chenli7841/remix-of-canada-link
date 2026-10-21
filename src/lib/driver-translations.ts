@@ -1,4 +1,6 @@
 export const driverEnglish: Record<string, string> = {
+  "上车编号": "Loading number",
+  "未填写城市": "City not provided",
   "仅司机可以扫码上车": "Only drivers can scan parcels for loading.",
   "上车清单不存在或不属于当前司机": "This loading trip does not exist or is not assigned to you.",
   "未找到唯一待派送单位，请核对箱号、运单号或托盘号": "No unique pending delivery unit was found. Check the carton, waybill or pallet number.",

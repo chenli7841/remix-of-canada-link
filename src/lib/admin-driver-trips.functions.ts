@@ -64,8 +64,10 @@ export const listAdminLoadedTrips = createServerFn({method:'GET'}).middleware([r
       readBatchRows(admin, 'driver_trips', 'id,driver_name,created_at,source', q=>q),
       readBatchRows(admin, 'driver_trip_items', 'id,trip_id,sequence,unit:delivery_queue(id,code,kind,customer_code,status,source_batch_id,batch:batches!source_batch_id(batch_no,display_name))', q=>q),
     ]);
+    const {attachLoadingAddresses} = await import("./loading-addresses.server");
+    const enrichedItems = await attachLoadingAddresses(items);
     return trips.map(trip=>{
-      const units = items.filter(item=>item.trip_id===trip.id && item.unit).sort((a,b)=>(a.sequence??0)-(b.sequence??0));
+      const units = enrichedItems.filter(item=>item.trip_id===trip.id && item.unit).sort((a,b)=>(a.sequence??0)-(b.sequence??0));
       return {...trip,items:units,total:units.length,
         completed:units.filter(x=>x.unit.status==='dispatched').length,
         pending:units.filter(x=>x.unit.status==='pending').length,
