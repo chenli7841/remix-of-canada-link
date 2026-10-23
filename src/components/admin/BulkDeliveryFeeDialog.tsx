@@ -71,6 +71,7 @@ export function BulkDeliveryFeeDialog({ batchId, onClose, onApplied }: Props) {
           若选择了对比批次，则用「本批次 + 对比批次」合并后的计费重量判断——合并后仍低于触发重量则加入派送费；
           若合并后已达到触发重量，且对比批次已为该客户收取过派送费，则在本批次为该客户加入等额折扣冲抵，避免重复收取。
           缺少计费重量时会提示补全，不会按实重或尺寸估算。
+          已确认价格的客户账单不会修改；如需添加，请先在该客户账单取消价格确认，处理完成后重新确认。
         </p>
 
         <div className="space-y-2">
@@ -120,9 +121,15 @@ export function BulkDeliveryFeeDialog({ batchId, onClose, onApplied }: Props) {
         {err && <div className="mt-2 text-xs text-rose-400">{err}</div>}
 
         {result && (
-          <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-200">
+          <div role="status" className="mt-3 space-y-2 rounded-md border border-white/20 bg-white/5 p-2.5 text-xs text-slate-100">
+            <p>
             已处理：加入派送费 {result.charged_count} 位 · 加入冲抵折扣 {result.discounted_count} 位 · 未处理{" "}
             {result.skipped_count} 位
+            </p>
+            {result.frozen?.length > 0 && <p className="text-amber-300">已确认价格，未修改：{result.frozen.join("、")}。如需添加，请先取消这些客户的价格确认，再重新执行。</p>}
+            {result.above_threshold?.length > 0 && <p>计费重量已达到触发重量，无需添加：{result.above_threshold.join("、")}</p>}
+            {result.charged?.length > 0 && <p className="text-emerald-300">已加入派送费：{result.charged.join("、")}</p>}
+            {result.discounted?.length > 0 && <p className="text-emerald-300">已加入冲抵折扣：{result.discounted.join("、")}</p>}
           </div>
         )}
 

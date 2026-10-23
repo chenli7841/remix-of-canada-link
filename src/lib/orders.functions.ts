@@ -4024,12 +4024,19 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
     if (!perCustomer.length) throw new Error("批次内没有可处理的客户账单");
 
     // 已确认价格的客户账单已冻结 —— 跳过，不改他们的派送费
-    const { data: confirmedRows } = await supabaseAdmin
+    const { data: confirmedRows, error: confirmedError } = await supabaseAdmin
       .from("batch_settlements")
       .select("customer_code")
       .eq("batch_id", data.batchId)
       .eq("confirmed", true);
+    if (confirmedError) throw new Error("读取价格确认状态失败：" + confirmedError.message);
     const confirmedCodes = new Set<string>((confirmedRows ?? []).map((r: any) => r.customer_code));
+    const frozen = [...new Set(perCustomer.filter(c => confirmedCodes.has(c.customer_code)).map(c => c.customer_code as string))];
+    if (frozen.length === new Set(perCustomer.map(c => c.customer_code)).size) {
+      return { ok: true, charged_count: 0, discounted_count: 0, skipped_count: frozen.length,
+        charged: [], discounted: [], skipped: frozen, frozen, above_threshold: [],
+        grand_total_cny: summary.grand_total_cny };
+    }
     // Validate saved totals before deleting any existing delivery fees.
     const currentByCode = deliveryWeightsByCustomer(perCustomer, confirmedCodes);
 
@@ -4058,12 +4065,14 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
         .eq("batch_id", data.batchId)
         .like("note", `${prefix}%`);
       if (confirmedList.length) del = del.not("customer_code", "in", `(${confirmedList.join(",")})`);
-      await del;
+      const { error: deleteError } = await del;
+      if (deleteError) throw new Error("清理上次批量派送费失败：" + deleteError.message);
     }
 
     const charged: string[] = [];
     const discounted: string[] = [];
-    const skipped: string[] = [...new Set(perCustomer.filter(c => confirmedCodes.has(c.customer_code)).map(c => c.customer_code as string))];
+    const skipped: string[] = [...frozen];
+    const aboveThreshold: string[] = [];
     const rows: any[] = [];
     for (const [code, current] of currentByCode) {
       const curWeight = current.weight;
@@ -4091,6 +4100,7 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
         discounted.push(code);
       } else {
         skipped.push(code);
+        aboveThreshold.push(code);
       }
     }
     if (rows.length) {
@@ -4099,13 +4109,15 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
     }
 
     const newSummary = await computeBatchFeeSummary(supabaseAdmin, data.batchId);
-    await supabaseAdmin
+    const { error: summaryError } = await supabaseAdmin
       .from("batches")
       .update({
         grand_total_cny: newSummary.grand_total_cny,
         fee_breakdown: { ...newSummary, computed_at: new Date().toISOString() },
       })
       .eq("id", data.batchId);
+
+    if (summaryError) throw new Error("派送费已保存，但批次汇总刷新失败，请刷新页面核对：" + summaryError.message);
 
     // 已确认客户已在上面整体跳过，账单冻结不动；未确认客户下次点确认时才会生成账单。
 
@@ -4117,6 +4129,8 @@ export const bulkApplyBatchDeliveryFee = createServerFn({ method: "POST" })
       charged,
       discounted,
       skipped,
+      frozen,
+      above_threshold: aboveThreshold,
       grand_total_cny: newSummary.grand_total_cny,
     };
   });
