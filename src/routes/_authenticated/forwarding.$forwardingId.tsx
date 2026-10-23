@@ -68,7 +68,9 @@ function ForwardingDetailPage() {
       setFo(data ?? null);
       setWaybills(wb ?? []);
       setFItems(fi ?? []);
-      if (data?.address_id) {
+      if (data?.address_snapshot) {
+        setShipAddr(data.address_snapshot);
+      } else if (data?.address_id) {
         const { data: a } = await sb.from("addresses").select("*").eq("id", data.address_id).maybeSingle();
         setShipAddr(a ?? null);
       }

@@ -1050,6 +1050,7 @@ export type Database = {
       }
       delivery_queue: {
         Row: {
+          address_snapshot: Json | null
           added_by: string | null
           code: string
           created_at: string
@@ -1069,6 +1070,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address_snapshot?: Json | null
           added_by?: string | null
           code: string
           created_at?: string
@@ -1088,6 +1090,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address_snapshot?: Json | null
           added_by?: string | null
           code?: string
           created_at?: string
@@ -1625,6 +1628,7 @@ export type Database = {
       }
       forwarding_orders: {
         Row: {
+          address_snapshot: Json | null
           actual_weight_kg: number | null
           address_id: string | null
           aliases: string[]
@@ -1675,6 +1679,7 @@ export type Database = {
           width_cm: number | null
         }
         Insert: {
+          address_snapshot?: Json | null
           actual_weight_kg?: number | null
           address_id?: string | null
           aliases?: string[]
@@ -1725,6 +1730,7 @@ export type Database = {
           width_cm?: number | null
         }
         Update: {
+          address_snapshot?: Json | null
           actual_weight_kg?: number | null
           address_id?: string | null
           aliases?: string[]

@@ -1,3 +1,4 @@
+import {resolveDriverRouteAddresses} from "./driver-route-addresses";
 import {canManageDriverTrips} from "./driver-trip-permissions";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -105,11 +106,13 @@ export const listDriverTrips = createServerFn({ method: "GET" })
       trips.push(...r.data);
       if (r.data.length < 200) break;
     }
+    const currentGroups = (await loadDeliveryGroups("")).groups;
     return Promise.all(
       trips.map(async (t) => {
         const rows = await units(admin, t.id);
         return {
           ...t,
+          route: resolveDriverRouteAddresses(t.route, currentGroups),
           total: rows.length,
           completed: rows.filter((x) => x.unit?.status === "dispatched").length,
         };
@@ -166,7 +169,7 @@ export const getDriverTrip = createServerFn({ method: "GET" })
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
     const {attachLoadingAddresses} = await import("./loading-addresses.server");
-    return { ...trip, items: await attachLoadingAddresses(await units(admin, trip.id)) };
+    return { ...trip, route: resolveDriverRouteAddresses(trip.route, (await loadDeliveryGroups("")).groups), items: await attachLoadingAddresses(await units(admin, trip.id)) };
   });
 export const scanDriverTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -292,8 +295,9 @@ export const loadDriverRouteMaps = createServerFn({ method: "GET" })
     const t = await owned(admin, context.userId, data.tripId);
     if (!t.route || t.route_revision !== t.revision)
       throw new Error("上车清单已变化，请重新生成线路");
+    const currentRoute = resolveDriverRouteAddresses(t.route, (await loadDeliveryGroups("")).groups);
     const maps = [];
-    for (const plan of t.route.plans) {
+    for (const plan of currentRoute.plans) {
       const r = await computeDeliveryRoute(
         {
           origin: plan.origin,

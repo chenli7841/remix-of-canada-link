@@ -908,8 +908,8 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
         .maybeSingle();
       user = u;
     }
-    let shippingAddress: any = null;
-    if (foR.data.address_id) {
+    let shippingAddress: any = foR.data.address_snapshot;
+    if (!shippingAddress && foR.data.address_id) {
       const { data: addr } = await supabaseAdmin
         .from("addresses")
         .select("*")
@@ -1277,10 +1277,10 @@ export const getWaybillDetail = createServerFn({ method: "POST" })
       } else if (wb.forwarding_id) {
         const { data: f } = await supabaseAdmin
           .from("forwarding_orders")
-          .select("user_id, address_id, address:address_id(destination_code)")
+          .select("user_id, address_snapshot, address_id, address:address_id(destination_code)")
           .eq("id", wb.forwarding_id)
           .maybeSingle();
-        address_destination_code = (f as any)?.address?.destination_code ?? null;
+        address_destination_code = (f as any)?.address_snapshot?.destination_code ?? null;
         if (!address_destination_code && (f as any)?.user_id) {
           const { data: a } = await supabaseAdmin
             .from("addresses").select("destination_code")
@@ -1588,7 +1588,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     selectByIds(
       admin,
       "forwarding_orders",
-      "id, request_no, customer_code, user_id, route_code, route_id, fee_cny, address_id, address:address_id(postal_code)",
+      "id, request_no, customer_code, user_id, route_code, route_id, fee_cny, address_snapshot, address_id, address:address_id(postal_code)",
       "id",
       fwdIds,
     ),
@@ -4660,7 +4660,8 @@ export const getLabelData = createServerFn({ method: "POST" })
       if (!f) throw new Error("Forwarding not found");
       parent = f;
       entityNo = f.request_no || f.tracking_no || "";
-      if (f.address_id) {
+      address = f.address_snapshot;
+      if (!address && f.address_id) {
         const { data: a } = await supabaseAdmin.from("addresses").select("*").eq("id", f.address_id).maybeSingle();
         address = a;
       }

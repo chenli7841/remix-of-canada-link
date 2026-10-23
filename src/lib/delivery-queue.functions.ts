@@ -8,7 +8,7 @@ import { normalizeCanadaAddress } from '@/lib/canada-address';
 export const saveDeliveryAddress = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({
-    userId: z.string().uuid(), addressId: z.string().uuid().nullable(),
+    ids: z.array(z.string().uuid()).min(1).max(10000), expectedAddress: z.record(z.string(), z.any()),
     line1: z.string().trim().min(1, '请填写详细地址').max(300), line2: z.string().trim().max(300),
     city: z.string().trim().min(1, '请选择城市').max(100), province: z.string().trim().min(1, '请选择省份').max(100),
     country: z.string().trim().min(2).max(100), postal_code: z.string().trim().min(1, '请填写邮编').max(30),
@@ -19,19 +19,10 @@ export const saveDeliveryAddress = createServerFn({ method: 'POST' })
     const normalized=normalizeCanadaAddress(data);
     if(['CA','CANADA','加拿大'].includes(data.country.toUpperCase())&&!normalized.matched)throw new Error('请从列表选择省份和城市');
     const address={line1:data.line1,line2:data.line2,city:normalized.city,province:normalized.province,country:normalized.country,postal_code:data.postal_code};
-    const id=data.addressId||data.userId;
-    const beforeQuery=data.addressId
-      ? admin.from('addresses').select('*').eq('id',id).eq('user_id',data.userId)
-      : admin.from('profiles').select('*').eq('id',id);
-    const {data:before,error:readError}=await beforeQuery.single();
-    if(readError||!before)throw new Error('地址不存在或已删除，请刷新列表');
-    const patch=data.addressId?address:{reg_address:data.line1,reg_city:address.city,reg_province:address.province,reg_country:address.country,reg_postal_code:address.postal_code};
-    const query=data.addressId
-      ? admin.from('addresses').update(address).eq('id',id).eq('user_id',data.userId)
-      : admin.from('profiles').update(patch).eq('id',id);
-    const {error}=await query.select('id').single();
+    const {error}=await (admin as any).rpc('update_delivery_unit_address', {
+      _actor:context.userId,_ids:data.ids,_expected:data.expectedAddress,_address:address,
+    });
     if(error)throw new Error('地址保存失败：'+error.message);
-    await logAction(admin,context.userId,'修改派送收货地址',id,patch,'从待派送列表修改客户地址');
     return {ok:true};
   });
 
@@ -444,14 +435,16 @@ export async function loadDeliveryGroups(status: string, customerCode?: string) 
     const list = Array.from(groups.values())
       .map((g) => {
         const p = g.customer_user_id ? profileMap.get(g.customer_user_id) : null;
-        const a = g.customer_user_id ? addrMap.get(g.customer_user_id) : null;
+        const raw = g.address_snapshot || {};
+        const a = {...raw, line1: raw.line1 || raw.address || '', recipient: raw.recipient || raw.name,
+          province: raw.province || raw.state, postal_code: raw.postal_code || raw.postal};
         const w = g.customer_user_id ? walletMap.get(g.customer_user_id) : null;
-        const address = a
+        const address = a.formatted_address || (a
           ? [a.line1, a.line2, a.city, a.province, a.country, a.postal_code].filter(Boolean).join(" ")
           : p
             ? [p.reg_address, p.reg_city, p.reg_province, p.reg_country, p.reg_postal_code].filter(Boolean).join(" ")
-            : "";
-        const phone = a?.phone || p?.phone || p?.reg_phone || null;
+            : "");
+        const phone = a?.phone || null;
         const feeCny = extraFeeMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) ?? g.fee_cny;
         return {
           ...g,
@@ -464,15 +457,15 @@ export async function loadDeliveryGroups(status: string, customerCode?: string) 
           settlement_note: settlementNoteMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) || '',
           fee_cad: +(feeCny * fx).toFixed(2),
           customer_code: g.customer_code || p?.customer_code || null,
-          full_name: p?.full_name || (a?.recipient ?? null),
+          full_name: a?.recipient || p?.full_name || null,
           phone,
           address,
-          editable_address: g.customer_user_id ? {
-            userId:g.customer_user_id, addressId:a?.id || null,
+          editable_address: {
+            ids:g.ids, expectedAddress:g.address_versions,
             line1:a ? a.line1 || '' : p?.reg_address || '', line2:a?.line2 || '',
             city:(a ? a.city : p?.reg_city) || '', province:(a ? a.province : p?.reg_province) || '',
             country:(a ? a.country : p?.reg_country) || 'CA', postal_code:(a ? a.postal_code : p?.reg_postal_code) || '',
-          } : null,
+          },
           city: (a ? a.city : p?.reg_city) || null,
           province: (a ? a.province : p?.reg_province) || null,
           country: (a ? a.country : p?.reg_country) || null,
@@ -529,7 +522,7 @@ export const getCustomerDelivery = createServerFn({ method: "GET" })
         supabaseAdmin.from("wallets").select("*").eq("user_id", data.customerUserId).maybeSingle(),
       ]);
       profile = p ?? null;
-      address = (addrs ?? [])[0] ?? null;
+      address = items[0]?.address_snapshot ?? null;
       wallet = w ?? null;
     }
 

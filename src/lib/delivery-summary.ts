@@ -10,13 +10,15 @@ export function groupDeliveryUnits(items: any[]) {
     const parentCarton = carton?.customer_code?.trim() ? carton : null;
     const owner = parentPallet || parentCarton || it;
     const customerKey = owner.customer_user_id || 'code:' + (owner.customer_code || 'unknown');
-    const key = customerKey + ':' + scope(owner);
+    const snapshot = owner.address_snapshot || {};
+    const key = customerKey + ':' + scope(owner) + ':' + JSON.stringify(snapshot);
     if (!groups.has(key)) groups.set(key, { key, customer_user_id: owner.customer_user_id ?? null,
       customer_code: owner.customer_code ?? null, batch_id: owner.source_batch_id ?? null,
-      count: 0, waybill_count: 0, carton_count: 0, pallet_count: 0, weight_kg: 0, fee_cny: 0,
+      address_snapshot: snapshot, address_versions: {}, count: 0, waybill_count: 0, carton_count: 0, pallet_count: 0, weight_kg: 0, fee_cny: 0,
       ids: [], earliest_at: owner.created_at, latest_at: owner.created_at });
     const g = groups.get(key);
     g.ids.push(it.id);
+    g.address_versions[it.id] = it.address_snapshot || {};
     // Covered descendants stay in the operation scope but do not count twice.
     if (owner !== it || units.get(scope(it) + ':' + it.kind + ':' + it.ref_id) !== it) continue;
     g.count++; g[it.kind + '_count']++;

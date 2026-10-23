@@ -90,7 +90,7 @@ export async function expressContext(
   const root = await dbOne(tables[source.kind], source.id);
   let address = root.address_snapshot;
   let owner = root.user_id ?? root.customer_user_id ?? null;
-  if (source.kind === "forwarding" && root.address_id)
+  if (!address && source.kind === "forwarding" && root.address_id)
     address = await dbOne("addresses", root.address_id);
   if (source.kind === "waybill") {
     const parent = root.order_id

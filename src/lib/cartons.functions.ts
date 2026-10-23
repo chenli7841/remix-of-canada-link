@@ -1020,7 +1020,7 @@ export const assignToCarton = createServerFn({ method: "POST" })
             `
           id, waybill_no,
           orders:order_id(route_code, customer_code, user_id, address_snapshot, destination_code),
-          forwarding_orders:forwarding_id(route_code, customer_code, user_id, address_id, destination_code, warehouse)
+          forwarding_orders:forwarding_id(route_code, customer_code, user_id, address_snapshot, address_id, destination_code, warehouse)
         `,
           )
           .in("id", data.waybillIds);
@@ -1042,7 +1042,7 @@ export const assignToCarton = createServerFn({ method: "POST" })
       if (data.forwardingIds?.length) {
         const { data: rows } = await supabaseAdmin
           .from("forwarding_orders")
-          .select("id, request_no, route_code, customer_code, user_id, address_id, destination_code, warehouse")
+          .select("id, request_no, route_code, customer_code, user_id, address_snapshot, address_id, destination_code, warehouse")
           .in("id", data.forwardingIds);
         fs = rows ?? [];
         for (const f of fs) if (f.address_id) addrIds.push(f.address_id);
@@ -1102,7 +1102,7 @@ export const assignToCarton = createServerFn({ method: "POST" })
         noteLock(o.customer_code ?? null, o.user_id ?? null, o.address_snapshot, o.order_no);
       }
       for (const f of fs) {
-        const address = f.address_id ? addrMap.get(f.address_id) : null;
+        const address = f.address_snapshot ?? (f.address_id ? addrMap.get(f.address_id) : null);
         const reason = mismatchReason(
           carton,
           {
@@ -1549,7 +1549,7 @@ export const assignToPallet = createServerFn({ method: "POST" })
             `
           id, waybill_no,
           orders:order_id(customer_code, user_id, address_snapshot),
-          forwarding_orders:forwarding_id(customer_code, user_id, address_id)
+          forwarding_orders:forwarding_id(customer_code, user_id, address_snapshot, address_id)
         `,
           )
           .in("id", data.waybillIds);
@@ -1571,7 +1571,7 @@ export const assignToPallet = createServerFn({ method: "POST" })
       if (data.forwardingIds?.length) {
         const { data: rows } = await supabaseAdmin
           .from("forwarding_orders")
-          .select("id, request_no, customer_code, user_id, address_id")
+          .select("id, request_no, customer_code, user_id, address_snapshot, address_id")
           .in("id", data.forwardingIds);
         fs = rows ?? [];
         for (const f of fs) if (f.address_id) addrIds.push(f.address_id);
@@ -1617,7 +1617,7 @@ export const assignToPallet = createServerFn({ method: "POST" })
         noteLock(o.customer_code ?? null, o.user_id ?? null, o.address_snapshot, o.order_no);
       }
       for (const f of fs) {
-        const address = f.address_id ? addrMap.get(f.address_id) : null;
+        const address = f.address_snapshot ?? (f.address_id ? addrMap.get(f.address_id) : null);
         const reason = palletAddressMismatch(pallet, address, f.customer_code, f.request_no ?? "");
         if (reason) throw new Error(reason);
         noteLock(f.customer_code ?? null, f.user_id ?? null, address, f.request_no ?? "");

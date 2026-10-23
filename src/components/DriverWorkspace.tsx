@@ -1,3 +1,4 @@
+import {driverRouteMapKey} from "@/lib/driver-route-addresses";
 import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { driverTripPrintHtml } from "@/lib/driver-trip-print";
 import { useRef, useState } from "react";
@@ -41,7 +42,7 @@ export function DriverWorkspace() {
     generate = useServerFn(generateDriverRoute),
     readMaps = useServerFn(loadDriverRouteMaps),
     originsFn = useServerFn(listDriverOrigins);
-  const trips = useQuery({ queryKey: ["driver-trips", driverId], queryFn: () => list() });
+  const trips = useQuery({ queryKey: ["driver-trips", driverId], queryFn: () => list(), refetchInterval: 15000 });
   const origins = useQuery({ queryKey: ["driver-origins"], queryFn: () => originsFn() });
   const [loadingSelected,setLoadingSelected] = useState<Set<string>>(new Set());
   const runRequest=useRef(crypto.randomUUID());
@@ -66,6 +67,7 @@ export function DriverWorkspace() {
     queryKey: ["driver-trip", driverId, tripId],
     queryFn: () => read({ data: { tripId } }),
     enabled: !!tripId,
+    refetchInterval: 15000,
   });
   const readCustomer = useServerFn(searchDriverDeliveries);
   const liveCustomer = useQuery({
@@ -73,7 +75,10 @@ export function DriverWorkspace() {
     queryFn: () =>
       readCustomer({ data: { customerCode: customer.customer_code, includeCompleted: true } }),
     enabled: page === "customer" && !!customer?.customer_code,
+    refetchInterval: 15000,
   });
+  const customerAddress = detail.data?.route?.plans?.flatMap((p: any) => p.stops.flatMap((s: any) => s.customers))
+    .find((c: any) => c.customer_code === customer?.customer_code && c.ids?.some((id: string) => customer?.ids?.includes(id)))?.address ?? customer?.address;
   const groupFor = (batchId: string) =>
     liveCustomer.data?.find((g) => g.batch_id === batchId) ||
     customer?.groups.find((g: any) => g.batch_id === batchId);
@@ -134,9 +139,9 @@ export function DriverWorkspace() {
       try {
         const current = await read({ data: { tripId: t.id } });
         if (current.route_revision !== current.revision) throw new Error(tr('上车清单已变化，请重新生成线路'));
-        const images = maps[t.id]?.length === current.route?.plans?.length && maps[t.id]?.every(Boolean)
-          ? maps[t.id] : await readMaps({ data: { tripId: t.id } });
-        setMaps(old => ({ ...old, [t.id]: images }));
+        const images = maps[driverRouteMapKey(current)]?.length === current.route?.plans?.length && maps[driverRouteMapKey(current)]?.every(Boolean)
+          ? maps[driverRouteMapKey(current)] : await readMaps({ data: { tripId: t.id } });
+        setMaps(old => ({ ...old, [driverRouteMapKey(current)]: images }));
         const html = driverTripPrintHtml(current, images, tr, date(current.created_at));
         if (popup.closed) return;
         popup.document.open(); popup.document.write(html); popup.document.close();
@@ -208,10 +213,10 @@ export function DriverWorkspace() {
     setLoadingSelected(new Set());
     if (page === "loading") setExpanded(old => old.has(t.id) ? new Set() : new Set([t.id]));
     else toggle(t.id);
-    if (page === "routes" && !maps[t.id] && !expanded.has(t.id) && t.route_revision === t.revision)
+    if (page === "routes" && !maps[driverRouteMapKey(t)] && !expanded.has(t.id) && t.route_revision === t.revision)
       await run(async () => {
         const m = await readMaps({ data: { tripId: t.id } });
-        setMaps((old) => ({ ...old, [t.id]: m }));
+        setMaps((old) => ({ ...old, [driverRouteMapKey(t)]: m }));
       });
   };
   const openCustomer = (t: any, c: any) => {
@@ -352,7 +357,7 @@ export function DriverWorkspace() {
                   void run(async () => {
                     const r = await generate({ data: { tripId, originId, ids:[...loadingSelected],runId:runRequest.current } });
                     setLoadingSelected(new Set());runRequest.current=crypto.randomUUID();
-                    setMaps((old) => ({ ...old, [r.id]: r.maps }));
+                    setMaps((old) => ({ ...old, [driverRouteMapKey(r)]: r.maps }));
                     await refresh();
                     setPage("routes");
                     setExpanded(new Set([r.id]));
@@ -480,9 +485,9 @@ export function DriverWorkspace() {
                               </a>
                             </div>
                           ))}
-                          {maps[t.id]?.[index] ? (
+                          {maps[driverRouteMapKey(t)]?.[index] ? (
                             <img
-                              src={maps[t.id][index]!}
+                              src={maps[driverRouteMapKey(t)][index]!}
                               alt={tr("Google 派送路线地图")}
                               className="w-full rounded-xl"
                             />
@@ -493,7 +498,7 @@ export function DriverWorkspace() {
                               onClick={() =>
                                 void run(async () => {
                                   const m = await readMaps({ data: { tripId: t.id } });
-                                  setMaps((old) => ({ ...old, [t.id]: m }));
+                                  setMaps((old) => ({ ...old, [driverRouteMapKey(t)]: m }));
                                 })
                               }
                             >
@@ -539,8 +544,8 @@ export function DriverWorkspace() {
             <strong className="text-xl">
               {customer.customer_code} · {customer.name}
             </strong>
-            <p className="my-2 font-bold">{customer.address}</p>
-            {customer.address && <a className={btn + " mb-2 inline-flex items-center text-blue-300"} href={googlePlace(customer.address)} target="_blank" rel="noopener noreferrer">{tr("Google地图搜索")} ↗</a>}
+            <p className="my-2 font-bold">{customerAddress}</p>
+            {customerAddress && <a className={btn + " mb-2 inline-flex items-center text-blue-300"} href={googlePlace(customerAddress)} target="_blank" rel="noopener noreferrer">{tr("Google地图搜索")} ↗</a>}
             <a
               className="text-blue-300"
               href={"tel:" + String(customer.phone || "").replace(/[^+\d]/g, "")}

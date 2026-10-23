@@ -23,7 +23,7 @@ export const listAssignableDrivers = createServerFn({method:'GET'}).middleware([
     return result.data as {id:string; full_name:string}[];
   });
 export const assignDeliveryTrip = createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
-  .inputValidator(z.object({id:z.string().uuid(),driverId:z.string().uuid(),originId:z.string().uuid(),keys:z.array(z.string().min(1).max(300)).min(1).max(1000)}))
+  .inputValidator(z.object({id:z.string().uuid(),driverId:z.string().uuid(),originId:z.string().uuid(),keys:z.array(z.string().min(1).max(4000)).min(1).max(1000)}))
   .handler(async ({data,context})=>{
     const admin = await staff(context);
     const previous = await admin.from('driver_trips').select('id,created_by,driver_id,origin_id').eq('id',data.id).maybeSingle();

@@ -115,14 +115,14 @@ export async function assembleOrderResponse(
   const { data: fo, error: foErr } = await admin
     .from("forwarding_orders")
     .select(
-      "id, request_no, domestic_tracking_no, route_code, status, note, updated_at, customer_code, address_id, user_id",
+      "id, request_no, domestic_tracking_no, route_code, status, note, updated_at, customer_code, address_snapshot, address_id, user_id",
     )
     .eq("id", order.forwarding_id)
     .maybeSingle();
   if (foErr) throw foErr;
   if (!fo) throw new ShipApiError("ORDER_NOT_FOUND", "运单不存在");
 
-  const { data: addr } = fo.address_id
+  const { data: addr } = fo.address_snapshot ? {data: fo.address_snapshot} : fo.address_id
     ? await admin
         .from("addresses")
         .select("recipient, phone, country, province, city, postal_code, line1, line2, destination_code")

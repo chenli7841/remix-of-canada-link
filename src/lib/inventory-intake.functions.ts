@@ -34,7 +34,7 @@ function itemKey(name: string, sku: any) {
 async function loadOrder(admin: any, forwardingId: string) {
   const { data: order } = await admin
     .from("forwarding_orders")
-    .select("id, request_no, user_id, customer_code, warehouse, route_id, route_code, destination_code, address_id, shipping_method, status")
+    .select("id, request_no, user_id, customer_code, warehouse, route_id, route_code, destination_code, address_snapshot, address_id, shipping_method, status")
     .eq("id", forwardingId)
     .maybeSingle();
   if (!order) throw new Error("订单不存在");
@@ -229,8 +229,8 @@ export const inventoryIntakeCommit = createServerFn({ method: "POST" })
     // 可选：入库同时直接成托盘（与正常入库扫描后的装托一致）
     let palletNo: string | null = null;
     if (data.makePallet) {
-      let addr: any = null;
-      if ((order as any).address_id) {
+      let addr: any = (order as any).address_snapshot;
+      if (!addr && (order as any).address_id) {
         const { data: a } = await supabaseAdmin
           .from("addresses")
           .select("*")
