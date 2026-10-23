@@ -115,6 +115,7 @@ export const listDriverTrips = createServerFn({ method: "GET" })
           route: resolveDriverRouteAddresses(t.route, currentGroups),
           total: rows.length,
           completed: rows.filter((x) => x.unit?.status === "dispatched").length,
+          dispatched_ids: rows.filter((x) => x.unit?.status === "dispatched").map((x) => x.queue_id),
         };
       }),
     );

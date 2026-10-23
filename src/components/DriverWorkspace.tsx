@@ -182,6 +182,8 @@ export function DriverWorkspace() {
   };
   const complete = (t: any) => t.total > 0 && t.completed === t.total;
   const matchesCustomer = (c: any) => !filter.trim() || String(c.customer_code || '').includes(filter.trim());
+  const visibleCustomer = (t: any, c: any) => matchesCustomer(c) &&
+    (showDone || !c.ids?.length || c.ids.some((id: string) => !t.dispatched_ids?.includes(id)));
   const candidates = (trips.data || [])
     .filter((t) => page === "loading" ? !t.loading_trip_id : page !== "routes" || t.loading_trip_id || t.generated_at)
 
@@ -197,7 +199,8 @@ export function DriverWorkspace() {
   const customerUnits = units
     .filter(
       (x) =>
-        x.unit?.customer_code === customer?.customer_code && customer?.ids.includes(x.queue_id),
+        x.unit?.customer_code === customer?.customer_code && customer?.ids.includes(x.queue_id) &&
+        (showDone || x.unit?.status !== "dispatched"),
     )
     .sort(
       (a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER),
@@ -230,7 +233,7 @@ export function DriverWorkspace() {
     <section className="pb-28">
       {page !== "home" && (
         <button
-          className={btn + " mb-4"}
+          className="mb-4 min-h-11 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-500"
           onClick={() => {
             setPage(page === "customer" ? "routes" : "home");
             setFilter("");
@@ -292,23 +295,21 @@ export function DriverWorkspace() {
             onChange={(e) => setFilter(e.target.value)}
           />
           )}
-          <button className={btn + " mb-3"} onClick={() => setShowDone((v) => !v)}>
-            {showDone ? tr("隐藏") : tr("显示")}
-            {tr("已完成（")}
-            {candidates.filter(complete).length}
-            {tr("趟）")}
-          </button>
+          <label className="mb-3 flex min-h-11 items-center gap-2 text-slate-200">
+            <input type="checkbox" className="h-5 w-5 accent-blue-500" checked={showDone} onChange={e => setShowDone(e.target.checked)} />
+            {tr("显示全部（含已派送）")}
+          </label>
           {trips.isLoading && <p>{tr("正在读取趟次…")}</p>}
           {trips.isError && <p role="alert">{tr(trips.error.message)}</p>}
           {!trips.isLoading && !shown.length && (
             <p className="p-4 text-slate-400">
-              {tr("暂无待派送趟次，可点击“显示已完成”查看历史清单。")}
+              {tr("暂无待派送趟次，勾选“显示全部”查看历史清单。")}
             </p>
           )}
-          {shown.map((t) => (
-            <article key={t.id} className="mb-4 overflow-hidden rounded-xl border border-white/10">
+          {shown.map((t, tripIndex) => (
+            <article key={t.id} className={"mb-4 overflow-hidden rounded-xl border " + (tripIndex % 2 === 0 ? "border-slate-500/50 bg-slate-900/50" : "border-sky-500/40 bg-sky-950/30")}>
               <button
-                className="w-full bg-slate-800 p-4 text-left"
+                className={"w-full p-4 text-left " + (tripIndex % 2 === 0 ? "bg-slate-800" : "bg-sky-900")}
                 aria-expanded={expanded.has(t.id)}
                 onClick={() => void openTrip(t)}
               >
@@ -405,7 +406,7 @@ export function DriverWorkspace() {
                 </p>
               )}
 
-              <div className="mt-3"><LoadingUnitList items={units} selected={loadingSelected} onSelect={selectLoading}/></div>
+              <div className="mt-3"><LoadingUnitList showAll={showDone} items={units} selected={loadingSelected} onSelect={selectLoading}/></div>
             </div>
                     )
                   ) : (
@@ -418,7 +419,7 @@ export function DriverWorkspace() {
                           {tr("上车清单已变化，请回到货物上车重新生成线路。")}
                         </p>
                       )}
-                      {t.route?.plans?.map((plan: any, index: number) => plan.stops.some((stop: any) => stop.customers.some(matchesCustomer)) && (
+                      {t.route?.plans?.map((plan: any, index: number) => plan.stops.some((stop: any) => stop.customers.some((c: any) => visibleCustomer(t, c))) && (
                         <div key={index} className="space-y-3">
                           <h3 className="font-bold">{tr("第 {0} 张派送线路", index + 1)}</h3>
                           <p className="text-xs text-slate-400">
@@ -444,12 +445,12 @@ export function DriverWorkspace() {
                               </a>
                             ))}
                           </div>
-                          {plan.stops.map((stop: any, i: number) => stop.customers.some(matchesCustomer) && (
+                          {plan.stops.map((stop: any, i: number) => stop.customers.some((c: any) => visibleCustomer(t, c)) && (
                             <div key={i} className="rounded-xl border border-white/15 p-3">
                               <p className="text-sm text-amber-300">
                                 {tr("第 {0} 站", index * 21 + i + 1)}
                               </p>
-                              {stop.customers.filter(matchesCustomer).map((c: any) => (
+                              {stop.customers.filter((c: any) => visibleCustomer(t, c)).map((c: any) => (
                                 <button
                                   key={c.customer_code}
                                   className="mr-3 min-h-11 text-2xl font-bold text-blue-300"
@@ -540,7 +541,11 @@ export function DriverWorkspace() {
             />
             <button className={btn}>{tr("搜索")}</button>
           </form>
-          <div className="mb-4 rounded-xl bg-slate-800 p-4">
+          <label className="mb-3 flex min-h-11 items-center gap-2 text-slate-200">
+            <input type="checkbox" className="h-5 w-5 accent-blue-500" checked={showDone} onChange={e => setShowDone(e.target.checked)} />
+            {tr("显示全部（含已派送）")}
+          </label>
+          {customerUnits.length > 0 && <div className="mb-4 rounded-xl bg-slate-800 p-4">
             <strong className="text-xl">
               {customer.customer_code} · {customer.name}
             </strong>
@@ -552,7 +557,7 @@ export function DriverWorkspace() {
             >
               {customer.phone}
             </a>
-          </div>
+          </div>}
           <CameraScanButton
             continuous
             onScan={(value) => {
