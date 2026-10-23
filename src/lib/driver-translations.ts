@@ -1,4 +1,6 @@
 export const driverEnglish: Record<string, string> = {
+  "未记录": "Not recorded",
+  "体积重": "Volumetric weight",
   "显示全部（含已派送）": "Show all (including delivered)",
   "暂无待派送趟次，勾选“显示全部”查看历史清单。": "No pending trips. Select Show all to view completed trips.",
   "按客户号筛选": "Filter by customer ID",

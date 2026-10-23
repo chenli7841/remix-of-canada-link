@@ -643,6 +643,7 @@ export function DriverWorkspace() {
                           : tr("独立运单")}
                     </p>
                     <p>{x.unit.code}</p>
+                    <p className="mt-2 text-slate-200">{tr("体积重")}：{x.volumetric_weight_kg == null ? tr("未记录") : `${Number(x.volumetric_weight_kg.toFixed(3))} kg`}</p>
                     <p className="mt-2 text-amber-200">
                       {tr("结算备注：")}
                       {groupFor(x.unit.source_batch_id)?.settlement_note || tr("未填写")}
