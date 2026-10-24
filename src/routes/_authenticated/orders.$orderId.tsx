@@ -1,3 +1,4 @@
+import {OrderTracking} from "@/components/order-tracking";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -395,6 +396,8 @@ function OrderDetailPage() {
           <Card title={tr("运单（含批次/轨迹）", "Waybills (batch & tracking)")} icon={<Boxes className="h-4 w-4" />}>
             <WaybillsList ownerKind="order" ownerId={order.id} lang={lang} />
           </Card>
+
+          <Card title={tr("物流轨迹", "Tracking")} icon={<Boxes className="h-4 w-4" />}><OrderTracking no={order.order_no} lang={lang} /></Card>
 
           {/* Attachments */}
           <Card title={tr("附件 / 单据", "Attachments")} icon={<Paperclip className="h-4 w-4" />}>

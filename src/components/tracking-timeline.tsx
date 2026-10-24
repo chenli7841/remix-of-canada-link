@@ -27,7 +27,7 @@ export function TrackingTimeline({ events, lang }: { events: TrackingEvent[]; la
     );
   }
   // sort ascending by time (oldest first); latest highlighted at the bottom
-  const sorted = [...events].sort((a, b) => +new Date(a.event_time) - +new Date(b.event_time));
+  const sorted = [...events].sort((a, b) => Number(b.status_zh === "订单已生成") - Number(a.status_zh === "订单已生成") || +new Date(a.event_time) - +new Date(b.event_time));
   const lastIdx = sorted.length - 1;
   return (
     <ol className="relative space-y-0 p-6">
@@ -35,7 +35,7 @@ export function TrackingTimeline({ events, lang }: { events: TrackingEvent[]; la
         const active = i === lastIdx;
         const loc = lang === "zh" ? ev.location_zh : ev.location_en;
         const status = lang === "zh" ? ev.status_zh : ev.status_en;
-        const src = SOURCE_META[(ev.source ?? "admin_manual") as TrackingSource];
+        const src = SOURCE_META[(ev.source ?? "admin_manual") as TrackingSource] ?? SOURCE_META.admin_action;
         const SrcIcon = src.icon;
         return (
           <li key={i} className="relative flex gap-4 pb-6 last:pb-0">
@@ -45,7 +45,7 @@ export function TrackingTimeline({ events, lang }: { events: TrackingEvent[]; la
             <span className="relative z-10 mt-1">
               {active ? <CheckCircle2 className="h-6 w-6 text-success" /> : <Circle className="h-6 w-6 text-border" />}
             </span>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 break-words">
               <div className="flex flex-wrap items-baseline gap-2">
                 <div className={`text-sm font-semibold ${active ? "text-foreground" : "text-ink-soft"}`}>{status}</div>
                 {loc && <div className="text-xs text-ink-soft">· {loc}</div>}

@@ -1,9 +1,10 @@
+import {lookupOrderTracking,OrderTrackingResultView,type OrderTrackingResult} from "@/components/order-tracking";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useApp } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { TrackingTimeline, type TrackingEvent } from "@/components/tracking-timeline";
-import { Plane, Ship, Search, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/track")({
   head: () => ({
@@ -34,7 +35,8 @@ interface ShipmentLookup {
 function TrackPage() {
   const { t, lang } = useApp();
   const [no, setNo] = useState("");
-  const [result, setResult] = useState<ShipmentLookup | "notfound" | null>(null);
+  const [result, setResult] = useState<OrderTrackingResult | "notfound" | null>(null);
+  const [error,setError]=useState("");
   const [busy, setBusy] = useState(false);
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
 
@@ -43,11 +45,10 @@ function TrackPage() {
     const q = no.trim();
     if (!q) return;
     setBusy(true);
-    const { data, error } = await supabase.rpc("track_by_any_no", { _input: q });
-    setBusy(false);
-    if (error) return setResult("notfound");
-    if (!data) return setResult("notfound");
-    setResult(data as unknown as ShipmentLookup);
+    setError(""); setResult(null);
+    try { setResult(await lookupOrderTracking(q) ?? "notfound"); }
+    catch(e:any){setError(e.message?.includes("关联多个订单") ? tr("该单号关联多个订单，请使用完整订单号查询", "Multiple orders match. Please enter the full order number.") : tr("查询失败，请重试","Lookup failed. Please retry."));}
+    finally {setBusy(false);}
   };
 
   return (
@@ -83,35 +84,11 @@ function TrackPage() {
         </div>
       )}
 
-      {result && result !== "notfound" && (
-        <div className="mt-10 overflow-hidden rounded-3xl border border-border bg-surface">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-hero p-6 text-white">
-            <div>
-              <div className="text-xs uppercase tracking-wider text-white/60">Tracking #</div>
-              <div className="font-display text-2xl font-bold">{result.tracking_no}</div>
-              {result.current_location && (
-                <div className="mt-1 text-sm text-white/80">
-                  {tr("当前位置", "Current")}: {result.current_location}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm backdrop-blur">
-                {result.shipping_method === "sea" ? <Ship className="h-4 w-4" /> : <Plane className="h-4 w-4" />}
-                {t(result.shipping_method === "sea" ? "shipping.sea" : "shipping.air")}
-                {result.eta && (
-                  <>
-                    <span className="mx-2 text-white/40">·</span>ETA {result.eta}
-                  </>
-                )}
-              </div>
-              {result.carrier && <div className="text-xs text-white/60">{result.carrier}</div>}
-            </div>
-          </div>
-
-          <TrackingTimeline events={result.events} lang={lang} />
-        </div>
-      )}
+      {error && <p role="alert" className="mt-6 text-center text-sm text-red-500">{error}</p>}
+      {result && result !== "notfound" && <section className="mt-8 rounded-2xl border border-border bg-surface">
+        <h2 className="break-all border-b border-border p-5 text-xl font-bold">{tr("订单号","Order")}：{result.order_no}</h2>
+        <OrderTrackingResultView key={result.order_no} result={result} lang={lang}/>
+      </section>}
     </div>
   );
 }

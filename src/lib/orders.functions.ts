@@ -1294,7 +1294,13 @@ export const getWaybillDetail = createServerFn({ method: "POST" })
       waybill: wb,
       address_destination_code,
 
-      events: (eventsR as any).data ?? [],
+      events: await (async () => {
+        const parentId = wb.order_id || wb.forwarding_id;
+        if (!parentId) return (eventsR as any).data ?? [];
+        const {data: tracking, error} = await (supabaseAdmin as any).rpc("order_tracking_view", {_kind: wb.order_id ? "order" : "forwarding", _id: parentId});
+        if (error) throw new Error("物流轨迹读取失败");
+        return tracking?.waybills?.find((w: any) => w.id === wb.id)?.events ?? [];
+      })(),
       logs: logsR.data ?? [],
       surcharges: (scR as any).data ?? [],
       items_breakdown,

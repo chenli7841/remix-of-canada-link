@@ -1,3 +1,4 @@
+import {OrderTracking,OrderTrackingDisclosure} from "@/components/order-tracking";
 import { AddressLocationPicker } from '@/components/AddressLocationPicker';
 import { canadaLocations, provinceOptions, normalizeCanadaAddress } from '@/lib/canada-address';
 import React from "react";
@@ -17,7 +18,6 @@ import { listMyBatches, payMyBatch } from "@/lib/orders.functions";
 import { startWechatBind, unbindWechat } from "@/lib/wechat.functions";
 import { generateWechatAiBindCode } from "@/lib/wechat-ai-bind.functions";
 import { toast } from "sonner";
-import { TrackingTimeline } from "@/components/tracking-timeline";
 import { HsCodeInput } from "@/components/HsCodeInput";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 import { orderVolumetricWeight } from "@/lib/saved-volumetric-weight";
@@ -1646,25 +1646,8 @@ function BatchCard({
   const [itemsOpen, setItemsOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [dutyOpen, setDutyOpen] = useState(false);
-  const [events, setEvents] = useState<any[] | null | "err">(null);
 
-  const toggleTrack = async () => {
-    const next = !trackOpen;
-    setTrackOpen(next);
-    if (next && events === null) {
-      if (b.intl_tracking_nos.length === 0) return setEvents("err");
-      const results = await Promise.all(b.intl_tracking_nos.map((t) => sb.rpc("lookup_shipment", { _tracking_no: t })));
-      const all: any[] = [];
-      results.forEach((r: any, i: number) => {
-        const evs = r?.data?.events ?? [];
-        const ref = b.intl_tracking_nos[i];
-        evs.forEach((e: any) => all.push({ ...e, source_ref: e.source_ref ?? ref }));
-      });
-      if (all.length === 0) return setEvents("err");
-      all.sort((a, b) => +new Date(a.event_time) - +new Date(b.event_time));
-      setEvents(all);
-    }
-  };
+  const toggleTrack = () => setTrackOpen(open => !open);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface">
@@ -1890,20 +1873,13 @@ function BatchCard({
         >
           <MapPin className="h-3 w-3" />
           {tr("批次物流轨迹", "Batch tracking")}
-          {b.intl_tracking_nos.length > 0 && <span className="text-ink-soft">({b.intl_tracking_nos.length})</span>}
+          <span className="text-ink-soft">({new Set(b.items.map(item=>item.no)).size})</span>
           <span className="text-ink-soft">{trackOpen ? "▲" : "▼"}</span>
         </button>
         {trackOpen && (
           <div className="mt-2 overflow-hidden rounded-xl border border-border bg-background">
-            {events === null && (
-              <div className="grid place-items-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
-              </div>
-            )}
-            {events === "err" && (
-              <div className="py-4 text-center text-xs text-ink-soft">{tr("暂无轨迹数据", "No tracking data yet")}</div>
-            )}
-            {Array.isArray(events) && <TrackingTimeline events={events as any} lang={lang} />}
+            {[...new Map(b.items.map(item=>[item.no,item])).values()].map(item=><OrderTrackingDisclosure key={item.no} no={item.no} lang={lang} defaultOpen={b.items.length===1}/>)}
+            {!b.items.length && <p className="p-4 text-sm">{tr("暂无关联订单","No associated orders")}</p>}
           </div>
         )}
       </div>
@@ -3076,13 +3052,13 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
             {(o.waybills?.length ?? 0) > 0 && <WaybillsDropdown waybills={o.waybills!} lang={lang} />}
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {o.tracking_no && (o.waybills?.length ?? 0) === 0 && (
+              {(o.waybills?.length ?? 0) === 0 && (
                 <button
                   onClick={() => setOpenId(openId === `${o.kind}-${o.id}` ? null : `${o.kind}-${o.id}`)}
                   className="inline-flex items-center gap-2 text-xs text-brand hover:underline"
                 >
                   {o.kind === "order" ? <Package className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                  {tr("追踪", "Track")}: {o.tracking_no}
+                  {tr("追踪", "Track")}: {o.no}
                   <span className="text-ink-soft">{openId === `${o.kind}-${o.id}` ? "▲" : "▼"}</span>
                 </button>
               )}
@@ -3120,7 +3096,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
                 </>
               )}
             </div>
-            {openId === `${o.kind}-${o.id}` && o.tracking_no && <InlineTrack trackingNo={o.tracking_no} />}
+            {openId === `${o.kind}-${o.id}` && <InlineTrack trackingNo={o.no} />}
           </div>
         ))}
       </div>
@@ -3654,28 +3630,9 @@ function WalletTab() {
 }
 
 // ===================== Helpers =====================
-function InlineTrack({ trackingNo }: { trackingNo: string }) {
-  const { lang } = useApp();
-  const [data, setData] = useState<any | null | "err">(null);
-  useEffect(() => {
-    sb.rpc("lookup_shipment", { _tracking_no: trackingNo }).then(({ data, error }: any) => {
-      if (error || !data) return setData("err");
-      setData(data);
-    });
-  }, [trackingNo]);
-  if (data === null)
-    return (
-      <div className="mt-3 grid h-20 place-items-center">
-        <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
-      </div>
-    );
-  if (data === "err")
-    return <div className="mt-3 text-xs text-ink-soft">{lang === "zh" ? "暂无轨迹数据" : "No tracking data yet"}</div>;
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-border bg-background">
-      <TrackingTimeline events={(data as any).events ?? []} lang={lang} />
-    </div>
-  );
+function InlineTrack({trackingNo}:{trackingNo:string}) {
+ const {lang}=useApp();
+ return <div className="mt-4 rounded-xl border border-border"><OrderTracking no={trackingNo} lang={lang}/></div>;
 }
 
 const inputCls =

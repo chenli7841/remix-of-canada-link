@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { TrackingTimeline } from "@/components/tracking-timeline";
+import { OrderTracking } from "@/components/order-tracking";
 import { METHOD_LABEL } from "@/lib/admin-shared";
 import { Loader2, Box, Ruler, Weight, Hash, Plane, Ship, Truck, Archive, Layers, Calendar, MapPin, ChevronDown } from "lucide-react";
 
@@ -78,20 +78,10 @@ export function WaybillsList({
 
 function WaybillRow({ w, index, lang, tr }: { w: Waybill; index: number; lang: "zh" | "en"; tr: (zh: string, en: string) => string }) {
   const [open, setOpen] = useState(false);
-  const [track, setTrack] = useState<any | null | "err">(null);
   const dims = [w.length_cm, w.width_cm, w.height_cm].filter((v) => v != null);
   const label = STATUS_LABEL[w.status] ?? [w.status, w.status];
 
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (next && track === null && w.intl_tracking_no) {
-      const { data, error } = await sb.rpc("lookup_shipment", { _tracking_no: w.intl_tracking_no });
-      if (error || !data) setTrack("err"); else setTrack(data);
-    } else if (next && !w.intl_tracking_no) {
-      setTrack("err");
-    }
-  };
+  const toggle = () => setOpen(!open);
 
   return (
     <li className="rounded-xl border border-border bg-background/40 p-3">
@@ -150,15 +140,7 @@ function WaybillRow({ w, index, lang, tr }: { w: Waybill; index: number; lang: "
         </button>
         {open && (
           <div className="mt-2 overflow-hidden rounded-xl border border-border bg-background">
-            {track === null && (
-              <div className="grid place-items-center py-4"><Loader2 className="h-4 w-4 animate-spin text-ink-soft" /></div>
-            )}
-            {track === "err" && (
-              <div className="py-4 text-center text-xs text-ink-soft">{tr("暂无轨迹数据", "No tracking data yet")}</div>
-            )}
-            {track && track !== "err" && (
-              <TrackingTimeline events={(track as any).events ?? []} lang={lang} />
-            )}
+            <OrderTracking no={w.waybill_no} waybillId={w.id} lang={lang}/>
           </div>
         )}
       </div>

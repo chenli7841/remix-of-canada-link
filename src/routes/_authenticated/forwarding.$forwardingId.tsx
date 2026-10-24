@@ -1,3 +1,4 @@
+import {OrderTracking} from "@/components/order-tracking";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -6,7 +7,6 @@ import { useApp } from "@/lib/i18n";
 import { savedVolumetricWeight, orderVolumetricWeight } from "@/lib/saved-volumetric-weight";
 import { OrderAttachments } from "@/components/order-attachments";
 import { WaybillsList } from "@/components/waybills-list";
-import { TrackingTimeline } from "@/components/tracking-timeline";
 import {
   ArrowLeft,
   Package,
@@ -48,7 +48,6 @@ function ForwardingDetailPage() {
   const [waybills, setWaybills] = useState<any[]>([]);
   const [fItems, setFItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<any[]>([]);
 
   const [shipAddr, setShipAddr] = useState<any | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
@@ -87,32 +86,6 @@ function ForwardingDetailPage() {
           .maybeSingle();
         setRouteInfo(r ?? null);
       }
-      // Timeline: follow only the first waybill (avoid duplicating events across all waybills)
-      const firstWaybillNo = (wb ?? [])[0]?.waybill_no ?? null;
-      const allEvents: any[] = [];
-      if (firstWaybillNo) {
-        const { data: ships } = await sb.from("shipments").select("id, tracking_no").eq("tracking_no", firstWaybillNo);
-        const shipIds = (ships ?? []).map((s: any) => s.id);
-        if (shipIds.length) {
-          const { data: evs } = await sb
-            .from("tracking_events")
-            .select("*")
-            .in("shipment_id", shipIds)
-            .order("event_time");
-          for (const e of evs ?? []) allEvents.push(e);
-        }
-      }
-      if (data) {
-        allEvents.push({
-          status_zh: "订单已生成",
-          status_en: "Order created",
-          location_zh: data.warehouse ?? null,
-          location_en: data.warehouse ?? null,
-          event_time: data.created_at,
-          source: "admin_manual",
-        });
-      }
-      setEvents(allEvents);
       setLoading(false);
     })();
   }, [forwardingId]);
@@ -524,7 +497,7 @@ function ForwardingDetailPage() {
 
           {/* Tracking timeline */}
           <Card title={tr("物流轨迹", "Tracking timeline")} icon={<Activity className="h-4 w-4" />}>
-            <TrackingTimeline events={events as any} lang={lang} />
+            <OrderTracking no={fo.request_no} lang={lang} />
           </Card>
 
           {/* Attachments */}

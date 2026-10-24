@@ -1,3 +1,4 @@
+import {OrderTracking} from "@/components/order-tracking";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
@@ -21,7 +22,6 @@ import { Loader2, PackageCheck, Plus, Copy, Printer, X, Calculator, Repeat, Penc
 import { renderLabel } from "@/lib/label-render";
 import { LabelSizeToggle } from "@/components/admin/LabelSizeToggle";
 import { WorkflowStepper, WAYBILL_FLOW } from "@/components/admin/WorkflowStepper";
-import { TrackingTimeline } from "@/components/tracking-timeline";
 import { OrderAttachments } from "@/components/order-attachments";
 import { SurchargePanel } from "@/components/admin/SurchargePanel";
 import { ForwardingLoadingInfo } from "@/components/admin/ForwardingLoadingInfo";
@@ -388,15 +388,7 @@ function FwDetail() {
 
       <Card title="物流轨迹">
         <div className="[&_*]:!text-white [&_.text-ink-soft]:!text-white/70 [&_.text-border]:!text-white/30">
-          {(events ?? []).length === 0
-            ? <div className="p-3 text-xs text-white/70">暂无轨迹</div>
-            : <TrackingTimeline events={(events ?? []).map((e: any) => ({
-                status_zh: e.status_zh, status_en: e.status_en,
-                location_zh: e.location_zh, location_en: e.location_en,
-                event_time: e.event_time,
-                source: e.source === "admin" ? "admin_action" : e.source === "third_party" ? "third_party" : "admin_manual",
-                source_ref: e.source_ref ?? null,
-              }))} lang="zh" />}
+          <OrderTracking no={fo.request_no} lang="zh" />
         </div>
       </Card>
 

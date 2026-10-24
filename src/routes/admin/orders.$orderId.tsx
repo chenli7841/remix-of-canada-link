@@ -1,3 +1,4 @@
+import {OrderTracking} from "@/components/order-tracking";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
@@ -237,6 +238,7 @@ function OrderDetail() {
         </ResponsiveTable>
       </Card>
 
+      <Card title="物流轨迹"><div className="[&_*]:!text-white"><OrderTracking no={order.order_no} lang="zh" /></div></Card>
       <Card title="客户上传的文件 / 图片">
         <div className="[&_*]:!text-white [&_.text-ink-soft]:!text-white/70 [&_.border-border]:!border-white/10 [&_.divide-border]:!divide-white/10">
           <OrderAttachments ownerKind="order" ownerId={order.id} lang="zh" />

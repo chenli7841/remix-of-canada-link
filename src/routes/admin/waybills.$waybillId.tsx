@@ -292,8 +292,8 @@ function WaybillDetail() {
         <div className="space-y-2">
           {events.length === 0 && <div className="text-xs text-white/60">暂无</div>}
           {events.map((ev: any) => (
-            <div key={ev.id} className="rounded-md border border-white/5 bg-white/[0.02] p-2 text-xs text-white">
-              {editing === ev.id ? (
+            <div key={ev.id ?? "order-created"} className="rounded-md border border-white/5 bg-white/[0.02] p-2 text-xs text-white">
+              {ev.id && editing === ev.id ? (
                 <div className="flex flex-wrap gap-2">
                   <input value={editForm.status_zh} onChange={(e) => setEditForm({ ...editForm, status_zh: e.target.value })}
                     className="w-32 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"/>
@@ -310,7 +310,7 @@ function WaybillDetail() {
                     <div className="font-semibold text-white">{ev.status_zh}</div>
                     <div className="text-white/80">{ev.location_zh ?? "—"} · {fmtDate(ev.event_time)} · 来源 {ev.source}</div>
                   </div>
-                  {canManage && (
+                  {canManage && ev.id && (
                     <div className="flex gap-1">
                       <button onClick={() => { setEditing(ev.id); setEditForm({ status_zh: ev.status_zh, location_zh: ev.location_zh ?? "", event_time: ev.event_time?.slice(0,16) ?? "" }); }}
                         className="rounded p-1 text-slate-400 hover:bg-white/10"><Pencil className="h-3 w-3"/></button>
