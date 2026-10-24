@@ -32,6 +32,10 @@ function WaybillDetail() {
   const saveDomesticFn = useServerFn(updateWaybillDomesticTrackingNo);
 
   const detailQ = useQuery({ queryKey: ["admin-waybill", waybillId], queryFn: () => fetchDetail({ data: { waybillId } }) });
+  const refreshTracking = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] }),
+    qc.invalidateQueries({ queryKey: ["unified-order-tracking"] }),
+  ]);
   const presetsQ = useQuery({ queryKey: ["tracking-presets"], queryFn: () => fetchPresets() });
   const meQ = useQuery({ queryKey: ["my-roles"], queryFn: () => fetchRoles(), staleTime: 60_000 });
   const canManage = (meQ.data?.roles ?? []).some(r => r === "owner" || r === "manager");
@@ -57,7 +61,7 @@ function WaybillDetail() {
     try {
       await saveDomesticFn({ data: { waybillId, domestic_tracking_no: dtValue } });
       setDtEditing(false);
-      await qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] });
+      await refreshTracking();
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -65,7 +69,7 @@ function WaybillDetail() {
     setBusy(true); setErr(null);
     try {
       await setStatusFn({ data: { waybillIds: [waybillId], status: newStatus, note: statusNote || undefined } });
-      setStatusNote(""); await qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] });
+      setStatusNote(""); await refreshTracking();
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   const onAddEvent = async () => {
@@ -82,7 +86,7 @@ function WaybillDetail() {
       }
       await addEvent({ data: { waybillIds: [waybillId], event } });
       setEvStatus(""); setEvLoc(""); setPresetCode("");
-      await qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] });
+      await refreshTracking();
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   const onEditSave = async (id: string) => {
@@ -90,13 +94,13 @@ function WaybillDetail() {
     try {
       await editEvent({ data: { eventId: id, patch: { status_zh: editForm.status_zh, location_zh: editForm.location_zh, event_time: editForm.event_time || undefined } } });
       setEditing(null);
-      await qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] });
+      await refreshTracking();
     } finally { setBusy(false); }
   };
   const onDelete = async (id: string) => {
     if (!confirm("删除该轨迹？")) return;
     await delEvent({ data: { eventId: id } });
-    await qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] });
+    await refreshTracking();
   };
 
   return (
