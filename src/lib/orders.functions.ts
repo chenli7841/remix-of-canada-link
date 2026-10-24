@@ -891,7 +891,7 @@ export const getForwardingDetail = createServerFn({ method: "POST" })
       supabaseAdmin
         .from("admin_action_logs")
         .select("*")
-        .eq("entity_type", "forwarding")
+        .in("entity_type", ["forwarding", "customer_forwarding"])
         .eq("entity_id", data.id)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -1207,6 +1207,25 @@ function toFraction(n: number): {
   const display = whole > 0 && rem > 0 ? `${whole} ${rem}/${k}` : whole > 0 ? String(whole) : `${h}/${k}`;
   return { display, numerator: h, denominator: k, value: h / k };
 }
+
+export const getWaybillActionLogs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { waybillId: string; offset?: number }) => {
+    if (!/^[0-9a-f-]{36}$/i.test(d.waybillId)) throw new Error("运单编号无效");
+    const offset = d.offset ?? 0;
+    if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("分页参数无效");
+    return { waybillId: d.waybillId, offset };
+  })
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin.from("admin_action_logs")
+      .select("*").eq("entity_type", "waybill").eq("entity_id", data.waybillId)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .range(data.offset, data.offset + 50);
+    if (error) throw new Error("运单操作记录读取失败，请重试");
+    return { logs: (rows ?? []).slice(0, 50), hasMore: (rows ?? []).length > 50 };
+  });
 
 export const getWaybillDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

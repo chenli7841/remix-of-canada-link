@@ -35,6 +35,7 @@ function WaybillDetail() {
   const refreshTracking = () => Promise.all([
     qc.invalidateQueries({ queryKey: ["admin-waybill", waybillId] }),
     qc.invalidateQueries({ queryKey: ["unified-order-tracking"] }),
+    qc.invalidateQueries({ queryKey: ["admin-waybill-action-logs", waybillId] }),
   ]);
   const presetsQ = useQuery({ queryKey: ["tracking-presets"], queryFn: () => fetchPresets() });
   const meQ = useQuery({ queryKey: ["my-roles"], queryFn: () => fetchRoles(), staleTime: 60_000 });

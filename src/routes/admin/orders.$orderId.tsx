@@ -1,3 +1,4 @@
+import { WaybillActionLogs } from "@/components/admin/WaybillActionLogs";
 import {OrderTracking} from "@/components/order-tracking";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
@@ -245,7 +246,7 @@ function OrderDetail() {
         </div>
       </Card>
 
-      <Card title="操作记录（内部）">
+      <Card title="订单操作记录（内部）">
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {logs.length === 0 && <div className="text-xs text-slate-500">暂无</div>}
           {logs.map((l: any) => (
@@ -260,6 +261,8 @@ function OrderDetail() {
           ))}
         </div>
       </Card>
+
+      <Card title="运单操作记录"><WaybillActionLogs waybills={waybills} /></Card>
 
       {err && <div className="text-xs text-rose-400">{err}</div>}
     </div>
