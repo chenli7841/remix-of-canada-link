@@ -1,4 +1,5 @@
 export const driverEnglish: Record<string, string> = {
+  "未派送站点 {0} / 共 {1} 站": "Stops remaining {0} / {1} total",
   "完成派送（{0}）": "Complete delivery ({0})",
   "保存备注": "Save notes",
   "填写或修改结算备注": "Enter or edit settlement notes",

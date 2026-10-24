@@ -1,4 +1,4 @@
-import {driverRouteMapKey} from "@/lib/driver-route-addresses";
+import {driverRouteMapKey, driverStopProgress} from "@/lib/driver-route-addresses";
 import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { driverTripPrintHtml } from "@/lib/driver-trip-print";
 import { useRef, useState } from "react";
@@ -23,7 +23,7 @@ import {
 } from "@/lib/driver.functions";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { DeliveryBatchPhotos } from "@/components/admin/DeliveryBatchPhotos";
-import { googlePlace, navigationLinks, stopLabel } from "@/lib/delivery-sheet";
+import { googlePlace, stopLabel } from "@/lib/delivery-sheet";
 import { useAuth } from "@/lib/auth";
 import { useDriverLanguage } from "@/lib/driver-language";
 const btn = "min-h-11 rounded-xl border border-white/15 bg-slate-800 px-4 py-2 disabled:opacity-40";
@@ -319,6 +319,9 @@ export function DriverWorkspace() {
                 <p className="mt-2 text-sm text-emerald-300">
                   {tr("已派送 {0} / 共 {1} 个派送单位", t.completed, t.total)}
                 </p>
+                {page === "routes" && <p className="mt-2 text-sm font-semibold text-amber-300">
+                  {tr("未派送站点 {0} / 共 {1} 站", driverStopProgress(t).remaining, driverStopProgress(t).total)}
+                </p>}
               </button>
               {t.total === 0 && (
                 <div className="px-4 pb-3">
@@ -421,30 +424,6 @@ export function DriverWorkspace() {
                       )}
                       {t.route?.plans?.map((plan: any, index: number) => plan.stops.some((stop: any) => stop.customers.some((c: any) => visibleCustomer(t, c))) && (
                         <div key={index} className="space-y-3">
-                          <h3 className="font-bold">{tr("第 {0} 张派送线路", index + 1)}</h3>
-                          <p className="text-xs text-slate-400">
-                            {tr("出发：")}
-                            {plan.origin}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {navigationLinks(
-                              plan.stops.map((s: any) => s.address),
-                              plan.origin,
-                              false,
-                            ).map((n, i) => (
-                              <a
-                                key={i}
-                                className={btn + " text-blue-300"}
-                                href={n.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {tr("导航")}
-                                {stopLabel(n.from - 1)}–{stopLabel(n.to - 1)}
-                                {tr("站 ↗")}
-                              </a>
-                            ))}
-                          </div>
                           {plan.stops.map((stop: any, i: number) => stop.customers.some((c: any) => visibleCustomer(t, c)) && (
                             <div key={i} className="rounded-xl border border-white/15 p-3">
                               <p className="text-sm text-amber-300">

@@ -47,3 +47,13 @@ export function driverRouteMapKey(trip: any) {
   return trip.id + ':' + JSON.stringify(trip.route?.plans?.map((p: any) =>
     [p.origin, ...p.stops.map((s: any) => s.address)]));
 }
+
+// Count saved route stops, not parcels or customers. A partially delivered stop remains open.
+export function driverStopProgress(trip: any) {
+  const delivered = new Set<string>(trip.dispatched_ids || []);
+  const stops = trip.route?.plans?.flatMap((plan: any) => plan.stops || []) || [];
+  const remaining = stops.filter((stop: any) => (stop.customers || []).some((customer: any) =>
+    !customer.ids?.length || customer.ids.some((id: string) => !delivered.has(id)),
+  )).length;
+  return {total: stops.length, remaining};
+}
