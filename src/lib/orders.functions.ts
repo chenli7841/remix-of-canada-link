@@ -2204,6 +2204,9 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   const mergedRuleMap = new Map<string, any>();
   for (const rule of mergedRules.data ?? []) if (!mergedRuleMap.has(rule.route_id)) mergedRuleMap.set(rule.route_id, rule);
   for (const b of buckets.values()) {
+    // Child waybills may create a duty/insurance-only route bucket while their
+    // customer carton/pallet owns freight. Do not require a second freight weight.
+    if (!b.freight_weight_inputs.length && !b.freight_waybill_ids.size && b.freight === 0) continue;
     if (!b.customer_code) continue;
     if (!b.route_id) continue;
     const rule = mergedRuleMap.get(b.route_id);
