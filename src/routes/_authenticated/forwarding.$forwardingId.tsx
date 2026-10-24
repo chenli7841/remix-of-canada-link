@@ -1,4 +1,3 @@
-import {OrderTracking} from "@/components/order-tracking";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -13,7 +12,6 @@ import {
   Plane,
   Hash,
   Loader2,
-  Activity,
   Receipt,
   ShieldCheck,
   FileText,
@@ -493,11 +491,6 @@ function ForwardingDetailPage() {
                 )}
               </div>
             </div>
-          </Card>
-
-          {/* Tracking timeline */}
-          <Card title={tr("物流轨迹", "Tracking timeline")} icon={<Activity className="h-4 w-4" />}>
-            <OrderTracking no={fo.request_no} lang={lang} />
           </Card>
 
           {/* Attachments */}
