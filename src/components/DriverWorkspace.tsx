@@ -23,7 +23,7 @@ import {
 } from "@/lib/driver.functions";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { DeliveryBatchPhotos } from "@/components/admin/DeliveryBatchPhotos";
-import { googlePlace, navigationLinks } from "@/lib/delivery-sheet";
+import { googlePlace, navigationLinks, stopLabel } from "@/lib/delivery-sheet";
 import { useAuth } from "@/lib/auth";
 import { useDriverLanguage } from "@/lib/driver-language";
 const btn = "min-h-11 rounded-xl border border-white/15 bg-slate-800 px-4 py-2 disabled:opacity-40";
@@ -142,7 +142,7 @@ export function DriverWorkspace() {
         const images = maps[driverRouteMapKey(current)]?.length === current.route?.plans?.length && maps[driverRouteMapKey(current)]?.every(Boolean)
           ? maps[driverRouteMapKey(current)] : await readMaps({ data: { tripId: t.id } });
         setMaps(old => ({ ...old, [driverRouteMapKey(current)]: images }));
-        const html = driverTripPrintHtml(current, images, tr, date(current.created_at));
+        const html = driverTripPrintHtml(current, images, tr, date(current.created_at), showDone);
         if (popup.closed) return;
         popup.document.open(); popup.document.write(html); popup.document.close();
       } catch (error) { popup.close(); throw error; }
@@ -440,7 +440,7 @@ export function DriverWorkspace() {
                                 rel="noopener noreferrer"
                               >
                                 {tr("导航")}
-                                {n.from}–{n.to}
+                                {stopLabel(n.from - 1)}–{stopLabel(n.to - 1)}
                                 {tr("站 ↗")}
                               </a>
                             ))}
@@ -448,7 +448,7 @@ export function DriverWorkspace() {
                           {plan.stops.map((stop: any, i: number) => stop.customers.some((c: any) => visibleCustomer(t, c)) && (
                             <div key={i} className="rounded-xl border border-white/15 p-3">
                               <p className="text-sm text-amber-300">
-                                {tr("第 {0} 站", index * 21 + i + 1)}
+                                {tr("站点")} {stopLabel(i)}
                               </p>
                               {stop.customers.filter((c: any) => visibleCustomer(t, c)).map((c: any) => (
                                 <button

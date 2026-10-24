@@ -1,16 +1,18 @@
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 
-export function driverTripPrintHtml(trip: any, maps: (string | null)[], tr: (text: string) => string, date: string) {
+import {stopLabel} from './delivery-sheet';
+
+export function driverTripPrintHtml(trip: any, maps: (string | null)[], tr: (text: string) => string, date: string, showAll = false) {
   const plans = trip.route?.plans || [];
   if (!plans.length || plans.some((_: unknown, i: number) => !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(maps[i] || ''))) {
     throw new Error(tr('地图未加载完整，请重试'));
   }
-  let station = 0;
   const pages = plans.map((plan: any, i: number) => {
-    const rows = plan.stops.flatMap((stop: any) => {
-      const number = ++station;
+    const rows = plan.stops.flatMap((stop: any, stopIndex: number) => {
+      const number = stopLabel(stopIndex);
       return stop.customers.map((customer: any) => {
-        const items = (trip.items || []).filter((item: any) => customer.ids.includes(item.queue_id)).sort((a: any, b: any) => a.sequence - b.sequence);
+        const items = (trip.items || []).filter((item: any) => customer.ids.includes(item.queue_id) && (showAll || item.unit?.status !== 'dispatched')).sort((a: any, b: any) => a.sequence - b.sequence);
+        if (!items.length && !showAll) return '';
         return `<tr><td>${number}</td><td>${escape(customer.customer_code)}<br>${escape(customer.name)}</td><td>${escape(stop.address)}<br>${escape(customer.phone)}</td><td>${items.map((item: any) => `<div><b>${escape(item.sequence)}</b> · ${escape(item.unit?.code)} · ${escape(tr(item.unit?.status === 'dispatched' ? '已派送' : item.unit?.status === 'cancelled' ? '已取消' : '待派送'))}</div>`).join('')}</td></tr>`;
       });
     }).join('');
