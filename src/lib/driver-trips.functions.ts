@@ -190,7 +190,7 @@ export const scanDriverTrip = createServerFn({ method: "POST" })
       const { recordAdminLog } = await import("./admin-log");
       await recordAdminLog(admin, {entity_type:"driver_trip",entity_id:trip.id,action:"后台代司机扫码上车",operator_id:context.userId,after:{driver_id:trip.driver_id,code:data.code,result:r.data}});
     }
-    return r.data as { sequence: number; duplicate: boolean };
+    return r.data as { sequence: number; duplicate: boolean; transferred?: boolean };
   });
 export const dispatchDriverUnits = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

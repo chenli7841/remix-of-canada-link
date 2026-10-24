@@ -22,7 +22,7 @@ export function LoadedTripActions({trip}:{trip:any}){
  const [code,setCode]=useState(''),[originId,setOrigin]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[maps,setMaps]=useState<string[]>([]);
  const lock=useRef(false);
  const refresh=()=>qc.invalidateQueries({queryKey:['admin-loaded-trips']});
- const add=async(value:string)=>{if(lock.current)throw Error('正在保存，请稍后重扫');lock.current=true;setBusy(true);setError('');try{const r=await scan({data:{tripId:trip.id,code:value.trim()}});setMessage(r.duplicate?'该单位已在此趟':`上车成功，序号 ${r.sequence}`);setCode('');setMaps([]);await refresh();}catch(e:any){setError(e.message);throw e;}finally{lock.current=false;setBusy(false);}};
+ const add=async(value:string)=>{if(lock.current)throw Error('正在保存，请稍后重扫');lock.current=true;setBusy(true);setError('');try{const r=await scan({data:{tripId:trip.id,code:value.trim()}});setMessage(r.duplicate?'该单位已在此趟':`${r.transferred?'已从原趟转入，序号':'上车成功，序号'} ${r.sequence}`);setCode('');setMaps([]);await refresh();}catch(e:any){setError(e.message);throw e;}finally{lock.current=false;setBusy(false);}};
  return <div className="space-y-3 border-t border-white/10 p-3">
  <form className="flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();void add(code).catch(()=>{});}}><input className={field+' min-w-0 flex-1'} aria-label="上车条码" placeholder="箱号 / 运单号 / 订单号 / 国内单号" value={code} onChange={e=>setCode(e.target.value)}/><button className={field} disabled={busy||!code.trim()}>加入</button></form>
  <CameraScanButton continuous onScan={add}/>

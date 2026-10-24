@@ -108,7 +108,7 @@ export function DriverWorkspace() {
     setError("");
     try {
       const r = await scan({ data: { tripId, code: value.trim() } });
-      setMessage(`${r.duplicate ? tr("已上车，原序号") : tr("上车成功，序号")} ${r.sequence}`);
+      setMessage(`${r.duplicate ? tr("已上车，原序号") : r.transferred ? tr("已从原趟转入，序号") : tr("上车成功，序号")} ${r.sequence}`);
       setCode("");
       await refresh();
     } catch (e: any) {

@@ -104,6 +104,7 @@ export const driverEnglish: Record<string, string> = {
   请先新建或选择上车趟次: "Create or select a loading trip first",
   "正在保存上一件，请稍后重扫": "Saving the previous item. Please scan again shortly.",
   "已上车，原序号": "Already loaded, sequence",
+  "已从原趟转入，序号": "Transferred from previous loading trip, sequence",
   "上车成功，序号": "Loaded, sequence",
   "新一趟从 1 开始编号": "New trip numbering starts at 1",
   "确认删除这趟空派送清单？删除后无法恢复。": "Delete this empty trip? This cannot be undone.",
