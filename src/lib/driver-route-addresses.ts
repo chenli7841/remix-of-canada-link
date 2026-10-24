@@ -57,3 +57,18 @@ export function driverStopProgress(trip: any) {
   )).length;
   return {total: stops.length, remaining};
 }
+
+export function pendingCustomerNeighbors(route: any, items: any[], current: any) {
+  const pending = new Set(items.filter(item => item.unit?.status === 'pending').map(item => item.queue_id));
+  const entries = (route?.plans || []).flatMap((plan: any, planIndex: number) =>
+    (plan.stops || []).flatMap((stop: any, stopIndex: number) =>
+      (stop.customers || []).map((customer: any) => ({customer, planIndex, stopIndex,
+        pending: (customer.ids || []).some((id: string) => pending.has(id))})),
+    ));
+  const index = entries.findIndex((entry: any) => entry.customer.customer_code === current?.customer_code &&
+    entry.customer.ids?.some((id: string) => current?.ids?.includes(id)));
+  return {
+    previous: index < 0 ? null : entries.slice(0, index).reverse().find((entry: any) => entry.pending) || null,
+    next: index < 0 ? null : entries.slice(index + 1).find((entry: any) => entry.pending) || null,
+  };
+}

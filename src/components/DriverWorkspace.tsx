@@ -1,5 +1,5 @@
 import {CargoPhotos} from '@/components/CargoPhotos';
-import {driverRouteMapKey, driverStopProgress} from "@/lib/driver-route-addresses";
+import {driverRouteMapKey, driverStopProgress, pendingCustomerNeighbors} from "@/lib/driver-route-addresses";
 import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { driverTripPrintHtml } from "@/lib/driver-trip-print";
 import { useRef, useState } from "react";
@@ -195,6 +195,16 @@ export function DriverWorkspace() {
     );
   const shown = candidates.filter((t) => showDone || !complete(t));
   const units: any[] = detail.data?.items || [];
+  const neighbors = pendingCustomerNeighbors(detail.data?.route, units, customer);
+  const goToCustomer = (entry: any) => {
+    if (!entry) return;
+    setCustomer(entry.customer);
+    setFilter(entry.customer.customer_code);
+    setSelected(new Set());
+    setDeliveryCard(false);
+    setError("");
+    setMessage("");
+  };
   // Match driver_load_unit: gaps and hidden delivered parcels still reserve their sequence.
   const nextLoadingSequence = units.reduce((max, item) => Math.max(max, item.sequence ?? 0), 0) + 1;
   const customerUnits = units
@@ -533,6 +543,15 @@ export function DriverWorkspace() {
             />
             <button className={btn}>{tr("搜索")}</button>
           </form>
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            {([['previous', '上一个'], ['next', '下一个']] as const).map(([key, label]) => {
+              const entry = neighbors[key];
+              return <button key={key} type="button" disabled={busy || detail.isFetching || !entry} onClick={() => goToCustomer(entry)} className="min-h-16 rounded-xl border border-blue-400/40 bg-blue-600 px-3 py-3 text-white hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-400">
+                <span className="block font-semibold">{tr(label)}</span>
+                <span className="mt-1 block text-sm">{entry ? `${entry.customer.customer_code} / ${detail.data?.route?.plans?.length > 1 ? tr("第 {0} 张派送线路", entry.planIndex + 1) + ' · ' : ''}${tr("站点")} ${stopLabel(entry.stopIndex)}` : tr("没有未派送客户")}</span>
+              </button>;
+            })}
+          </div>
           <label className="mb-3 flex min-h-11 items-center gap-2 text-slate-200">
             <input type="checkbox" className="h-5 w-5 accent-blue-500" checked={showDone} onChange={e => setShowDone(e.target.checked)} />
             {tr("显示全部（含已派送）")}

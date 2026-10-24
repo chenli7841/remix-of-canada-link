@@ -1,4 +1,7 @@
 export const driverEnglish: Record<string, string> = {
+  "上一个": "Previous",
+  "下一个": "Next",
+  "没有未派送客户": "No pending customer",
   "货物记录不存在": "Cargo record not found",
   "货物不属于司机上车趟": "This parcel is not in your loading trips",
   "没有货物照片访问权限": "You do not have permission to access cargo photos",

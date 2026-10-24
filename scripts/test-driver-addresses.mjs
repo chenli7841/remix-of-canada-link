@@ -9,3 +9,12 @@ const moved=resolve(partial,[{ids:['a'],address:'New',city:'Toronto'}]);assert.d
 const groupJs=ts.transpileModule(fs.readFileSync('src/lib/delivery-summary.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;const groupExports={};new Function('exports',groupJs)(groupExports);
 const mk=(id,address)=>({id,kind:'waybill',ref_id:id,source_batch_id:'batch',customer_code:'00001',customer_user_id:'user',created_at:'2026',address_snapshot:{line1:address}});
 const groups=[...groupExports.groupDeliveryUnits([mk('a','First'),mk('b','Second')]).values()];assert.equal(groups.length,2);assert.deepEqual(groups[0].address_versions,{a:{line1:'First'}});console.log('PASS: partial customer move preserves other batch; frozen addresses group separately and carry concurrency versions');
+
+const navRoute={plans:[{stops:[{customers:[{customer_code:'1',ids:['a']}]},{customers:[{customer_code:'2',ids:['b']},{customer_code:'3',ids:['c']}]}]},{stops:[{customers:[{customer_code:'2',ids:['d']}]}]}]};
+const navItems=[{queue_id:'a',unit:{status:'pending'}},{queue_id:'b',unit:{status:'dispatched'}},{queue_id:'c',unit:{status:'cancelled'}},{queue_id:'d',unit:{status:'pending'}}];
+const nav=exp.pendingCustomerNeighbors(navRoute,navItems,{customer_code:'2',ids:['b']});
+assert.equal(nav.previous.customer.customer_code,'1');assert.deepEqual(nav.next.customer.ids,['d']);assert.equal(nav.next.planIndex,1);assert.equal(nav.next.stopIndex,0);
+assert.equal(exp.pendingCustomerNeighbors(navRoute,navItems,{customer_code:'1',ids:['a']}).previous,null);
+assert.equal(exp.pendingCustomerNeighbors(navRoute,navItems,{customer_code:'2',ids:['d']}).next,null);
+assert.equal(exp.pendingCustomerNeighbors(navRoute,[],{customer_code:'2',ids:['b']}).next,null);
+console.log('PASS: navigation skips completed/cancelled customers, preserves completed anchor, distinguishes repeated customer addresses and map letters');
