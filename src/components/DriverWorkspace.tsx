@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import {driverRouteMapKey, driverStopProgress} from "@/lib/driver-route-addresses";
 import { LoadingUnitList } from "@/components/LoadingUnitList";
 import { driverTripPrintHtml } from "@/lib/driver-trip-print";
@@ -633,7 +634,7 @@ export function DriverWorkspace() {
                           ? tr("客户托盘")
                           : tr("独立运单")}
                     </p>
-                    <p>{x.unit.code}</p>
+                    <p>{x.unit.code}</p><CargoPhotos kind={x.unit.kind} refId={x.unit.ref_id} />
                     <p className="mt-2 text-slate-200">{tr("体积重")}：{x.volumetric_weight_kg == null ? tr("未记录") : `${Number(x.volumetric_weight_kg.toFixed(3))} kg`}</p>
                     <p className="mt-2 text-amber-200">
                       {tr("结算备注：")}

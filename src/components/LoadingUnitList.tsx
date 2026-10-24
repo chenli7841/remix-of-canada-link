@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import {groupLoadingUnits} from '@/lib/loading-unit-groups';
 import {useDriverLanguage} from '@/lib/driver-language';
 import {useState, type ReactNode} from 'react';
@@ -19,7 +20,7 @@ export function LoadingUnitList({items,footer,selected,onSelect,showAll=false}:{
    <div className="row-span-2 self-center">{checkbox([item],`勾选箱子 ${item.unit.code}`)}</div>
    <div aria-label={tr('上车编号')} className="row-span-2 flex min-w-14 flex-col justify-center rounded-xl bg-amber-300 px-2 py-2 text-center text-slate-950"><div className="text-xs font-semibold">{tr('上车编号')}</div><strong className="text-3xl font-black tabular-nums">{item.sequence ?? '—'}</strong></div>
    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"><strong className="break-all">{item.unit.code}</strong><span className="text-sm text-amber-300">{tr(item.unit.status==='dispatched'?'已派送':item.unit.status==='cancelled'?'已取消':'待派送')}</span>{item.delivery_run_id&&<span className="text-xs text-sky-300">已生成派送趟</span>}</div>
-   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs"><span className="break-words text-slate-400">{item.unit.batch?.display_name} {item.unit.batch?.batch_no}</span>{item.unit.kind==='waybill'&&item.domestic_numbers?.map((number:string,index:number)=><span key={index} className="break-all text-sky-200">{tr("国内单号")}：{number}</span>)}<span className="text-slate-200">{tr("体积重")}：{item.volumetric_weight_kg == null ? tr("未记录") : `${Number(item.volumetric_weight_kg.toFixed(3))} kg`}</span>{footer?.(item)}</div>
+   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs"><span className="break-words text-slate-400">{item.unit.batch?.display_name} {item.unit.batch?.batch_no}</span>{item.unit.kind==='waybill'&&item.domestic_numbers?.map((number:string,index:number)=><span key={index} className="break-all text-sky-200">{tr("国内单号")}：{number}</span>)}<span className="text-slate-200">{tr("体积重")}：{item.volumetric_weight_kg == null ? tr("未记录") : `${Number(item.volumetric_weight_kg.toFixed(3))} kg`}</span>{footer?.(item)}</div><div className="col-span-3"><CargoPhotos kind={item.unit.kind} refId={item.unit.ref_id} canUpload /></div>
   </div>)}</div></div>)}
  </section>)}</div></div>;
 }

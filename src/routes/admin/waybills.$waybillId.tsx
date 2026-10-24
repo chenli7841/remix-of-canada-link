@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel, logDetailsText } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -115,6 +116,7 @@ function WaybillDetail() {
 
 
       <div className="grid gap-4 md:grid-cols-2">
+        <CargoPhotos kind="waybill" refId={wb.id} canUpload />
         <Card title="基础信息">
           <div className="space-y-1 text-xs text-slate-300">
             <div>国际单号：{wb.intl_tracking_no ?? "—"}</div>

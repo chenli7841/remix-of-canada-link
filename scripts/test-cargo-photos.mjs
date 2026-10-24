@@ -1,0 +1,24 @@
+import fs from 'node:fs';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+let staff=true,driver=false,owned=false,storageCalls=0,lastPath='';
+const admin={from(table){const query={select(){return this;},eq(){return this;},in(){return this;},limit(){return this;},maybeSingle(){return Promise.resolve({data:{id:'entity'}});},then(resolve){resolve({data:table==='delivery_queue'?[{id:'q'}]:owned?[{id:'item'}]:[]});}};return query;},storage:{from(bucket){assert.equal(bucket,'delivery-proofs');storageCalls++;return {list:async path=>{lastPath=path;return {data:[{id:'p',name:'photo.jpg'}]};},createSignedUrl:async(path,ttl)=>{assert.equal(ttl,600);return {data:{signedUrl:'private-url'}};},upload:async(path)=>{lastPath=path;return {error:null};}};}}};
+const context={userId:'driver-id',supabase:{rpc:async(_,args)=>({data:args._role==='driver'?driver:staff})}};
+const exp={};const js=ts.transpileModule(fs.readFileSync('src/lib/cargo-photos.functions.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+new Function('exports','require',js)(exp,name=>{
+ if(name==='@tanstack/react-start')return {createServerFn:()=>({middleware(){return this;},inputValidator(){return this;},handler(fn){return fn;}})};
+ if(name.includes('auth-middleware'))return {requireSupabaseAuth:{}};
+ if(name.includes('client.server'))return {supabaseAdmin:admin};
+ if(name.includes('admin-log'))return {recordAdminLog:async()=>{}};
+ return require(name);
+});
+const data={kind:'carton',refId:'00000000-0000-4000-8000-000000000001'};
+await exp.listCargoPhotos({context,data});assert.equal(lastPath,`cargo/carton/${data.refId}`);
+await exp.listCargoPhotos({context,data:{...data,kind:'waybill'}});assert.equal(lastPath,`cargo/waybill/${data.refId}`);
+staff=false;driver=true;owned=false;const before=storageCalls;await assert.rejects(()=>exp.listCargoPhotos({context,data}),/不属于/);assert.equal(storageCalls,before);
+owned=true;await exp.listCargoPhotos({context,data});
+await assert.rejects(()=>exp.uploadCargoPhoto({context,data:{...data,photoId:'photo',image:'data:image/jpeg;base64,AAAA'}}),/无效/);
+driver=false;await assert.rejects(()=>exp.listCargoPhotos({context,data}),/权限/);
+console.log('PASS: entity-specific private paths, staff access, own-trip driver access, unrelated/unauthorized access denied, invalid photo rejected');

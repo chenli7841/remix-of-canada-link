@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -495,7 +496,7 @@ function WaybillsSection({ waybills, canEdit, onAdd, onEditDims, onSurchargesCha
             return (
             <tr key={w.id}>
               <td className="py-2">
-                <Link to="/admin/waybills/$waybillId" params={{ waybillId: w.id }} className="font-mono text-xs text-brand">{w.waybill_no}</Link>
+                <Link to="/admin/waybills/$waybillId" params={{ waybillId: w.id }} className="font-mono text-xs text-brand">{w.waybill_no}</Link><CargoPhotos kind="waybill" refId={w.id} canUpload={canEdit} />
               </td>
               <td className="font-mono text-[11px] text-slate-300">{w.mark_no ?? "—"}</td>
               <td className="font-mono text-[11px] text-slate-300">{w.box_no ?? "—"}</td>

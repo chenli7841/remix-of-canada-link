@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { OrderNoteCard } from "@/components/admin/OrderNoteEditor";
@@ -223,7 +224,7 @@ function OrderDetail() {
             {waybills.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-slate-500">—</td></tr>}
             {waybills.map((w: any) => (
               <tr key={w.id}>
-                <td className="py-2 font-mono text-xs">{w.waybill_no}</td>
+                <td className="py-2 font-mono text-xs">{w.waybill_no}<CargoPhotos kind="waybill" refId={w.id} canUpload /></td>
                 <td className="text-xs">{METHOD_LABEL[w.shipping_method] ?? "—"}</td>
                 <td><StatusBadge map={WAYBILL_STATUS_LABEL} color={WAYBILL_STATUS_COLOR} value={w.status}/></td>
                 <td className="text-xs">{w.weight_kg ?? "—"} kg</td>

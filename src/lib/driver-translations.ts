@@ -1,4 +1,11 @@
 export const driverEnglish: Record<string, string> = {
+  "货物记录不存在": "Cargo record not found",
+  "货物不属于司机上车趟": "This parcel is not in your loading trips",
+  "没有货物照片访问权限": "You do not have permission to access cargo photos",
+  "货物照片读取失败": "Unable to load cargo photos",
+  "暂无货物照片": "No cargo photos",
+  "放大货物照片": "Enlarge cargo photo",
+  "货物照片": "Cargo photos",
   "暂时无法获取当前位置，请重试或选择其他起始点": "Unable to get your location. Retry or choose another starting point.",
   "定位权限被拒绝，请允许定位或选择其他起始点": "Location permission denied. Allow access or choose another starting point.",
   "正在获取当前位置，请允许定位…": "Getting your location. Please allow location access…",

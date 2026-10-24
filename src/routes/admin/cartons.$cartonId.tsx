@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -80,6 +81,7 @@ function CartonDetail() {
 
       <ScanAddDialog open={showScan} onClose={() => setShowScan(false)} container={"carton" as any} containerId={cartonId} onChanged={invalidate}/>
 
+      <CargoPhotos kind="carton" refId={cartonId} canUpload />
       <ContainerInfoCard kind="carton" row={carton} currency="CAD"/>
       <FeeComparisonCard fees={carton} currency="CAD"/>
 

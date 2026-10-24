@@ -1,3 +1,4 @@
+import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -85,6 +86,7 @@ function PalletDetail() {
       <ScanAddDialog open={showScan} onClose={() => setShowScan(false)} container="pallet" containerId={palletId}
         onChanged={invalidateP}/>
 
+      <CargoPhotos kind="pallet" refId={palletId} canUpload />
       <ContainerInfoCard kind="pallet" row={pallet} currency="CAD"/>
       <FeeComparisonCard fees={pallet} currency="CAD"/>
 
