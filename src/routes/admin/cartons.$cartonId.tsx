@@ -53,9 +53,9 @@ function CartonDetail() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
       <BackLink to="/admin/cartons">返回箱号列表</BackLink>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold font-mono">{carton.carton_no}</h1>
+          <h1 className="break-all font-display text-2xl font-bold font-mono">{carton.carton_no}</h1>
           <div className="mt-1 text-xs text-slate-400">状态：{carton.status} · 付款 {carton.payment_status} · 创建 {fmtDate(carton.created_at)} · 计费重 <span className="font-mono text-amber-300">{chargeableW ?? 0} kg</span>（{carton.customer_code ? "自身" : "下属之和"}）{carton.batch_status ? ` · 批次状态 ${carton.batch_status}` : ""}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

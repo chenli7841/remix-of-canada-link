@@ -59,9 +59,9 @@ function PalletDetail() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
       <BackLink to="/admin/pallets">返回托盘列表</BackLink>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold font-mono">{pallet.pallet_no}</h1>
+          <h1 className="break-all font-display text-2xl font-bold font-mono">{pallet.pallet_no}</h1>
           <div className="mt-1 text-xs text-slate-400">状态：{pallet.status} · 付款 {pallet.payment_status} · 创建 {fmtDate(pallet.created_at)}{pallet.batch_no ? ` · 批次 ${pallet.batch_no}` : ""} · 计费重 <span className="font-mono text-amber-300">{pallet.chargeable_weight_kg ?? 0} kg</span>（{pallet.customer_code ? "自身" : "下属之和"}）{pallet.batch_status ? ` · 批次状态 ${pallet.batch_status}` : ""}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

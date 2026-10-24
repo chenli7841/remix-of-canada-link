@@ -73,7 +73,7 @@ function OrderDetail() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
       <BackLink to="/admin/orders">返回订单列表</BackLink>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold">订单 {order.order_no}</h1>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">

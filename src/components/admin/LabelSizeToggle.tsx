@@ -37,10 +37,10 @@ export function LabelSizeToggle({
   };
 
   return (
-    <div className={`inline-flex items-center gap-1.5 text-xs text-slate-400 ${className}`}>
+    <div className={`inline-flex max-w-full flex-wrap items-center gap-1.5 text-xs text-slate-400 ${className}`}>
       <Printer className="h-3.5 w-3.5" />
       <span>面单尺寸</span>
-      <div className="inline-flex overflow-hidden rounded-md border border-white/10">
+      <div className="inline-flex shrink-0 overflow-hidden rounded-md border border-white/10">
         {LABEL_SIZES.map((s) => (
           <button
             key={s.value}

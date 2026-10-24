@@ -443,9 +443,9 @@ function BatchDetail() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
       <BackLink to="/admin/batches">返回批次列表</BackLink>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold font-mono">{batch.batch_no}</h1>
+          <h1 className="break-all font-display text-2xl font-bold font-mono">{batch.batch_no}</h1>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
             <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={batch.status} />
             <span>· 计划发货 {batch.planned_ship_date}</span>
