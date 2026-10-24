@@ -346,6 +346,7 @@ export function DriverWorkspace() {
                 onChange={(e) => setOriginId(e.target.value)}
               >
                 <option value="">{tr("选择司机起始点")}</option>
+                <option value="current-location">{tr("从当前位置出发")}</option>
                 {origins.data
                   ?.filter((x) => x.active)
                   .map((x) => (
@@ -359,7 +360,18 @@ export function DriverWorkspace() {
                 className={btn + " mt-3 w-full bg-blue-600"}
                 onClick={() =>
                   void run(async () => {
-                    const r = await generate({ data: { tripId, originId, ids:[...loadingSelected],runId:runRequest.current } });
+                    let currentLocation: {latitude:number;longitude:number} | undefined;
+                    if (originId === "current-location") {
+                      if (!navigator.geolocation) throw new Error(tr("此设备不支持定位，请选择其他起始点"));
+                      setMessage(tr("正在获取当前位置，请允许定位…"));
+                      currentLocation = await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(
+                        position=>resolve({latitude:position.coords.latitude,longitude:position.coords.longitude}),
+                        e=>{setMessage("");reject(new Error(tr(e.code===1 ? "定位权限被拒绝，请允许定位或选择其他起始点" : "暂时无法获取当前位置，请重试或选择其他起始点")));},
+                        {enableHighAccuracy:true,timeout:15000,maximumAge:0},
+                      ));
+                      setMessage("");
+                    }
+                    const r = await generate({ data: { tripId, ...(currentLocation ? {currentLocation} : {originId}), ids:[...loadingSelected],runId:runRequest.current } });
                     setLoadingSelected(new Set());runRequest.current=crypto.randomUUID();
                     setMaps((old) => ({ ...old, [driverRouteMapKey(r)]: r.maps }));
                     await refresh();

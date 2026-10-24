@@ -1,7 +1,7 @@
 import {createServerFn} from '@tanstack/react-start';
 import {z} from 'zod';
 import {requireSupabaseAuth} from '@/integrations/supabase/auth-middleware';
-import {orderedIndexes, stopLabel} from '@/lib/delivery-sheet';
+import {orderedIndexes, stopLabel, routeWaypoint} from '@/lib/delivery-sheet';
 import {recordAdminLog} from '@/lib/admin-log';
 
 const originSchema = z.object({id:z.string().uuid(),name:z.string().trim().min(1).max(100),address:z.string().trim().min(1).max(500),active:z.boolean()});
@@ -73,8 +73,8 @@ export async function computeDeliveryRoute(data:{origin:string;addresses:string[
     if (!route) throw new Error('Google 未找到可行的驾车路线，请检查地址');
     return route;
     };
-    const approach = fixedFirst ? await query({origin:{address:data.origin},destination:{address:data.addresses[0]},travelMode:'DRIVE'}) : null;
-    const route = await query({origin:{address:fixedFirst?data.addresses[0]:data.origin},destination:{address:data.roundTrip?(data.returnAddress || data.origin):addresses.at(-1)},intermediates:intermediate.map(address=>({address})),travelMode:'DRIVE',optimizeWaypointOrder:optimize});
+    const approach = fixedFirst ? await query({origin:routeWaypoint(data.origin),destination:{address:data.addresses[0]},travelMode:'DRIVE'}) : null;
+    const route = await query({origin:routeWaypoint(fixedFirst?data.addresses[0]:data.origin),destination:{address:data.roundTrip?(data.returnAddress || data.origin):addresses.at(-1)},intermediates:intermediate.map(address=>({address})),travelMode:'DRIVE',optimizeWaypointOrder:optimize});
     const order = optimize ? orderedIndexes(route.optimizedIntermediateWaypointIndex, intermediate.length) : intermediate.map((_,i)=>i);
     if (!data.roundTrip) order.push(addresses.length-1);
     if (fixedFirst) { for(let i=0;i<order.length;i++)order[i]++; order.unshift(0); }

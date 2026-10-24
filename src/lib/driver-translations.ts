@@ -1,4 +1,9 @@
 export const driverEnglish: Record<string, string> = {
+  "暂时无法获取当前位置，请重试或选择其他起始点": "Unable to get your location. Retry or choose another starting point.",
+  "定位权限被拒绝，请允许定位或选择其他起始点": "Location permission denied. Allow access or choose another starting point.",
+  "正在获取当前位置，请允许定位…": "Getting your location. Please allow location access…",
+  "此设备不支持定位，请选择其他起始点": "Location is unavailable on this device. Choose another starting point.",
+  "从当前位置出发": "Start from current location",
   "未派送站点 {0} / 共 {1} 站": "Stops remaining {0} / {1} total",
   "完成派送（{0}）": "Complete delivery ({0})",
   "保存备注": "Save notes",

@@ -26,6 +26,14 @@ export function orderedIndexes(value: unknown, count: number): number[] {
   return value;
 }
 export const stopLabel = (index: number) => String.fromCharCode(65 + index);
+export function routeWaypoint(address: string) {
+  const match = address.trim().match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+  if (match) {
+    const latitude = Number(match[1]), longitude = Number(match[2]);
+    if (Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) return {location: {latLng: {latitude, longitude}}};
+  }
+  return {address};
+}
 export const googlePlace = (address: string) => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
 export function navigationLinks(addresses: string[], origin: string, roundTrip: boolean, returnAddress = origin) {
   const targets = [...addresses, ...(roundTrip && returnAddress.trim() ? [returnAddress.trim()] : [])];

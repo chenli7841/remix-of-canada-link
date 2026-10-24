@@ -209,7 +209,7 @@ export const dispatchDriverUnits = createServerFn({ method: "POST" })
   });
 export const generateDriverRoute = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(tripInput.extend({ originId: z.string().uuid(), runId:z.string().uuid(), ids:z.array(z.string().uuid()).min(1).max(1000) }))
+  .inputValidator(tripInput.extend({ originId: z.string().uuid().optional(), currentLocation: z.object({latitude:z.number().finite().min(-90).max(90),longitude:z.number().finite().min(-180).max(180)}).optional(), runId:z.string().uuid(), ids:z.array(z.string().uuid()).min(1).max(1000) }).refine(d=>Boolean(d.originId)!==Boolean(d.currentLocation), '请选择一个起始点'))
   .handler(async ({ data, context }) => {
     const admin = await db(context);
     const trip = await owned(admin, context.userId, data.tripId);
@@ -217,12 +217,18 @@ export const generateDriverRoute = createServerFn({ method: "POST" })
     const selectedIds = [...new Set(data.ids)];
     const rows = (await units(admin,trip.id)).filter(x=>selectedIds.includes(x.queue_id)&&x.unit?.status==="pending");
     if(rows.length!==selectedIds.length) throw new Error("勾选包裹已派送或不属于此上车趟，请刷新");
+    let originAddress: string;
+    if (data.currentLocation) {
+      originAddress = `${data.currentLocation.latitude},${data.currentLocation.longitude}`;
+    } else {
     const origin = await admin
       .from("app_settings")
       .select("value")
       .eq("key", "driver-origin:" + data.originId)
       .single();
     if (origin.error || !origin.data?.value?.active) throw new Error("请选择已启用的司机起始点");
+    originAddress = origin.data.value.address;
+    }
     const groups: any[] = [];
     for (const code of new Set<string>(rows.map((x) => x.unit.customer_code))) {
       for (const status of ["pending", "dispatched"]) {
@@ -263,7 +269,7 @@ export const generateDriverRoute = createServerFn({ method: "POST" })
     }
     const plans: any[] = [];
     const maps: (string | null)[] = [];
-    let departure = origin.data.value.address;
+    let departure = originAddress;
     for (let i = 0; i < stops.length; i += 21) {
       const chunk = stops.slice(i, i + 21);
       const result = await computeDeliveryRoute(
@@ -283,7 +289,7 @@ export const generateDriverRoute = createServerFn({ method: "POST" })
       departure = ordered.at(-1).address;
     }
     // Persist our delivery manifest and chosen stop order, not Google map image data.
-    const route = { origin: origin.data.value.address, plans };
+    const route = { origin: originAddress, plans };
     const saved = await admin.rpc("create_driver_delivery_run",{_actor:context.userId,_id:data.runId,_loading:trip.id,_ids:selectedIds,_route:route,_revision:trip.revision});
     if(saved.error) throw new Error(saved.error.message);
     return { route, maps, id:data.runId };
