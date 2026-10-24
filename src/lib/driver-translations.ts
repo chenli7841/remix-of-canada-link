@@ -1,4 +1,8 @@
 export const driverEnglish: Record<string, string> = {
+  "完成派送（{0}）": "Complete delivery ({0})",
+  "保存备注": "Save notes",
+  "填写或修改结算备注": "Enter or edit settlement notes",
+  "派送确认": "Confirm delivery",
   "未记录": "Not recorded",
   "体积重": "Volumetric weight",
   "显示全部（含已派送）": "Show all (including delivered)",

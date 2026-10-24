@@ -60,7 +60,7 @@ export function DriverWorkspace() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
-    [collect, setCollect] = useState(false);
+    [deliveryCard, setDeliveryCard] = useState(false);
   const lock = useRef(false),
     newId = useRef<string | null>(null);
   const detail = useQuery({
@@ -660,74 +660,24 @@ export function DriverWorkspace() {
               ))}
             </tbody>
           </table>
-          <div id="driver-photos">
-            <CustomerTools tripId={tripId} customer={customer} onMessage={setMessage} />
-          </div>
           <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-2xl border-t border-white/10 bg-slate-900 p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-            <p className="mb-2 text-sm">
-              {tr("已选")}
-              {selected.size} / {customerUnits.length}
-              {tr("个单位")}
-            </p>
+            <p className="mb-2 text-sm">{tr("已选")} {selected.size} / {customerUnits.length} {tr("个单位")}</p>
             <div className="flex gap-3">
-              <button
-                className={btn}
-                onClick={() =>
-                  document
-                    .getElementById("driver-photos")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
-              >
-                {tr("拍照")}
-              </button>
-              <button className={btn} onClick={() => setCollect(true)}>
-                {tr("收款")}
-              </button>
-              <button
-                className={btn + " flex-1 bg-emerald-700"}
-                disabled={busy || !selected.size}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      tr(
-                        "确认派送 {0} 个单位？运单将完成，并记录已派送及晚30秒的已完成轨迹。",
-                        selected.size,
-                      ),
-                    )
-                  )
-                    void run(async () => {
-                      await dispatch({ data: { tripId, ids: [...selected] } });
-                      setSelected(new Set());
-                      await refresh();
-                      setMessage(tr("已完成派送，可继续补传照片"));
-                    });
-                }}
-              >
-                {tr("派送（{0}）", selected.size)}
-              </button>
+              <button className={btn} onClick={() => setDeliveryCard(true)}>{tr("拍照")}</button>
+              <button className="min-h-14 flex-1 rounded-xl bg-orange-500 px-5 py-3 text-xl font-bold text-white shadow-lg shadow-orange-500/25 hover:bg-orange-400 disabled:opacity-40" disabled={busy || !selected.size} onClick={() => setDeliveryCard(true)}>{tr("派送（{0}）", selected.size)}</button>
             </div>
           </div>
+          {deliveryCard && <div role="dialog" aria-modal="true" aria-label={tr("派送确认")} className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-3">
+            <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl">
+              <h2 className="text-xl font-bold">{tr("派送确认")} · {customer.customer_code}</h2>
+              <CustomerTools key={tripId + ':' + customer.customer_code} tripId={tripId} customer={customer} onMessage={setMessage} selectedCount={selected.size} onClose={() => setDeliveryCard(false)} onComplete={async () => {
+                await dispatch({ data: { tripId, ids: [...selected] } });
+                setSelected(new Set()); setDeliveryCard(false);
+                setMessage(tr("已完成派送，可继续补传照片")); await refresh();
+              }} />
+            </div>
+          </div>}
         </>
-      )}
-      {collect && (
-        <div
-          role="dialog"
-          aria-label={tr("收款")}
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-5"
-        >
-          <div className="w-full max-w-md space-y-3 rounded-xl bg-slate-800 p-5">
-            <h2 className="text-xl">{tr("收款")}</h2>
-            <button disabled className={btn + " w-full"}>
-              {tr("收款充值 · 待配置")}
-            </button>
-            <button disabled className={btn + " w-full"}>
-              {tr("收款付费 · 待配置")}
-            </button>
-            <button className={btn + " w-full"} onClick={() => setCollect(false)}>
-              {tr("关闭")}
-            </button>
-          </div>
-        </div>
       )}
       {busy && (
         <p role="status" className="my-4 animate-pulse text-blue-300">
@@ -753,10 +703,16 @@ function CustomerTools({
   tripId,
   customer,
   onMessage,
+  selectedCount,
+  onComplete,
+  onClose,
 }: {
   tripId: string;
   customer: any;
   onMessage: (s: string) => void;
+  selectedCount: number;
+  onComplete: () => Promise<void>;
+  onClose: () => void;
 }) {
   const { t: tr, money } = useDriverLanguage();
   const { user } = useAuth();
@@ -770,13 +726,27 @@ function CustomerTools({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [version, setVersion] = useState(0);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const saving = useRef(false);
+  const finish = async (complete: boolean) => {
+    if (saving.current || busy) return;
+    if (complete && !window.confirm(tr("确认派送 {0} 个单位？运单将完成，并记录已派送及晚30秒的已完成轨迹。", selectedCount))) return;
+    saving.current = true; setBusy(true); setError("");
+    try {
+      for (const [batchId, note] of Object.entries(notes)) await act({ data: { tripId, customerCode: customer.customer_code, batchId, note } });
+      await q.refetch();
+      if (complete) await onComplete(); else onMessage(tr("备注已保存"));
+    } catch (e: any) { setError(e.message || tr("操作失败")); }
+    finally { saving.current = false; setBusy(false); }
+  };
   return (
     <div className="my-5 space-y-3">
       {customer.groups.map((snapshot: any) => {
         const g = q.data?.find((x) => x.batch_id === snapshot.batch_id) || snapshot;
         const scope = { customerCode: customer.customer_code, batchId: g.batch_id };
         const photo = async (file?: File) => {
-          if (!file || busy) return;
+          if (!file || busy || saving.current) return;
+          saving.current = true;
           setBusy(true);
           setError("");
           let url = "";
@@ -809,6 +779,7 @@ function CustomerTools({
             setError(e.message);
           } finally {
             URL.revokeObjectURL(url);
+            saving.current = false;
             setBusy(false);
           }
         };
@@ -828,25 +799,10 @@ function CustomerTools({
               {g.chargeable_weight_kg ?? tr("待确认")}
               {tr("kg · 额外费用")} {money(g.extra_fee_cad ?? g.fee_cad)}
             </p>
-            <button
-              className={btn + " my-2 w-full text-left"}
-              disabled={busy}
-              onClick={() => {
-                const note = window.prompt(tr("结算备注"), g.settlement_note || "");
-                if (note == null) return;
-                setBusy(true);
-                void act({ data: { ...scope, tripId, note } })
-                  .then(async () => {
-                    await q.refetch();
-                    onMessage(tr("备注已保存"));
-                  })
-                  .catch((e) => setError(e.message))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {tr("结算备注：")}
-              {g.settlement_note || tr("点击填写")}
-            </button>
+            <label className="my-3 block">
+              <span className="mb-2 block font-semibold">{tr("结算备注")}</span>
+              <textarea className={input + " min-h-24"} maxLength={2000} disabled={busy} value={notes[g.batch_id] ?? g.settlement_note ?? ""} onChange={e => setNotes(old => ({...old, [g.batch_id]: e.target.value}))} placeholder={tr("填写或修改结算备注")} />
+            </label>
             <div className="flex flex-wrap gap-2">
               <label className={btn + " cursor-pointer"}>
                 {tr("拍照上传")}
@@ -881,6 +837,15 @@ function CustomerTools({
           </section>
         );
       })}
+      <section className="rounded-xl border border-white/10 p-3">
+        <h3 className="mb-2 font-bold">{tr("收款")}</h3>
+        <div className="flex flex-wrap gap-2"><button disabled className={btn}>{tr("收款充值 · 待配置")}</button><button disabled className={btn}>{tr("收款付费 · 待配置")}</button></div>
+      </section>
+      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-white/10 bg-slate-900 py-3">
+        <button disabled={busy} className={btn} onClick={onClose}>{tr("关闭")}</button>
+        <button disabled={busy || !Object.keys(notes).length} className={btn} onClick={() => void finish(false)}>{tr("保存备注")}</button>
+        <button disabled={busy || !selectedCount} className="min-h-12 flex-1 rounded-xl bg-orange-500 px-4 py-3 text-lg font-bold text-white hover:bg-orange-400 disabled:opacity-40" onClick={() => void finish(true)}>{tr("完成派送（{0}）", selectedCount)}</button>
+      </div>
       {busy && <p role="status">{tr("正在保存…")}</p>}
       {error && (
         <p role="alert" className="text-rose-300">
