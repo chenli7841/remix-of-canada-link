@@ -1,0 +1,14 @@
+// Reviewed names and exact current statistical-code additions only.
+import fs from 'node:fs';import assert from 'node:assert/strict';import {createClient} from '@supabase/supabase-js';
+process.loadEnvFile('.env');assert.equal(new URL(process.env.SUPABASE_URL).hostname,'fhfsrrbzubgjrjhgwerv.supabase.co');
+const root='.hs-names.local/continuation',sources=JSON.parse(fs.readFileSync(`${root}/official-2026.json`));
+const entries=fs.readFileSync('scripts/hs-names-2026-reviewed.txt','utf8').trim().split(/\r?\n/).map(line=>{const[code,zh]=line.split('|');assert.ok(sources[code]);assert.match(zh,/[\u3400-\u9fff]/);return{code,zh};});assert.equal(new Set(entries.map(e=>e.code)).size,entries.length);
+if(!process.argv.includes('--apply')){console.log('Reviewed entries: '+entries.length);process.exit();}
+const db=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}});let updated=0,inserted=0;
+for(const {code,zh} of entries){const source=sources[code];const r=await db.from('hs_codes').select('*').eq('hs_code',code).maybeSingle();if(r.error)throw Error(r.error.message);const old=r.data;if(old?.name_zh===zh)continue;if(old)assert.ok(!/[\u3400-\u9fff]/.test(old.name_zh),'Existing reviewed name: '+code);
+const note=[old?.note,`[2026-10-24 核对] CBSA T2026-2；MFN：${source.mfnText}；来源：${source.url}`].filter(Boolean).join('\n');const payload=old?{name_zh:zh,name_en:source.description,note}:{hs_code:code,chapter:code.slice(0,2),name_zh:zh,name_en:source.description,unit:source.unit,mfn_rate:source.rate,gst_rate:0.05,anti_dumping_rate:0,origin:'China',note,is_active:true};
+fs.appendFileSync(`${root}/names-journal.jsonl`,JSON.stringify({event:'before',code,before:old,after:payload})+'\n');
+let q;if(old){q=db.from('hs_codes').update(payload).eq('id',old.id).eq('updated_at',old.updated_at);}else{assert.notEqual(source.rate,null);q=db.from('hs_codes').insert(payload);}
+const saved=await q.select('*').single();if(saved.error)throw Error(saved.error.message);assert.equal(saved.data.name_zh,zh);assert.equal(saved.data.name_en,source.description);if(old)for(const key of Object.keys(old))if(!['name_zh','name_en','note','updated_at'].includes(key))assert.deepEqual(saved.data[key],old[key]);
+const log=await db.from('admin_action_logs').insert({entity_type:'hs_code',entity_id:saved.data.id,action:old?'update_bilingual_names':'create',operator_id:null,operator_name:'Codex（用户授权补全 HS 编码库）',before:old?{name_zh:old.name_zh,name_en:old.name_en,note:old.note}:null,after:payload,note:`按现行完整分类核对中英文品名；来源：${source.url}`});if(log.error)throw Error('Saved; log failed: '+log.error.message);old?updated++:inserted++;fs.appendFileSync(`${root}/names-journal.jsonl`,JSON.stringify({event:'verified',code,id:saved.data.id})+'\n');}
+console.log(JSON.stringify({updated,inserted}));

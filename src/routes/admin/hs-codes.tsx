@@ -139,7 +139,7 @@ function HsCodesPage() {
                           </div>
                         )}
                       </td>
-                      <td className="p-3 text-right">{(Number(c.mfn_rate) * 100).toFixed(2)}%</td>
+                      <td className="p-3 text-right">{c.note?.includes("[MFN非单一百分比]") ? <span className="text-xs text-amber-300" title={c.note}>从量／复合税率<br />查看分类说明</span> : Number.isFinite(Number(c.mfn_rate)) && c.mfn_rate != null ? `${(Number(c.mfn_rate) * 100).toFixed(2)}%` : <span className="text-xs text-amber-300">待核对</span>}</td>
                       <td className="p-3 text-right">{(Number(c.gst_rate) * 100).toFixed(2)}%</td>
                       <td className="p-3 text-center">
                         {c.sima_involved ? (
