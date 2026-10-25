@@ -78,5 +78,115 @@
     "description": "Other embroidery in other textile materials, in lengths, strips or motifs",
     "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
     "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5906.10.00.00": {
+    "description": "Rubberized textile adhesive tape, width at most 20 cm, excluding heading 59.02",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5906.91.00.00": {
+    "description": "Other rubberized knitted or crocheted fabrics, excluding heading 59.02",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.10.00.10": {
+    "description": "Technical-use coated or laminated textile blankets or lapping for offset printing machinery (Chapter Note 8)",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.10.00.90": {
+    "description": "Other technical-use textile fabrics, felt or felt-lined weaves coated or laminated with rubber, leather or other materials, for card clothing or similar uses; rubber-impregnated velvet for covering weaving beams",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.20.00.00": {
+    "description": "Technical-use bolting fabric, including made-up forms",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.31.00.00": {
+    "description": "Endless or link-equipped fabrics and felts for papermaking or similar machinery, below 650 grams per square metre",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.32.00.00": {
+    "description": "Endless or link-equipped fabrics and felts for papermaking or similar machinery, at least 650 grams per square metre",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.40.00.00": {
+    "description": "Filter or straining fabric for oil presses or similar machinery, including human-hair fabric",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5911.90.00.00": {
+    "description": "Other technical textile goods covered by Chapter 59 Note 8",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch59-2026-2-eng.pdf",
+    "reason": "HTML omits product qualifiers; verified against same-edition PDF."
+  },
+  "5402.52.91.00": {
+    "description": "Other polyester single yarn with over 50 turns per metre: wholly polyester fully drawn yarn not exceeding 180 decitex; wholly polyester yarn of 72 to 111 decitex for woven labels; or yarn containing at least 80% polyester, of uneven thickness with slubs, loops or similar irregularities, not exceeding 1000 decitex, for curtains not exceeding 100 grams per square metre",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.10.00.00": {
+    "description": "Woven fabrics of high-tenacity nylon, other polyamide or polyester filament yarn",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.20.00.00": {
+    "description": "Woven fabrics obtained from synthetic strip or the like",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.30.00.00": {
+    "description": "Synthetic filament fabrics specified in Note 9 to Section XI",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.41.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of nylon or other polyamide filaments, unbleached or bleached",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.42.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of nylon or other polyamide filaments, dyed",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.43.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of nylon or other polyamide filaments, of yarns of different colours",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.44.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of nylon or other polyamide filaments, printed",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.51.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, unbleached or bleached",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.52.00.40": {
+    "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, dyed, not exceeding 170 grams per square metre",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.52.00.90": {
+    "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, dyed, exceeding 170 grams per square metre",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.53.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, of yarns of different colours",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5407.54.00.00": {
+    "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, printed",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
+    "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
   }
 }
