@@ -1,0 +1,82 @@
+{
+  "5806.10.00.00": {
+    "description": "Narrow woven pile, terry or chenille fabrics, excluding heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.20.00.00": {
+    "description": "Other narrow woven fabrics with at least 5% elastomeric yarn or rubber thread, excluding heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.31.00.00": {
+    "description": "Other narrow cotton weaves, excluding heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.32.00.11": {
+    "description": "Other narrow polyester ribbon weaves, excluding heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.32.00.19": {
+    "description": "Other narrow polyester weaves, except ribbons and heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.32.00.90": {
+    "description": "Other narrow man-made-fibre weaves, except polyester and heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.39.00.00": {
+    "description": "Other narrow weaves in other textile materials, excluding heading 58.07",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5806.40.00.00": {
+    "description": "Adhesively bonded warp-only narrow fabrics (bolducs)",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5807.10.00.00": {
+    "description": "Non-embroidered woven textile labels, badges and similar goods",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5807.90.00.00": {
+    "description": "Other non-embroidered textile labels, badges and similar goods",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5808.10.00.00": {
+    "description": "Continuous-length braiding",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5808.90.00.00": {
+    "description": "Non-embroidered ornamental trimmings except knitted or crocheted types; tassels, pompons and similar goods",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5810.10.00.00": {
+    "description": "Groundless embroidery in lengths, strips or motifs",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5810.91.00.00": {
+    "description": "Other cotton embroidery in lengths, strips or motifs",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5810.92.00.00": {
+    "description": "Other man-made-fibre embroidery in lengths, strips or motifs",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  },
+  "5810.99.00.00": {
+    "description": "Other embroidery in other textile materials, in lengths, strips or motifs",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch58-2026-2-eng.pdf",
+    "reason": "HTML omits subheading qualifiers; reviewed against same-edition PDF pages 4–6."
+  }
+}
