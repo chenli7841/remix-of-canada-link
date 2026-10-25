@@ -49,28 +49,30 @@ export function OrderTrackingResultView({
   result,
   lang,
   primaryOnly = false,
+  admin = false,
 }: {
   result: OrderTrackingResult;
   lang: "zh" | "en";
   primaryOnly?: boolean;
+  admin?: boolean;
 }) {
   if (primaryOnly || !result.waybills.length)
-    return <TrackingTimeline events={result.events} lang={lang} />;
+    return <TrackingTimeline events={result.events} lang={lang} admin={admin} />;
   return (
     <div className="space-y-3 p-3 sm:p-5">
       {result.waybills.map((w, i) => (
         <details
           key={result.order_no + ":" + w.id}
           open={i === 0}
-          className="rounded-xl border border-border"
+          className={admin ? "rounded-xl border border-slate-700 bg-slate-900/50" : "rounded-xl border border-border"}
         >
-          <summary className="cursor-pointer break-all p-4 text-sm font-semibold">
+          <summary className={`cursor-pointer break-all rounded-xl p-4 text-sm font-semibold ${admin ? "text-sky-300 hover:bg-slate-800/60 focus-visible:outline-sky-400" : ""}`}>
             <span>{w.waybill_no}</span>
-            <span className="ml-3 text-xs font-normal text-ink-soft">
+            <span className={`ml-3 inline-block text-xs font-normal ${admin ? "rounded-full border border-sky-400/25 bg-sky-400/10 px-2 py-0.5 text-sky-200" : "text-ink-soft"}`}>
               {statusLabels[w.status]?.[lang === "zh" ? 0 : 1] ?? w.status}
             </span>
           </summary>
-          <TrackingTimeline events={w.events} lang={lang} />
+          <TrackingTimeline events={w.events} lang={lang} admin={admin} />
         </details>
       ))}
     </div>
@@ -80,11 +82,13 @@ export function OrderTracking({
   no,
   lang,
   primaryOnly = true,
+  admin = false,
   waybillId,
 }: {
   no: string;
   lang: "zh" | "en";
   primaryOnly?: boolean;
+  admin?: boolean;
   waybillId?: string;
 }) {
   const q = useQuery({
@@ -113,9 +117,9 @@ export function OrderTracking({
   if (waybillId)
     return (
       <TrackingTimeline
-        events={q.data.waybills.find((w) => w.id === waybillId)?.events ?? []}
+        events={q.data.waybills.find((w) => w.id === waybillId)?.events ?? []} admin={admin}
         lang={lang}
       />
     );
-  return <OrderTrackingResultView result={q.data} lang={lang} primaryOnly={primaryOnly} />;
+  return <OrderTrackingResultView result={q.data} lang={lang} primaryOnly={primaryOnly} admin={admin} />;
 }

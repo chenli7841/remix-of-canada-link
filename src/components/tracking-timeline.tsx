@@ -18,10 +18,10 @@ const SOURCE_META: Record<TrackingSource, { icon: typeof Globe; zh: string; en: 
   admin_manual: { icon: PencilLine, zh: "客服备注", en: "Note", cls: "bg-cta/10 text-cta" },
 };
 
-export function TrackingTimeline({ events, lang }: { events: TrackingEvent[]; lang: "zh" | "en" }) {
+export function TrackingTimeline({ events, lang, admin = false }: { events: TrackingEvent[]; lang: "zh" | "en"; admin?: boolean }) {
   if (events.length === 0) {
     return (
-      <div className="p-6 text-center text-sm text-ink-soft">
+      <div className={`p-6 text-center text-sm ${admin ? "text-slate-400" : "text-ink-soft"}`}>
         {lang === "zh" ? "运单已创建，等待入库扫描…" : "Shipment created. Waiting for warehouse scan…"}
       </div>
     );
@@ -40,22 +40,22 @@ export function TrackingTimeline({ events, lang }: { events: TrackingEvent[]; la
         return (
           <li key={i} className="relative flex gap-4 pb-6 last:pb-0">
             {i < lastIdx && (
-              <span className="absolute left-[11px] top-7 h-full w-px bg-border" aria-hidden />
+              <span className={`absolute left-[11px] top-7 h-full w-px ${admin ? "bg-slate-700" : "bg-border"}`} aria-hidden />
             )}
             <span className="relative z-10 mt-1">
-              {active ? <CheckCircle2 className="h-6 w-6 text-success" /> : <Circle className="h-6 w-6 text-border" />}
+              {active ? <CheckCircle2 className={`h-6 w-6 ${admin ? "text-emerald-400" : "text-success"}`} /> : <Circle className={`h-6 w-6 ${admin ? "text-slate-500" : "text-border"}`} />}
             </span>
             <div className="min-w-0 flex-1 break-words">
               <div className="flex flex-wrap items-baseline gap-2">
-                <div className={`text-sm font-semibold ${active ? "text-foreground" : "text-ink-soft"}`}>{status}</div>
-                {loc && <div className="text-xs text-ink-soft">· {loc}</div>}
-                <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${src.cls}`}>
+                <div className={`text-sm font-semibold ${admin ? (active ? "text-slate-100" : "text-slate-300") : (active ? "text-foreground" : "text-ink-soft")}`}>{status}</div>
+                {loc && <div className={`text-xs ${admin ? "text-slate-400" : "text-ink-soft"}`}>· {loc}</div>}
+                <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${admin ? (ev.source === "third_party" ? "border border-violet-400/30 bg-violet-400/10 text-violet-200" : ev.source === "admin_action" ? "border border-sky-400/30 bg-sky-400/10 text-sky-200" : "border border-amber-400/30 bg-amber-400/10 text-amber-200") : src.cls}`}>
                   <SrcIcon className="h-3 w-3" />
                   {lang === "zh" ? src.zh : src.en}
-                  {ev.source_ref && <span className="opacity-60">· {ev.source_ref}</span>}
+                  {ev.source_ref && <span className={admin ? "break-all text-slate-300" : "opacity-60"}>· {ev.source_ref}</span>}
                 </span>
               </div>
-              <div className="mt-1 font-mono text-xs text-ink-soft">
+              <div className={`mt-1 font-mono text-xs ${admin ? "text-slate-400" : "text-ink-soft"}`}>
                 {new Date(ev.event_time).toLocaleString(lang === "zh" ? "zh-CN" : "en-CA")}
               </div>
             </div>

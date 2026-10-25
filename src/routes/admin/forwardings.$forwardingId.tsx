@@ -389,9 +389,7 @@ function FwDetail() {
       />
 
       <Card title="物流轨迹">
-        <div className="[&_*]:!text-white [&_.text-ink-soft]:!text-white/70 [&_.text-border]:!text-white/30">
-          <OrderTracking no={fo.request_no} lang="zh" primaryOnly={false} />
-        </div>
+        <OrderTracking no={fo.request_no} lang="zh" primaryOnly={false} admin />
       </Card>
 
 
