@@ -7,9 +7,8 @@ import { useEffect, useState } from "react";
 import { listHsCodes, upsertHsCode, deleteHsCode } from "@/lib/hs-codes.functions";
 import { HsCodeInput } from "@/components/HsCodeInput";
 import { HsCodeNames } from "@/components/HsCodeNames";
+import { HsChapterList } from "@/components/HsChapterList";
 import { BookText, Loader2, Plus, Save, Trash2, Search, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
-
-const PAGE_SIZE = 50;
 
 export const Route = createFileRoute("/admin/hs-codes")({ component: HsCodesPage });
 
@@ -30,16 +29,21 @@ function HsCodesPage() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
+  const [chapter, setChapter] = useState("");
+  const [pageSize, setPageSize] = useState(25);
   const q = useQuery({
-    queryKey: ["hs-codes", debounced, page],
-    queryFn: () => fetchList({ data: { search: debounced || undefined, page, pageSize: PAGE_SIZE } }),
+    queryKey: ["hs-codes", debounced, chapter, page, pageSize],
+    queryFn: () => fetchList({ data: { search: debounced || undefined, chapter: chapter || undefined, page, pageSize } }),
   });
   const total = q.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  // 搜索词变了就回到第 1 页——否则停在旧页码上，搜索结果可能刚好被"翻页"藏起来，看着像 0 条
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   useEffect(() => {
-    setPage(1);
-  }, [debounced]);
+    const timer = window.setTimeout(() => { setDebounced(search); setPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    if (q.data && page > totalPages) setPage(totalPages);
+  }, [q.data, page, totalPages]);
 
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(EMPTY);
@@ -75,12 +79,12 @@ function HsCodesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div className="mx-auto min-w-0 max-w-7xl p-3 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-bold inline-flex items-center gap-2">
           <BookText className="h-5 w-5 text-blue-400" />HS 编码库
         </h1>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <a href="https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2025/menu-eng.html" target="_blank" rel="noreferrer"
              className="inline-flex items-center gap-1 hover:text-white"><ExternalLink className="h-3 w-3"/>Customs Tariff T2025</a>
           <a href="https://www.cbsa-asfc.gc.ca/sima-lmsi/mif-mev/menu-eng.html" target="_blank" rel="noreferrer"
@@ -88,18 +92,21 @@ function HsCodesPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 rounded-2xl border border-white/5 bg-white/[0.02]">
+          <HsChapterList chapter={chapter} onChange={value => { setChapter(value); setPage(1); }} />
           <div className="flex items-center gap-2 border-b border-white/5 p-3">
             <Search className="h-4 w-4 text-slate-500" />
             <input
               value={search}
-              onChange={(e) => { setSearch(e.target.value); clearTimeout((window as any).__hs); (window as any).__hs = setTimeout(() => setDebounced(e.target.value), 300); }}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索 HS 编码 / 品名…"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-600"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-600"
             />
-            <span className="text-xs text-slate-500">共 {total} 条</span>
+            <span className="shrink-0 text-xs text-slate-500">共 {total} 条</span>
           </div>
+          <HsPagination page={page} pageSize={pageSize} total={total} loading={q.isFetching} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(1); }} />
+          {q.isError && <div role="alert" className="p-3 text-sm text-rose-300">加载失败，请重试。<button onClick={() => q.refetch()} className="ml-2 underline">重新加载</button></div>}
           {q.isLoading ? (
             <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-slate-500"/></div>
           ) : (
@@ -165,47 +172,16 @@ function HsCodesPage() {
               </ResponsiveTable>
             </div>
           )}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-white/5 p-3 text-xs text-slate-400">
-              <span>第 {page} / {totalPages} 页</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 hover:bg-white/5 disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />上一页
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={page}
-                  onChange={(e) => {
-                    const v = Math.min(totalPages, Math.max(1, Number(e.target.value) || 1));
-                    setPage(v);
-                  }}
-                  className="w-14 rounded-md border border-white/10 bg-white/5 px-1.5 py-1 text-center"
-                />
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 hover:bg-white/5 disabled:opacity-40"
-                >
-                  下一页<ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
+          <HsPagination page={page} pageSize={pageSize} total={total} loading={q.isFetching} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(1); }} />
         </div>
 
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+        <div className="min-w-0 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="font-bold">{editing ? "编辑 HS 编码" : "新增 HS 编码"}</div>
             {editing && <button onClick={() => { setEditing(null); setMsg(null); }} className="text-xs text-slate-400 hover:text-white">取消</button>}
           </div>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <Field label="HS 编码 *"><HsCodeInput value={current.hs_code} onChange={v => update("hs_code", v)} /></Field>
               <Field label="章节"><Input value={current.chapter ?? ""} onChange={v => update("chapter", v)} placeholder="01"/></Field>
             </div>
@@ -233,7 +209,7 @@ function HsCodesPage() {
               />
             </Field>
             <Field label="备注"><Input value={current.note ?? ""} onChange={v => update("note", v)}/></Field>
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={current.is_active} onChange={(e) => update("is_active", e.target.checked)}/>
                 启用
@@ -256,8 +232,36 @@ function HsCodesPage() {
   );
 }
 
+function HsPagination({ page, pageSize, total, loading, onPage, onPageSize }: {
+  page: number; pageSize: number; total: number; loading: boolean;
+  onPage: (page: number) => void; onPageSize: (size: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const [jump, setJump] = useState(String(page));
+  useEffect(() => setJump(String(page)), [page]);
+  const go = () => { const next = Math.min(pages, Math.max(1, Math.floor(Number(jump) || 1))); setJump(String(next)); onPage(next); };
+  const buttonClass = "rounded-md border border-white/10 px-2 py-1.5 hover:bg-white/5 disabled:opacity-40";
+  return <nav aria-label="HS 编码分页" className="flex flex-wrap items-center justify-between gap-3 border-b border-t border-white/5 p-3 text-xs text-slate-300">
+    <div className="flex flex-wrap items-center gap-2">
+      <label>每页 <select aria-label="每页条数" value={pageSize} onChange={e => onPageSize(Number(e.target.value))} className="rounded border border-white/10 bg-slate-900 px-2 py-1.5">{[25, 50, 100].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label>
+      <span>{loading ? "加载中…" : `共 ${total} 条 · ${total ? (page - 1) * pageSize + 1 : 0}–${Math.min(page * pageSize, total)}`}</span>
+    </div>
+    <div className="flex flex-wrap items-center gap-1">
+      <button type="button" disabled={loading || page <= 1} onClick={() => onPage(1)} className={buttonClass}>首页</button>
+      <button type="button" aria-label="上一页" disabled={loading || page <= 1} onClick={() => onPage(page - 1)} className={buttonClass}><ChevronLeft className="h-4 w-4" /></button>
+      <span className="px-1">{page} / {pages}</span>
+      <button type="button" aria-label="下一页" disabled={loading || page >= pages} onClick={() => onPage(page + 1)} className={buttonClass}><ChevronRight className="h-4 w-4" /></button>
+      <button type="button" disabled={loading || page >= pages} onClick={() => onPage(pages)} className={buttonClass}>末页</button>
+      <form className="ml-1 flex items-center gap-1" onSubmit={e => { e.preventDefault(); go(); }}>
+        <input aria-label="跳转页码" type="number" min={1} max={pages} value={jump} onChange={e => setJump(e.target.value)} className="w-14 rounded border border-white/10 bg-white/5 px-1 py-1.5 text-center" />
+        <button disabled={loading} className={buttonClass}>跳转</button>
+      </form>
+    </div>
+  </nav>;
+}
+
 function Field({ label, children }: any) {
-  return <div><div className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">{label}</div>{children}</div>;
+  return <div className="min-w-0"><div className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">{label}</div>{children}</div>;
 }
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}

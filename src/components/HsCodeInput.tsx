@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { OTPInputContext } from "input-otp";
-import { InputOTP, InputOTPGroup, InputOTPSeparator } from "@/components/ui/input-otp";
+import { InputOTP, InputOTPGroup } from "@/components/ui/input-otp";
 import { hsCodeDigitsOnly } from "@/lib/hs-code-format";
 
 // Segmented 0000.00.00.00 entry — the shape is baked into the input itself
@@ -12,7 +12,7 @@ function Slot({ index }: { index: number }) {
   const { char, hasFakeCaret, isActive } = ctx.slots[index];
   return (
     <div
-      className={`relative flex h-8 w-6 items-center justify-center border-y border-r border-input text-sm shadow-sm first:rounded-l-md first:border-l last:rounded-r-md ${
+      className={`relative flex h-8 min-w-0 flex-1 items-center justify-center border-y border-r border-input text-sm shadow-sm first:rounded-l-md first:border-l last:rounded-r-md ${
         isActive ? "z-10 ring-1 ring-ring" : ""
       }`}
     >
@@ -27,9 +27,7 @@ function Slot({ index }: { index: number }) {
 }
 
 const Dot = () => (
-  <InputOTPSeparator>
-    <span className="px-0.5 text-muted-foreground">.</span>
-  </InputOTPSeparator>
+  <span aria-hidden="true" className="w-1 shrink-0 text-center text-muted-foreground">.</span>
 );
 
 export function HsCodeInput({
@@ -54,27 +52,28 @@ export function HsCodeInput({
       disabled={disabled}
       inputMode="numeric"
       pattern="^[0-9]*$"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? "HS 编码"}
+      containerClassName="w-full min-w-0 max-w-80 gap-1"
     >
-      <InputOTPGroup>
+      <InputOTPGroup className="min-w-0 flex-[4]">
         {[0, 1, 2, 3].map((i) => (
           <Slot key={i} index={i} />
         ))}
       </InputOTPGroup>
       <Dot />
-      <InputOTPGroup>
+      <InputOTPGroup className="min-w-0 flex-[2]">
         {[4, 5].map((i) => (
           <Slot key={i} index={i} />
         ))}
       </InputOTPGroup>
       <Dot />
-      <InputOTPGroup>
+      <InputOTPGroup className="min-w-0 flex-[2]">
         {[6, 7].map((i) => (
           <Slot key={i} index={i} />
         ))}
       </InputOTPGroup>
       <Dot />
-      <InputOTPGroup>
+      <InputOTPGroup className="min-w-0 flex-[2]">
         {[8, 9].map((i) => (
           <Slot key={i} index={i} />
         ))}
