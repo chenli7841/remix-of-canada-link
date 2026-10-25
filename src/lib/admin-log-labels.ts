@@ -26,6 +26,13 @@ const actions: Record<string, string> = {
   update_note: "修改备注", set_intake_reminder: "设置入库提醒", set_return_reminder: "设置退运提醒",
 };
 const entities: Record<string, string> = {
+  customer_profile: "客户资料", customer_address: "客户地址", customer_item: "客户物品", customer_hs_item: "客户品名",
+  forwarding_item: "订单内件", delivery_queue: "待派送单位", driver_trip: "司机趟", detained_package: "扣留包裹",
+  wallet: "钱包", wallet_transaction: "钱包流水", invoice_item: "账单明细", offline_payment: "线下付款", batch_settlement: "客户批次结算",
+  shop_product: "商品", shop_variant: "商品规格", shop_stock: "商品库存", shop_order: "商城订单", shop_category: "商品分类",
+  shop_coupon: "优惠券", shop_banner: "横幅", shop_article: "文章", user: "用户权限及等级",
+  freight_rule: "运费规则", shipping_route: "运输线路", warehouse: "仓库", destination: "目的地", cargo_type: "货物类型", oversize_rule: "超尺寸规则",
+  app_setting: "系统设置", wecom_notify_group: "企业微信群", wecom_notify_binding: "客户群绑定", wecom_notify_message: "企业微信消息",
   order: "订单", forwarding: "集运单", customer_forwarding: "客户集运单", waybill: "运单", batch: "批次", carton: "箱号", pallet: "托盘",
   profile: "客户资料", customer: "客户", invoice: "账单", surcharge: "附加费", tracking_event: "物流动态", receiving: "收货单",
   settings: "系统设置", route: "线路", shop_cart: "购物车", product: "商品", inventory: "库存", address: "地址", hs_code: "海关编码",

@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -37,7 +38,7 @@ function CouponsPage() {
               <tbody className="divide-y divide-white/5">
                 {(q.data?.items ?? []).map((c: any) => (
                   <tr key={c.id} className="hover:bg-white/5">
-                    <td className="p-3 font-mono text-xs">{c.code}</td>
+                    <td className="p-3 font-mono text-xs">{c.code}<EntityActionLogs compact entityType="shop_coupon" entityId={c.id}/></td>
                     <td className="p-3 text-xs">{c.type === "fixed" ? "固定金额" : "百分比"}</td>
                     <td className="p-3 text-right">{c.type === "fixed" ? `¥${c.value}` : `${c.value}%`}</td>
                     <td className="p-3 text-right">¥{c.min_order_cny}</td>

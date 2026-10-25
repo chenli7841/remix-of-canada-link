@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -143,7 +144,7 @@ function OversizeRulesPage() {
                     <td className="py-2.5">
                       <div className="text-xs font-semibold text-slate-100">{r.name}</div>
                       {r.notes && <div className="mt-0.5 text-[10px] text-slate-500">{r.notes}</div>}
-                    </td>
+                    <EntityActionLogs compact entityType="oversize_rule" entityId={r.id}/></td>
                     <td className="text-xs text-slate-300">{scope}</td>
                     <td className="text-xs font-mono text-slate-300">{r.max_length_cm ?? "—"} × {r.max_width_cm ?? "—"} × {r.max_height_cm ?? "—"}</td>
                     <td className="text-xs font-mono text-slate-300">{r.max_single_side_cm ?? "—"} / {r.max_girth_cm ?? "—"}</td>

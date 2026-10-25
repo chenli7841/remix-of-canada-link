@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,7 +43,7 @@ function ArticlesPage() {
                   </div>
                   <button onClick={() => setEditing({ ...a })} className="text-xs text-brand hover:underline">编辑</button>
                   <button onClick={() => onDel(a.id)} className="text-rose-400"><Trash2 className="h-3.5 w-3.5"/></button>
-                </div>
+                <EntityActionLogs compact entityType="shop_article" entityId={a.id}/></div>
               ))}
               {(q.data?.items ?? []).length === 0 && <div className="p-6 text-center text-sm text-slate-500">尚无文章</div>}
             </div>

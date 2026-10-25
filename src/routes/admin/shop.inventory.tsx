@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -147,7 +148,7 @@ function InventoryPage() {
             <tbody className="divide-y divide-white/5">
               {items.map((m: any) => (
                 <tr key={m.id} className="hover:bg-white/5">
-                  <td className="p-3 text-xs text-slate-400">{new Date(m.created_at).toLocaleString("zh-CN")}</td>
+                  <td className="p-3 text-xs text-slate-400">{new Date(m.created_at).toLocaleString("zh-CN")}<EntityActionLogs compact entityType="shop_stock" entityId={m.variant_id}/></td>
                   <td className="p-3 text-xs">{m.warehouse ? `${m.warehouse.code} · ${m.warehouse.name_zh}` : "—"}</td>
                   <td className="p-3 font-mono text-xs">{m.variant?.sku ?? "—"}</td>
                   <td className="p-3 text-xs">{m.variant?.product?.name ?? "—"}</td>

@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -379,7 +380,9 @@ function UserDetailPage() {
           )}
         </section>
       </div>
-    </div>
+
+<EntityActionLogs entityType={["user", "customer_profile", "customer_address", "customer_item"]} entityId={userId} title="客户资料操作记录" /><EntityActionLogs entityType="wallet" entityId={userId} title="钱包操作记录" />
+</div>
   );
 }
 
@@ -1130,7 +1133,7 @@ function WalletLedgerCard({ txs, userId, canEdit }: { txs: any[]; userId: string
                       {new Date(t.created_at).toLocaleString("zh-CN", { hour12: false })}
                       {t.ref_no ? ` · ${t.ref_no}` : ""}
                     </div>
-                    {t.note && <div className="mt-0.5 truncate text-[10px] text-slate-500">{t.note}</div>}
+                    {t.note && <div className="mt-0.5 truncate text-[10px] text-slate-500">{t.note}</div>}<EntityActionLogs compact entityType="wallet_transaction" entityId={t.id} />
                     {t.receipt_reason && (
                       <div className="mt-0.5 text-[10px] text-amber-300/90">
                         回执：{t.receipt_reason}
@@ -1352,7 +1355,7 @@ function CustomerHsCard({ userId, canEdit }: { userId: string; canEdit: boolean 
             ) : (
               rows.map((r) => (
                 <tr key={r.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                  <td className="px-2 py-1.5 font-mono text-slate-300">{r.sku ?? "—"}</td>
+                  <td className="px-2 py-1.5 font-mono text-slate-300">{r.sku ?? "—"}<EntityActionLogs compact entityType="customer_hs_item" entityId={r.id}/></td>
                   <td className="px-2 py-1.5 text-slate-100">{r.description}</td>
                   <td className="px-2 py-1.5 text-right text-slate-300">
                     {r.unit_price_cad != null ? `$${Number(r.unit_price_cad).toFixed(2)}` : "—"}

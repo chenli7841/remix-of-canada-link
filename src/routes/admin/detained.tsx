@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -58,7 +59,7 @@ function DetainedPage() {
                 <td className="px-4 py-3 text-xs text-slate-300">{d.created_by_name ?? "—"}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{d.released_at ? fmtDate(d.released_at) : "—"}</td>
                 <td className="px-4 py-3 text-xs text-slate-300">{d.released_by_name ?? "—"}</td>
-                <td className="px-4 py-3 text-xs text-slate-400">{d.note ?? "—"}</td>
+                <td className="px-4 py-3 text-xs text-slate-400">{d.note ?? "—"}<EntityActionLogs compact entityType="detained_package" entityId={d.id}/></td>
               </tr>
             ))}
 

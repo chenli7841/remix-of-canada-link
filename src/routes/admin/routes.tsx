@@ -1,3 +1,4 @@
+import { EntityActionLogs, RelatedActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -133,7 +134,7 @@ function RoutesPage() {
                   <td className="px-4 py-3">
                     <div className="font-mono text-xs text-slate-300">{r.code}</div>
                     <div className="text-sm font-medium text-slate-100">{r.name_zh}</div>
-                  </td>
+                  <EntityActionLogs compact entityType="shipping_route" entityId={r.id}/><RelatedActionLogs kind="route" id={r.id}/></td>
                   <td className="px-4 py-3 text-xs">
                     {METHOD_OPTIONS.find((m) => m.v === r.shipping_method)?.label}
                     <span

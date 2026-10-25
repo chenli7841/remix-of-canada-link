@@ -1,3 +1,4 @@
+import { RelatedActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
@@ -1546,7 +1547,7 @@ function BatchDetail() {
           </div>
         </div>
       )}
-    </div>
+    <RelatedActionLogs kind="batch" id={batchId}/></div>
   );
 }
 

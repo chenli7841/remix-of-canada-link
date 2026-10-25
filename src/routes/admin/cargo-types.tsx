@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -31,7 +32,7 @@ function CargoTypesPage() {
             {q.isLoading && <tr><td colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500"/></td></tr>}
             {q.data?.items.map((c: any) => (
               <tr key={c.id} className="hover:bg-white/[0.03]">
-                <td className="px-4 py-2.5 font-mono text-xs text-brand">{c.code}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-brand">{c.code}<EntityActionLogs compact entityType="cargo_type" entityId={c.id}/></td>
                 <td className="text-sm">{c.name_zh}</td>
                 <td className="text-xs text-slate-400">{c.name_en ?? "—"}</td>
                 <td className="text-xs">{c.sort_order}</td>

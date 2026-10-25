@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -755,7 +756,7 @@ function SystemPage() {
           <SaveBtn busy={saving === "print_template"} onClick={() => save("print_template", tpl)} />
         </Card>
       </div>
-    </div>
+    <section className="mt-6"><h2 className="text-sm font-semibold">设置操作记录</h2>{KEYS.map(key=><EntityActionLogs key={key} entityType="app_setting" entityId={key} title={KEY_LABELS[key]||key}/>)}</section></div>
   );
 }
 

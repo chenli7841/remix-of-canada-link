@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -404,7 +405,9 @@ function ReceivingDetail() {
           </div>
         </div>
       )}
-    </div>
+
+<EntityActionLogs entityType="receiving" entityId={receivingId} />
+</div>
   );
 }
 

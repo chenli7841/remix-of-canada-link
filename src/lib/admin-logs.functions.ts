@@ -25,6 +25,7 @@ export const listAdminLogs = createServerFn({ method: "POST" })
     (
       d: {
         entity_type?: string;
+        entity_types?: string[];
         entity_id?: string;
         action?: string;
         q?: string;
@@ -43,8 +44,10 @@ export const listAdminLogs = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("admin_action_logs")
       .select("*", { count: "exact" })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     if (data.entity_type) q = q.eq("entity_type", data.entity_type);
+    if (data.entity_types?.length) q = q.in("entity_type", data.entity_types);
     if (data.entity_id) q = q.eq("entity_id", data.entity_id);
     if (data.action) q = q.eq("action", data.action);
     if (data.date_from) q = q.gte("created_at", new Date(data.date_from).toISOString());
@@ -77,4 +80,27 @@ export const logFacets = createServerFn({ method: "POST" })
     const types = Array.from(new Set((rows ?? []).map((r: any) => r.entity_type).filter(Boolean))).sort() as string[];
     const actions = Array.from(new Set((rows ?? []).map((r: any) => r.action).filter(Boolean))).sort() as string[];
     return { types, actions };
+  });
+
+export const listAuditChildren = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { kind: "batch" | "route" | "trip"; id: string }) => {
+    if (!["batch", "route", "trip"].includes(d.kind) || !d.id) throw new Error("记录范围无效");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const rows: { id: string; label: string }[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const result = data.kind === "batch"
+        ? await supabaseAdmin.from("batch_settlements").select("id,customer_code").eq("batch_id", data.id).order("id").range(offset, offset + 499)
+        : data.kind === "route"
+        ? await supabaseAdmin.from("freight_rules").select("id").eq("route_id", data.id).order("id").range(offset, offset + 499)
+        : await supabaseAdmin.from("driver_trips").select("id,created_at").eq("loading_trip_id", data.id).order("id").range(offset, offset + 499);
+      if (result.error) throw new Error("关联记录读取失败");
+      rows.push(...(result.data ?? []).map((r: any, i: number) => ({id:r.id, label:data.kind === "batch" ? `客户 ${r.customer_code} 结算` : data.kind === "route" ? `运费规则 ${offset + i + 1}` : `派送趟 ${r.created_at}`})));
+      if ((result.data ?? []).length < 500) break;
+    }
+    return rows;
   });

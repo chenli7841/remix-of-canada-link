@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -1408,7 +1409,7 @@ function AddressesTab({ userId }: { userId: string }) {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-            </div>
+            <EntityActionLogs compact entityType="customer_address" entityId={a.id}/></div>
           ))}
         </div>
       )}
@@ -1584,7 +1585,7 @@ function ItemsTab({ userId }: { userId: string }) {
             <tbody>
               {list.map((r: any) => (
                 <tr key={r.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                  <td className="px-3 py-2 font-mono text-slate-300">{r.sku ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-slate-300">{r.sku ?? "—"}<EntityActionLogs compact entityType="customer_item" entityId={r.id}/></td>
                   <td className="px-3 py-2 text-slate-100">{r.name}</td>
                   <td className="px-3 py-2 font-mono text-cyan-300">{r.hs_code}</td>
                   <td className="px-3 py-2 text-right text-slate-300">

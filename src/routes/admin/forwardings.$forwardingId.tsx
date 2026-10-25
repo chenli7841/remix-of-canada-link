@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { WaybillActionLogs } from "@/components/admin/WaybillActionLogs";
 import {OrderTracking} from "@/components/order-tracking";
 import {CargoPhotos} from '@/components/CargoPhotos';
@@ -812,6 +813,7 @@ function ItemsCustomerCard({
                 {ITEM_COLS.map((c) => (
                   <td key={c.k} className="py-1.5 pr-3 align-top">
                     {editId === it.id ? editInput(c.k) : fmtCell(c.k, it)}
+{c === ITEM_COLS[0] && <EntityActionLogs compact entityType="forwarding_item" entityId={it.id} />}
                   </td>
                 ))}
                 {canEdit && (

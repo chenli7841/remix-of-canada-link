@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -278,7 +279,7 @@ function LedgerView() {
                   </span>
                 </td>
                 <td className="px-4 py-3 font-mono text-[10px] text-slate-500">{r.ref_no ?? "—"}</td>
-                <td className="px-4 py-3 text-xs text-slate-400">{r.note ?? "—"}</td>
+                <td className="px-4 py-3 text-xs text-slate-400">{r.note ?? "—"}<EntityActionLogs compact entityType="wallet_transaction" entityId={r.id}/></td>
               </tr>
             ))}
           </tbody>

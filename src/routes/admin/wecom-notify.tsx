@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { Pagination } from "@/components/admin/Pagination";
 import { createFileRoute } from "@tanstack/react-router";
@@ -518,7 +519,7 @@ function GroupsTab({ enabled }: { enabled: boolean }) {
                   {g.name || "—"}
                   {g.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
                   {g.problem && <div className="mt-1 text-[11px] font-normal text-amber-300">{g.problem.problem_label}</div>}
-                </td>
+                <EntityActionLogs compact entityType="wecom_notify_group" entityId={g.chat_id}/></td>
                 <td className="text-xs text-slate-300">{g.owner_name || g.owner_userid || "—"}{g.owner_name && g.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{g.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">
                   {g.matched_customer_code || <span className="text-amber-400">未匹配</span>}
@@ -782,7 +783,7 @@ function ProblemGroupsTab() {
                 <td className="px-3 py-2 font-medium text-slate-100">
                   {group.name || "—"}
                   {group.is_blocked && <span className="ml-2 text-xs text-rose-400">已屏蔽</span>}
-                </td>
+                <EntityActionLogs compact entityType="wecom_notify_group" entityId={group.chat_id}/></td>
                 <td className="text-xs text-slate-300">{group.owner_name || group.owner_userid || "—"}{group.owner_name && group.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{group.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">{group.candidate_customer_code || "—"}</td>
                 <td className="text-xs text-amber-300">{group.problem_label}</td>
@@ -984,7 +985,7 @@ function BlockedGroupsTab() {
                     aria-label={`选择测试群 ${group.name || group.chat_id}`}
                   />
                 </td>
-                <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}</td>
+                <td className="px-3 py-2 font-medium text-slate-100">{group.name || "—"}<EntityActionLogs compact entityType="wecom_notify_group" entityId={group.chat_id}/></td>
                 <td className="text-xs text-slate-300">{group.owner_name || group.owner_userid || "—"}{group.owner_name && group.owner_userid ? <div className="font-mono text-[10px] text-slate-500">{group.owner_userid}</div> : null}</td>
                 <td className="font-mono text-xs text-slate-300">{group.matched_customer_code || "—"}</td>
                 <td className="text-xs text-slate-400">{group.member_count}</td>
@@ -1154,7 +1155,7 @@ function BindingsTab({ enabled: _enabled }: { enabled: boolean }) {
             {pageRows.map((b) => (
               <tr key={b.id}>
                 <td className="px-3 py-2"><input type="checkbox" checked={selectedChatIds.includes(b.chat_id)} onChange={(event) => setSelectedChatIds(event.target.checked ? [...new Set([...selectedChatIds, b.chat_id])] : selectedChatIds.filter((id) => id !== b.chat_id))} aria-label={`选择群 ${b.wecom_notify_groups?.name || b.chat_id}`} /></td>
-                <td className="px-3 py-2 font-medium text-slate-100">{b.customer_code}</td>
+                <td className="px-3 py-2 font-medium text-slate-100">{b.customer_code}<EntityActionLogs compact entityType="wecom_notify_binding" entityId={b.customer_code}/></td>
                 <td className="text-xs text-slate-300">
                   {b.wecom_notify_groups?.name || b.chat_id}
                 </td>
@@ -1669,7 +1670,7 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
             )}
             {pageRows.map((m) => (
               <tr key={m.id}>
-                <td className="px-3 py-2 font-medium text-slate-100">{m.title || "(未命名)"}</td>
+                <td className="px-3 py-2 font-medium text-slate-100">{m.title || "(未命名)"}<EntityActionLogs compact entityType="wecom_notify_message" entityId={m.id}/></td>
                 <td className="text-xs text-slate-400">
                   {m.target_scope === "all_bound" ? "全部已绑定" : "指定客户"}
                 </td>

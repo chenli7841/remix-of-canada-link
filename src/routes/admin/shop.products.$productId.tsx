@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -750,7 +751,7 @@ function ProductEdit() {
                           </div>
                         </div>
                       )}
-                    </div>
+                    {v.id && <EntityActionLogs compact entityType={["shop_variant", "shop_stock"]} entityId={v.id} title="规格及库存操作记录"/>}</div>
                   );
                 })}
               </div>
@@ -1360,7 +1361,9 @@ function ProductEdit() {
 
         <p className="mt-6 text-center text-[11px] text-ink-soft">相关推荐按同分类自动生成，无需在这里设置</p>
       </div>
-    </div>
+
+{productId !== "new" && <EntityActionLogs entityType="shop_product" entityId={productId} title="商品操作记录" />}
+</div>
   );
 }
 

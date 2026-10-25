@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -119,7 +120,7 @@ function HsCodesPage() {
                 <tbody className="divide-y divide-white/5">
                   {(q.data?.items ?? []).map((c: any) => (
                     <tr key={c.id} className="hover:bg-white/5 align-top">
-                      <td className="p-3 font-mono text-xs">{c.hs_code}</td>
+                      <td className="p-3 font-mono text-xs">{c.hs_code}<EntityActionLogs compact entityType="hs_code" entityId={c.id}/></td>
                       <td className="p-3 text-slate-400">{c.chapter ?? "-"}</td>
                       <td className="p-3 max-w-md">
                         <HsCodeNames nameZh={c.name_zh} nameEn={c.name_en} />

@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -219,7 +220,7 @@ function InvoiceDetail() {
                   <td>{METHOD_LABEL[p.method] ?? p.method}</td>
                   <td className="font-semibold text-emerald-300">CA${Number(p.amount_cad).toFixed(2)}</td>
                   <td className="font-mono text-[10px]">{p.reference ?? "—"}</td>
-                  <td className="text-slate-400">{p.note ?? "—"}</td>
+                  <td className="text-slate-400">{p.note ?? "—"}<EntityActionLogs compact entityType="offline_payment" entityId={p.id}/></td>
                   <td>
                     <button
                       onClick={async () => {
@@ -305,7 +306,10 @@ function InvoiceDetail() {
           </div>
         </div>
       )}
-    </div>
+
+<EntityActionLogs entityType="invoice" entityId={invoiceId} />
+<details className="my-4 print:hidden"><summary className="cursor-pointer text-sm text-slate-200">账单明细操作记录</summary>{items.map((it:any)=><EntityActionLogs key={it.id} entityType="invoice_item" entityId={it.id} title={it.description || "账单明细"}/>)}</details>
+</div>
   );
 }
 

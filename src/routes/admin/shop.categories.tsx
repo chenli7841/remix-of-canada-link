@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -43,7 +44,7 @@ function CategoriesPage() {
               <tbody className="divide-y divide-white/5">
                 {(q.data?.items ?? []).map((c: any) => (
                   <tr key={c.id} className="hover:bg-white/5">
-                    <td className="p-3">{c.name}</td>
+                    <td className="p-3">{c.name}<EntityActionLogs compact entityType="shop_category" entityId={c.id}/></td>
                     <td className="p-3 font-mono text-xs text-slate-400">{c.slug}</td>
                     <td className="p-3 text-right">{c.sort_order}</td>
                     <td className="p-3">{c.is_active ? <span className="text-emerald-300">启用</span> : <span className="text-slate-500">停用</span>}</td>

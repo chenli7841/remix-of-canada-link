@@ -1,3 +1,4 @@
+import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -75,7 +76,7 @@ function WarehousesPage() {
             {q.data?.warehouses.length === 0 && (<tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500">暂无仓库</td></tr>)}
             {q.data?.warehouses.map((w) => (
               <tr key={w.id} className="hover:bg-white/[0.03]">
-                <td className="px-4 py-3 font-mono text-xs">{w.code}</td>
+                <td className="px-4 py-3 font-mono text-xs">{w.code}<EntityActionLogs compact entityType="warehouse" entityId={w.id}/></td>
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-100">{w.name_zh}</div>
                   {w.name_en && <div className="text-xs text-slate-500">{w.name_en}</div>}
