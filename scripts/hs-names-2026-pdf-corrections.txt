@@ -1,0 +1,29 @@
+5603.13.00.20|Polypropylene filament nonwovens, weighing more than 70 but not more than 150 grams per square metre, whether or not impregnated, coated, covered or laminated|聚丙烯长丝无纺布（70克<每平方米重量≤150克，不论是否浸渍、涂覆、包覆或层压）
+5607.49.10.00|Other polyethylene or polypropylene ropes: UIAA-standard climbing ropes; commercial fishing or marine-plant harvesting seine ropes of circumference at least 60 mm, consisting of multiple polypropylene ropes and twisted steel wires surrounding a multiple-polypropylene-rope core; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; twine for baling farm produce|其他聚乙烯或聚丙烯绳索：符合UIAA标准的攀登绳；商业捕鱼或海洋植物采集用周长≥60毫米、聚丙烯多绳芯外包聚丙烯多绳及绞合钢丝的围网绳；上述商业用途周长≤38毫米的绳索；农产品打包绳
+5607.50.10.00|Other synthetic-fibre ropes: wholly polyester electrically conductive braided cord of circumference over 29 but not exceeding 40 mm for manufacturing or refurbishing electrical generators; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes|其他合成纤维绳索：发电机制造或翻修用纯聚酯导电编织绳（29毫米<周长≤40毫米）；商业捕鱼或海洋植物采集用周长≤38毫米的绳索；符合UIAA标准的攀登绳
+5607.90.10.00|Other textile ropes: jute twine for area-carpet backing manufacture; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes|其他纺织材料绳索：块毯衬底制造用黄麻绳；商业捕鱼或海洋植物采集用周长≤38毫米的绳索；符合UIAA标准的攀登绳
+6804.10.00.00|Millstones and grindstones for milling, grinding or pulping, without frameworks, of natural stone, agglomerated natural or artificial abrasives, or ceramics|碾磨、研磨或制浆用无框磨石（天然石料、凝聚天然或人造磨料或陶瓷制）
+6804.21.00.00|Other millstones, grindstones, grinding wheels and the like, without frameworks, of agglomerated synthetic or natural diamond|凝聚人造或天然金刚石制其他无框磨石、砂轮及类似品
+6804.22.00.00|Other millstones, grindstones, grinding wheels and the like, without frameworks, of other agglomerated abrasives or ceramics|其他凝聚磨料或陶瓷制无框磨石、砂轮及类似品
+6804.23.00.00|Other millstones, grindstones, grinding wheels and the like, without frameworks, of natural stone|天然石料制其他无框磨石、砂轮及类似品
+6804.30.00.00|Hand sharpening or polishing stones, of natural stone, agglomerated natural or artificial abrasives, or ceramics|手用刃磨或抛光石（天然石料、凝聚天然或人造磨料或陶瓷制）
+6805.10.00.00|Natural or artificial abrasive powder or grain on a base of woven textile fabric only, whether or not cut to shape, sewn or otherwise made up|仅以机织物为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+6805.20.00.00|Natural or artificial abrasive powder or grain on a base of paper or paperboard only, whether or not cut to shape, sewn or otherwise made up|仅以纸或纸板为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+6805.30.00.00|Natural or artificial abrasive powder or grain on a base of other materials, whether or not cut to shape, sewn or otherwise made up|以其他材料为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+6806.10.00.10|Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: insulation products|矿渣棉、岩棉及类似矿物棉（包括混合物，散装、片状或卷状）：隔热制品
+6806.10.00.90|Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: other than insulation products|其他矿渣棉、岩棉及类似矿物棉（包括混合物，散装、片状或卷状；隔热制品除外）
+6806.20.00.20|Expanded perlite within exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials|膨胀矿物材料中的膨胀珍珠岩
+6806.20.00.90|Other exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials, including mixtures, other than expanded perlite|其他膨胀蛭石、膨胀黏土、泡沫矿渣及类似膨胀矿物材料（包括混合物；膨胀珍珠岩除外）
+6806.90.00.20|Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles: acoustical pads or boards, excluding headings 68.11 and 68.12 and Chapter 69|其他隔热、隔音或吸音矿物材料混合物及制品中的隔音或吸音垫、板（品目68.11、68.12及第69章除外）
+6806.90.00.90|Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles, excluding acoustical pads or boards, headings 68.11 and 68.12 and Chapter 69|其他隔热、隔音或吸音矿物材料混合物及制品（隔音或吸音垫、板及品目68.11、68.12、第69章除外）
+6807.10.00.00|Articles of asphalt or similar material such as petroleum bitumen or coal tar pitch, in rolls|成卷的沥青或类似材料（如石油沥青、煤焦沥青）制品
+6809.11.00.11|Unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width 137.16 cm or more|仅以纸或纸板饰面或加强的未装饰石膏墙板（宽度≥137.16厘米）
+6809.11.00.19|Other unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width less than 137.16 cm|其他仅以纸或纸板饰面或加强的未装饰石膏墙板（宽度<137.16厘米）
+6809.11.00.90|Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles faced or reinforced with paper or paperboard only, other than gypsum wallboard|其他仅以纸或纸板饰面或加强的未装饰石膏或石膏基板、片、砖等（石膏墙板除外）
+6809.19.00.10|Other unornamented gypsum wallboard, not faced or reinforced with paper or paperboard only|其他未装饰石膏墙板（非仅以纸或纸板饰面或加强）
+6809.19.00.90|Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles, not faced or reinforced with paper or paperboard only, other than gypsum wallboard|其他未装饰石膏或石膏基板、片、砖等（非仅以纸或纸板饰面或加强，且非石膏墙板）
+7406.10.00.00|Copper powders of non-lamellar structure|非片状结构铜粉
+7406.20.00.00|Copper powders of lamellar structure; copper flakes|片状结构铜粉；铜片状粉末
+7409.21.00.10|Copper-zinc base alloy (brass) plates, sheets and strip, over 0.15 mm thick, in coils, of width not exceeding 508 mm|成卷铜锌合金（黄铜）板、片及带（厚度>0.15毫米，宽度≤508毫米）
+6807.90.00.10|Articles of asphalt or similar material, not in rolls: asphalt shingles|非成卷的沥青或类似材料制品：沥青瓦
+6807.90.00.90|Other articles of asphalt or similar material, not in rolls, other than asphalt shingles|其他非成卷的沥青或类似材料制品（沥青瓦除外）

@@ -1,0 +1,540 @@
+Other|其他
+Other fabrics|其他织物
+Other woven fabrics|其他机织物
+Unbleached|未漂白
+Bleached|漂白
+Dyed|染色
+Printed|印花
+Of yarns of different colours|色织
+Unbleached or bleached|未漂白或漂白
+Plain weave|平纹
+3-thread or 4-thread twill, including cross twill|三线或四线斜纹（包括交叉斜纹）
+Other fabrics of 3-thread or 4-thread twill, including cross twill|其他三线或四线斜纹织物（包括交叉斜纹）
+Denim|牛仔布
+Cotton, not carded or combed|未梳棉花
+Cotton, carded or combed|已梳棉花
+Cotton waste (including yarn waste and garnetted stock)|废棉（包括废棉纱及回收纤维）
+Garnetted stock|回收棉纤维
+Yarn waste (including thread waste)|废棉纱线
+Cotton sewing thread, whether or not put up for retail sale|棉制缝纫线（不论是否零售包装）
+Not put up for retail sale|非零售包装
+Put up for retail sale|零售包装
+Cotton yarn (other than sewing thread), containing 85% or more by weight of cotton, not put up for retail sale|非零售棉纱（棉含量≥85%，缝纫线除外）
+Cotton yarn (other than sewing thread), containing less than 85% by weight of cotton, not put up for retail sale|非零售棉纱（棉含量<85%，缝纫线除外）
+Cotton yarn (other than sewing thread) put up for retail sale|零售包装棉纱（缝纫线除外）
+Containing 85% or more by weight of cotton|棉含量≥85%
+Single yarn, of uncombed fibres|未精梳纤维单纱
+Single yarn, of combed fibres|精梳纤维单纱
+Multiple (folded) or cabled yarn, of uncombed fibres|未精梳纤维股线或缆线
+Multiple (folded) or cabled yarn, of combed fibres|精梳纤维股线或缆线
+Woven fabrics of cotton, containing 85% or more by weight of cotton, weighing not more than 200 g/m²|棉机织物（棉含量≥85%，每平方米≤200克）
+Woven fabrics of cotton, containing 85% or more by weight of cotton, weighing more than 200 g/m²|棉机织物（棉含量≥85%，每平方米>200克）
+Woven fabrics of cotton, containing less than 85% by weight of cotton, mixed mainly or solely with man-made fibres, weighing not more than 200 g/m²|棉机织物（棉含量<85%，主要或仅与化纤混纺，每平方米≤200克）
+Woven fabrics of cotton, containing less than 85% by weight of cotton, mixed mainly or solely with man-made fibres, weighing more than 200 g/m²|棉机织物（棉含量<85%，主要或仅与化纤混纺，每平方米>200克）
+Other woven fabrics of cotton|其他棉机织物
+Printcloths and sheetings, not napped or brushed|未起绒或刷绒的印花坯布及床单布
+Synthetic filament tow|合成纤维长丝丝束
+Artificial filament tow|人造纤维长丝丝束
+Synthetic staple fibres, not carded, combed or otherwise processed for spinning|未梳或未经其他纺前加工的合成纤维短纤
+Synthetic staple fibres, carded, combed or otherwise processed for spinning|已梳或经其他纺前加工的合成纤维短纤
+Artificial staple fibres, not carded, combed or otherwise processed for spinning|未梳或未经其他纺前加工的人造纤维短纤
+Artificial staple fibres, carded, combed or otherwise processed for spinning|已梳或经其他纺前加工的人造纤维短纤
+Waste (including noils, yarn waste and garnetted stock) of man-made fibres|化学纤维废料（包括落棉、废纱及回收纤维）
+Sewing thread of man-made staple fibres, whether or not put up for retail sale|化学纤维短纤缝纫线（不论是否零售包装）
+Yarn (other than sewing thread) of synthetic staple fibres, not put up for retail sale|非零售合成纤维短纤纱（缝纫线除外）
+Yarn (other than sewing thread) of artificial staple fibres, not put up for retail sale|非零售人造纤维短纤纱（缝纫线除外）
+Yarn (other than sewing thread) of man-made staple fibres, put up for retail sale|零售包装化学纤维短纤纱（缝纫线除外）
+Woven fabrics of synthetic staple fibres, containing 85% or more by weight of synthetic staple fibres|合成纤维短纤机织物（合成纤维短纤含量≥85%）
+Woven fabrics of synthetic staple fibres, containing less than 85% by weight of such fibres, mixed mainly or solely with cotton, of a weight not exceeding 170 g/m²|合成纤维短纤机织物（合成纤维短纤含量<85%，主要或仅与棉混纺，每平方米≤170克）
+Woven fabrics of synthetic staple fibres, containing less than 85% by weight of such fibres, mixed mainly or solely with cotton, of a weight exceeding 170 g/m²|合成纤维短纤机织物（合成纤维短纤含量<85%，主要或仅与棉混纺，每平方米>170克）
+Other woven fabrics of synthetic staple fibres|其他合成纤维短纤机织物
+Woven fabrics of artificial staple fibres|人造纤维短纤机织物
+Of polyesters|聚酯制
+Of nylon or other polyamides|尼龙或其他聚酰胺制
+Of aramids|芳纶制
+Of polypropylene|聚丙烯制
+Acrylic or modacrylic|腈纶或变性腈纶制
+Of cellulose acetate|醋酸纤维制
+Of viscose rayon|粘胶人造丝制
+Of artificial fibres|人造纤维制
+Of synthetic fibres|合成纤维制
+Of artificial staple fibres|人造纤维短纤制
+Of synthetic staple fibres|合成纤维短纤制
+Of polyester staple fibres|聚酯短纤制
+Of acrylic or modacrylic staple fibres|腈纶或变性腈纶短纤制
+Other woven fabrics of polyester staple fibres|其他聚酯短纤机织物
+Of polyester staple fibres, plain weave|聚酯短纤平纹织物
+3-thread or 4-thread twill, including cross twill, of polyester staple fibres|聚酯短纤三线或四线斜纹（包括交叉斜纹）
+Other yarn|其他纱线
+Single yarn|单纱
+Multiple (folded) or cabled yarn|股线或缆线
+Other yarn, containing 85% or more by weight of synthetic staple fibres|其他合成纤维短纤含量≥85%的纱线
+Containing 85% or more by weight of acrylic or modacrylic staple fibres|腈纶或变性腈纶短纤含量≥85%
+Containing 85% or more by weight of polyester staple fibres|聚酯短纤含量≥85%
+Containing 85% or more by weight of staple fibres of nylon or other polyamides|尼龙或其他聚酰胺短纤含量≥85%
+Containing 85% or more by weight of artificial staple fibres|人造纤维短纤含量≥85%
+Of synthetic staple fibres, containing 85% or more by weight of such fibres|合成纤维短纤制且该纤维含量≥85%
+Of synthetic staple fibres, containing less than 85% by weight of such fibres|合成纤维短纤制且该纤维含量<85%
+Other yarn, of polyester staple fibres|其他聚酯短纤纱线
+Other yarn, of acrylic or modacrylic staple fibres|其他腈纶或变性腈纶短纤纱线
+Other yarn, mixed mainly or solely with wool or fine animal hair|其他主要或仅与羊毛或动物细毛混纺的纱线
+Other yarn, mixed mainly or solely with cotton|其他主要或仅与棉混纺的纱线
+Mixed mainly or solely with wool or fine animal hair|主要或仅与羊毛或动物细毛混纺
+Mixed mainly or solely with cotton|主要或仅与棉混纺
+Mixed mainly or solely with artificial staple fibres|主要或仅与人造纤维短纤混纺
+Mixed mainly or solely with man-made filaments|主要或仅与化学纤维长丝混纺
+Mixed mainly or solely with viscose rayon staple fibres|主要或仅与粘胶短纤混纺
+Containing less than 85% by weight of artificial staple fibres, mixed mainly or solely with cotton|人造纤维短纤含量<85%，主要或仅与棉混纺
+Containing less than 85% by weight of artificial staple fibres, mixed mainly or solely with man-made filaments|人造纤维短纤含量<85%，主要或仅与化学纤维长丝混纺
+Containing less than 85% by weight of artificial staple fibres, mixed mainly or solely with wool or fine animal hair|人造纤维短纤含量<85%，主要或仅与羊毛或动物细毛混纺
+Pig iron and spiegeleisen in pigs, blocks or other primary forms|生铁及镜铁（锭、块或其他初级形状）
+Non-alloy pig iron containing by weight 0.5% or less of phosphorus|非合金生铁（磷含量≤0.5%）
+Non-alloy pig iron containing by weight more than 0.5% of phosphorus|非合金生铁（磷含量>0.5%）
+Alloy pig iron; spiegeleisen|合金生铁；镜铁
+Ferro-alloys|铁合金
+Ferro-manganese|锰铁
+Ferro-silicon|硅铁
+Ferro-silico-manganese|硅锰铁
+Ferro-chromium|铬铁
+Ferro-silico-chromium|硅铬铁
+Ferro-nickel|镍铁
+Ferro-molybdenum|钼铁
+Ferro-tungsten and ferro-silico-tungsten|钨铁及硅钨铁
+Ferro-titanium and ferro-silico-titanium|钛铁及硅钛铁
+Ferro-vanadium|钒铁
+Ferro-niobium|铌铁
+Ferrous products obtained by direct reduction of iron ore and other spongy ferrous products, in lumps, pellets or similar forms; iron having a minimum purity by weight of 99.94%, in lumps, pellets or similar forms|铁矿直接还原产品及其他海绵铁产品（块、团粒或类似形状）；纯度≥99.94%的铁（块、团粒或类似形状）
+Ferrous products obtained by direct reduction of iron ore|铁矿直接还原产品
+Ferrous waste and scrap; remelting scrap ingots of iron or steel|钢铁废碎料及供再熔炼的废钢铁锭
+Waste and scrap of cast iron|铸铁废碎料
+Waste and scrap of alloy steel|合金钢废碎料
+Waste and scrap of tinned iron or steel|镀锡钢铁废碎料
+Other waste and scrap|其他废碎料
+Turnings, shavings, chips, milling waste, sawdust, filings, trimmings and stampings, whether or not in bundles|车屑、刨屑、切屑、铣屑、锯屑、锉屑、剪切及冲压废料（不论是否成捆）
+Other turnings and shavings|其他车屑及刨屑
+Remelting scrap ingots|供再熔炼的废锭
+No. 1 heavy melting|一号重熔废钢
+No. 2 heavy melting|二号重熔废钢
+No.1 in bundles|一号打包废钢
+Shredded|破碎废钢
+Granules and powders, of pig iron, spiegeleisen, iron or steel|生铁、镜铁、钢铁颗粒及粉末
+Granules|颗粒
+Powders|粉末
+Of alloy steel|合金钢制
+Of iron|铁制
+Iron and non-alloy steel in ingots or other primary forms (excluding iron of heading 72.03)|铁及非合金钢锭或其他初级形状（品目72.03的铁除外）
+Ingots|锭
+Ingots and other primary forms|锭及其他初级形状
+Semi-finished products of iron or non-alloy steel|铁或非合金钢半制成品
+Blooms|大方坯
+Billets|小方坯
+Slabs, sheet bars or rounds|板坯、薄板坯或圆坯
+Blooms, billets, rounds, slabs and sheet bars|大方坯、小方坯、圆坯、板坯及薄板坯
+Of rectangular (including square) cross-section, the width measuring less than twice the thickness|矩形（包括正方形）截面，宽度小于厚度的两倍
+Of rectangular (other than square) cross-section|矩形（正方形除外）截面
+Other, of rectangular (other than square) cross-section|其他矩形（正方形除外）截面
+Other, of rectangular cross section|其他矩形截面
+Of circular cross-section|圆形截面
+Flat-rolled products of iron or non-alloy steel, of a width of 600 mm or more, hot-rolled, not clad, plated or coated|铁或非合金钢热轧板材（宽度≥600毫米，未包覆、镀层或涂层）
+Flat-rolled products of iron or non-alloy steel, of a width of 600 mm or more, cold-rolled (cold-reduced), not clad, plated or coated|铁或非合金钢冷轧板材（宽度≥600毫米，未包覆、镀层或涂层）
+Flat-rolled products of iron or non-alloy steel, of a width of 600 mm or more, clad, plated or coated|铁或非合金钢板材（宽度≥600毫米，经包覆、镀层或涂层）
+Flat-rolled products of iron or non-alloy steel, of a width of less than 600 mm, not clad, plated or coated|铁或非合金钢板材（宽度<600毫米，未包覆、镀层或涂层）
+Flat-rolled products of iron or non-alloy steel, of a width of less than 600 mm, clad, plated or coated|铁或非合金钢板材（宽度<600毫米，经包覆、镀层或涂层）
+Flat-rolled products of stainless steel, of a width of 600 mm or more|不锈钢板材（宽度≥600毫米）
+Flat-rolled products of stainless steel, of a width of less than 600 mm|不锈钢板材（宽度<600毫米）
+Flat-rolled products of other alloy steel, of a width of 600 mm or more|其他合金钢板材（宽度≥600毫米）
+Flat-rolled products of other alloy steel, of a width of less than 600 mm|其他合金钢板材（宽度<600毫米）
+Bars and rods, hot-rolled, in irregularly wound coils, of iron or non-alloy steel|铁或非合金钢热轧不规则盘卷条杆
+Other bars and rods of iron or non-alloy steel, not further worked than forged, hot-rolled, hot-drawn or hot-extruded, but including those twisted after rolling|其他铁或非合金钢条杆（仅经锻造、热轧、热拉拔或热挤压，包括轧后扭转的条杆）
+Other bars and rods of iron or non-alloy steel|其他铁或非合金钢条杆
+Angles, shapes and sections of iron or non-alloy steel|铁或非合金钢角材、型材及异型材
+Wire of iron or non-alloy steel|铁或非合金钢丝
+Stainless steel in ingots or other primary forms; semi-finished products of stainless steel|不锈钢锭或其他初级形状；不锈钢半制成品
+Bars and rods, hot-rolled, in irregularly wound coils, of stainless steel|不锈钢热轧不规则盘卷条杆
+Other bars and rods of stainless steel; angles, shapes and sections of stainless steel|其他不锈钢条杆；不锈钢角材、型材及异型材
+Wire of stainless steel|不锈钢丝
+Other alloy steel in ingots or other primary forms; semi-finished products of other alloy steel|其他合金钢锭或初级形状；其他合金钢半制成品
+Bars and rods, hot-rolled, in irregularly wound coils, of other alloy steel|其他合金钢热轧不规则盘卷条杆
+Other bars and rods of other alloy steel; angles, shapes and sections, of other alloy steel; hollow drill bars and rods, of alloy or non-alloy steel|其他合金钢条杆、角材、型材及异型材；合金钢或非合金钢空心钻钢
+Wire of other alloy steel|其他合金钢丝
+In coils, not further worked than hot-rolled, with patterns in relief|成卷，仅热轧，带凸起花纹
+Not in coils, not further worked than hot-rolled, with patterns in relief|非卷材，仅热轧，带凸起花纹
+Other, in coils, not further worked than hot-rolled, pickled|其他成卷、仅经热轧并酸洗
+Other, in coils, not further worked than hot-rolled|其他成卷、仅经热轧
+Other, not in coils, not further worked than hot-rolled|其他非卷材、仅经热轧
+In coils, not further worked than cold-rolled (cold-reduced)|成卷、仅经冷轧
+Not in coils, not further worked than cold-rolled (cold-reduced)|非卷材、仅经冷轧
+Not further worked than hot-rolled|仅经热轧
+Not further worked than hot-rolled, in coils|仅经热轧、成卷
+Not further worked than hot-rolled, not in coils|仅经热轧、非卷材
+Other, not further worked than hot-rolled, in coils|其他仅经热轧、成卷
+Other, not further worked than hot-rolled, not in coils|其他仅经热轧、非卷材
+Not further worked than cold-rolled (cold-reduced)|仅经冷轧
+Other, not further worked than cold-rolled (cold-reduced)|其他仅经冷轧
+Not further worked than hot-rolled or cold-rolled|仅经热轧或冷轧
+Rolled on four faces or in a closed box pass, of a width exceeding 150 mm and a thickness of not less than 4 mm, not in coils and without patterns in relief|四面轧制或闭合孔型轧制，宽度>150毫米、厚度≥4毫米，非卷材且无凸起花纹
+Plated or coated with tin|镀锡或涂锡
+Plated or coated with zinc|镀锌或涂锌
+Electrolytically plated or coated with zinc|电镀锌
+Otherwise plated or coated with zinc|以其他方式镀锌或涂锌
+Plated or coated with lead, including terne-plate|镀铅或涂铅（包括铅锡合金镀层板）
+Plated or coated with chromium oxides or with chromium and chromium oxides|镀或涂氧化铬，或铬与氧化铬
+Plated or coated with aluminum|镀铝或涂铝
+Plated or coated with aluminum-zinc alloys|镀或涂铝锌合金
+Plated or coated with aluminum or aluminum alloys|镀或涂铝或铝合金
+Painted, varnished or coated with plastics|涂漆、清漆或塑料
+Clad|包覆
+Plated or coated with other base metals|镀或涂其他贱金属
+Not plated or coated with metal and not clad|未镀或涂金属且未包覆
+Not plated or coated, whether or not polished|未镀或涂层（可抛光）
+Plated or coated with copper|镀铜或涂铜
+Otherwise plated or coated|其他镀层或涂层
+Coated with plastics|涂塑料
+Other, coated or covered|其他经涂层或包覆
+Chrome plated|镀铬
+Electrolytically|电镀
+Containing indentations, ribs, grooves or other deformations produced during the rolling process|带轧制形成的凹痕、肋、槽或其他变形
+Containing indentations, ribs, grooves or other deformations produced during the rolling process or twisted after rolling|带轧制形成的凹痕、肋、槽或其他变形，或轧后扭转
+Other, containing indentations, ribs, grooves or other deformations produced during the rolling process|其他带轧制形成的凹痕、肋、槽或其他变形
+Concrete reinforcing bars, of specification CSA G30.18|符合CSA G30.18规范的混凝土钢筋
+Concrete reinforcing bar, of specification CSA G30.18, with a diameter of 12 mm or less|符合CSA G30.18规范的混凝土钢筋，直径≤12毫米
+Concrete reinforcing bar, of specification CSA G30.18, with a diameter of more than 12 mm but not exceeding 39 mm|符合CSA G30.18规范的混凝土钢筋，12毫米<直径≤39毫米
+Concrete reinforcing bar, of specification CSA G30.18, with a diameter exceeding 39 mm|符合CSA G30.18规范的混凝土钢筋，直径>39毫米
+Concrete reinforcing bars and rods|混凝土钢筋
+Other concrete reinforcing bars|其他混凝土钢筋
+Corrosion resistant concrete reinforcing bars|耐腐蚀混凝土钢筋
+With a maximum yield point of 400MPa|屈服点≤400兆帕
+With a minimum yield point greater than 400MPa but not exceeding 500MPa|最低屈服点>400且≤500兆帕
+With a minimum yield point greater than 500MPa but not exceeding 600MPa|最低屈服点>500且≤600兆帕
+With a minimum yield point greater than 600MPa|最低屈服点>600兆帕
+Other, of free-cutting steel|其他易切削钢制
+Of free-cutting steel, not further worked than cold-formed or cold-finished|易切削钢制，仅经冷成形或冷加工
+Of non-alloy steel|非合金钢制
+Other, alloy steel|其他合金钢制
+Of stainless steel|不锈钢制
+Other, tool steel|其他工具钢制
+Tool steel|工具钢
+Of tool steel (other than high-speed steel)|工具钢制（高速钢除外）
+Of other tool steel (other than high-speed steel)|其他工具钢制（高速钢除外）
+Of tool steel (other than high speed steel), not tempered or treated and not partly manufactured|工具钢制（高速钢除外），未经回火或处理且未经部分制造
+Other, of high nickel alloy steel|其他高镍合金钢制
+Other, of high-nickel alloy steel|其他高镍合金钢制
+High nickel alloy steel|高镍合金钢
+Of high speed steel|高速钢制
+Of high-speed steel|高速钢制
+Bars and rods, of high speed steel|高速钢条杆
+Bars and rods, of silico-manganese steel|硅锰钢条杆
+Of silico-manganese steel|硅锰钢制
+Of ball bearing steel|滚珠轴承钢制
+Of ball-bearing steel|滚珠轴承钢制
+Mold steel|模具钢
+Of chipper knife steel, not cold-formed|削片刀钢制，未经冷成形
+Of silicon-electrical steel|硅电工钢制
+Grain-oriented|晶粒取向
+Not tempered or treated and not partly manufactured|未经回火或处理且未经部分制造
+Heat treated|热处理
+Forged|锻造
+Other, forged|其他锻造
+Annealed|退火
+Ground, turned or polished|研磨、车削或抛光
+Pressure vessel quality, vacuum-degassed|压力容器级，真空脱气
+Pressure vessel quality, not vacuum-degassed|压力容器级，未经真空脱气
+Cold-formed|冷成形
+Not cold-formed|非冷成形
+Other, not further worked than cold-formed or cold-finished|其他仅经冷成形或冷加工
+Cold-formed or cold-finished from flat-rolled products|由板材冷成形或冷加工而成
+Bars and rods, not further worked than cold-formed or cold-finished|仅经冷成形或冷加工的条杆
+Other bars and rods, not further worked than cold-formed or cold-finished|其他仅经冷成形或冷加工的条杆
+Other bars and rods, not further worked than forged|其他仅经锻造的条杆
+Bars and rods, not further worked than hot-rolled, hot-drawn or extruded|仅经热轧、热拉拔或挤压的条杆
+Other bars and rods, not further worked than hot-rolled, hot-drawn or extruded|其他仅经热轧、热拉拔或挤压的条杆
+Other bars and rods|其他条杆
+Other wire|其他丝材
+Other wire rods|其他盘条
+Tire cord-quality steel wire rod, as defined in Statistical Note 2 to this Chapter|本章统计注释二所定义的轮胎帘线级钢盘条
+Of welding quality wire rods, as defined in Statistical Note 4 to this Chapter|本章统计注释四所定义的焊接级盘条制
+Of welding quality wire rods, as defined in statistical note 4 to this chapter|本章统计注释四所定义的焊接级盘条制
+Other, of welding quality wire rods, as defined in Statistical Note 4 to this Chapter|其他本章统计注释四所定义的焊接级盘条制
+Of cold heading quality (CHQ) steel, as defined in Statistical Note 3 to this Chapter|本章统计注释三所定义的冷镦级钢制
+Other, of cold heading quality (CHQ) steel, as defined in Statistical Note 3 to this Chapter|其他本章统计注释三所定义的冷镦级钢制
+Rounds|圆材
+Other rounds|其他圆材
+Other round|其他圆形
+Round spring|圆形弹簧钢丝
+Spring|弹簧用
+Round, non-alloy steel|圆形非合金钢
+Round, alloy steel|圆形合金钢
+Flat|扁形
+Other flat|其他扁形
+Flat bars|扁钢
+Flat bars, including flat grader blade sections|扁钢（包括平地机扁形刀片型材）
+Squares|方形
+Hexagons|六角形
+300 Series|300系列
+Rounds, 300 series|300系列圆材
+Hollow drill bars and rods|空心钻钢
+Angles, shapes and sections|角材、型材及异型材
+Angles, shapes and sections, not further worked than cold-formed or cold-finished|仅经冷成形或冷加工的角材、型材及异型材
+Other angles, shapes and sections, not further worked than hot-rolled, hot-drawn or extruded|其他仅经热轧、热拉拔或挤压的角材、型材及异型材
+L sections|L形型材
+T sections|T形型材
+U sections|U形型材
+I sections|I形型材
+H sections|H形型材
+I or H sections|I形或H形型材
+H or I sections|H形或I形型材
+L sections, equal legs|等边L形型材
+L sections, unequal legs|不等边L形型材
+Equal legs|等边
+Unequal legs|不等边
+Wide flange|宽翼缘
+American standard|美国标准
+Bearing pile|承重桩
+Ribbed shapes|带肋型材
+Curved grader blade sections|弧形平地机刀片型材
+Other shapes or sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|其他仅经热轧、冷轧、拉拔或挤压的型材
+I sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的I形型材
+L sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的L形型材
+T sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的T形型材
+U sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的U形型材
+Z sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的Z形型材
+Wide flange H sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|仅经热轧、冷轧、拉拔或挤压的宽翼缘H形型材
+Other H sections, not further worked than hot-rolled, cold-rolled, drawn or extruded|其他仅经热轧、冷轧、拉拔或挤压的H形型材
+U, I or H sections, not further worked than hot-rolled, hot-drawn or extruded, of a height of less than 80 mm|仅经热轧、热拉拔或挤压的U、I或H形型材，高度<80毫米
+U, I or H sections, not further worked than hot-rolled, hot-drawn or extruded, of a height of 80 mm or more|仅经热轧、热拉拔或挤压的U、I或H形型材，高度≥80毫米
+L or T sections, not further worked than hot-rolled, hot-drawn or extruded, of a height of less than 80 mm|仅经热轧、热拉拔或挤压的L或T形型材，高度<80毫米
+L or T sections, not further worked than hot-rolled, hot-drawn or extruded, of a height of 80 mm or more|仅经热轧、热拉拔或挤压的L或T形型材，高度≥80毫米
+Obtained from flat-rolled products|由板材制得
+For motor vehicles|机动车用
+For use in ships, boats or floating structures|船舶或浮动结构体用
+Not in coils|非卷材
+Corrugated|波纹形
+Of circular cross-section measuring less than 14 mm in diameter|圆形截面，直径<14毫米
+Other, of a circular cross-section|其他圆形截面
+Other round, containing by weight 1.2% or more of silicon and 0.6% or more of chromium|其他圆形，硅含量≥1.2%且铬含量≥0.6%
+Track shoe profile bars of steel, of a width of 190 mm or more but not exceeding 350 mm and of a height not exceeding 150 mm, for use in the manufacture of track shoes for track-laying machinery or vehicles|履带板型钢（190毫米≤宽度≤350毫米，高度≤150毫米），用于制造履带式机械或车辆履带板
+Profile wire, cold drawn or cold drawn and annealed, up to 0.787 mm² in maximum solid cross-sectional area|冷拉或冷拉后退火的异型钢丝，最大实心截面积≤0.787平方毫米
+Round, of a diameter not exceeding 1.6 mm, containing by weight less than 0.2% of carbon, more than 0.9% of manganese, and more than 0.6% of silicon, suitable for electric arc-welding|适用于电弧焊的圆形钢丝（直径≤1.6毫米，碳含量<0.2%、锰含量>0.9%且硅含量>0.6%）
+Other round, of a diameter not exceeding 1.6 mm, containing by weight less than 0.2% of carbon and more than 0.3% of nickel or more than 0.08% of molybdenum, suitable for electric arc-welding|其他适用于电弧焊的圆形钢丝（直径≤1.6毫米，碳含量<0.2%，并且镍含量>0.3%或钼含量>0.08%）
+Containing by weight more than 4% of carbonNote: The benefit of the Most-Favoured-Nation Tariff is extended to goods of this tariff item that originate in a country to which the General Tariff applies|碳含量>4%；本税目最惠国税率亦适用于原产于一般税率适用国的货物
+OtherNote: The benefit of the Most-Favoured-Nation Tariff is extended to goods of this tariff item that originate in a country to which the General Tariff applies|其他；本税目最惠国税率亦适用于原产于一般税率适用国的货物
+Containing by weight 0.15% or more but not exceeding 0.35% of lead or 0.05% or more but not exceeding 0.4% of bismuth, for use in Canadian manufactures|铅含量0.15%至0.35%或铋含量0.05%至0.4%，用于加拿大制造业
+Shapes or sections, with bevelled edge or edges, of a length of more than 3.65 m and either of a width of more than 25.4 cm or of a thickness of more than 3.5 cm, for use in the manufacture of cutting edges for bulldozer or angledozer blades, front-end shovel loader buckets, combination excavating and transporting scrapers, road graders or road scrapers|带斜边型材（长度>3.65米，且宽度>25.4厘米或厚度>3.5厘米），用于制造推土机或斜铲推土机刀片、前端装载机铲斗、挖运联合铲运机、平地机或道路铲运机的切削刃
+Of a diameter of less than 1.5 mm, in coils weighing not more than 2 kg|直径<1.5毫米，每卷重量≤2千克
+With a minimum cross section less than 152mm|最小截面尺寸<152毫米
+With a maximum cross section of 152mm or more|最大截面尺寸≥152毫米
+Wadding of textile materials and articles thereof; textile fibres, not exceeding 5 mm in length (flock), textile dust and mill neps|纺织材料絮胎及制品；长度≤5毫米的纺织纤维绒屑、纤维粉尘及纤维球结
+Wadding of textile materials and articles thereof|纺织材料絮胎及其制品
+Of cotton|棉制
+Strips of wadding, for use in the manufacture of tampons|制造卫生棉条用絮胎条
+Other wadding|其他絮胎
+For use in the manufacture of apparel|服装制造用
+Articles of wadding|絮胎制品
+Of man-made fibres|化学纤维制
+Wadding|絮胎
+Textile flock and dust and mill neps|纺织纤维绒屑、纤维粉尘及纤维球结
+Felt, whether or not impregnated, coated, covered or laminated|毡（不论是否浸渍、涂覆、包覆或层压）
+Needleloom felt and stitch-bonded fibre fabrics|针刺毡及缝编纤维织物
+Impregnated, coated, covered or laminated|经浸渍、涂覆、包覆或层压
+Other felt, not impregnated, coated, covered or laminated|其他未经浸渍、涂覆、包覆或层压的毡
+Of wool or fine animal hair|羊毛或动物细毛制
+Of other textile materials|其他纺织材料制
+Nonwovens, whether or not impregnated, coated, covered or laminated|无纺布（不论是否浸渍、涂覆、包覆或层压）
+Of man-made filaments|化学纤维长丝制
+Floor covering underlays|铺地材料衬垫
+Rubber thread and cord, textile covered; textile yarn, and strip and the like of heading 54.04 or 54.05, impregnated, coated, covered or sheathed with rubber or plastics|纺织材料包覆的橡胶线绳；经橡胶或塑料浸渍、涂覆、包覆或护套的纱线及品目54.04或54.05的扁条等
+Rubber thread and cord, textile covered|纺织材料包覆的橡胶线绳
+Metallized yarn, whether or not gimped, being textile yarn, or strip or the like of heading 54.04 or 54.05, combined with metal in the form of thread, strip or powder or covered with metal|金属化纱线（可包缠）：纺织纱线或品目54.04、54.05的扁条等与金属线、带或粉末结合或经金属覆盖
+Gimped yarn, and strip and the like of heading 54.04 or 54.05, gimped (other than those of heading 56.05 and gimped horsehair yarn); chenille yarn (including flock chenille yarn); loop wale-yarn|包缠纱线及品目54.04或54.05的包缠扁条等（品目56.05及包缠马毛纱除外）；绳绒线（包括植绒绳绒线）；环圈纱
+Twine, cordage, ropes and cables, whether or not plaited or braided and whether or not impregnated, coated, covered or sheathed with rubber or plastics|线、绳、索及缆（不论是否编织，或经橡胶、塑料浸渍、涂覆、包覆或护套）
+Of sisal or other textile fibres of the genus Agave|剑麻或其他龙舌兰属纺织纤维制
+Binder or baler twine|捆扎或打包用绳
+Of a circumference not exceeding 38 mm, to be employed in commercial fishing or in the commercial harvesting of marine plants; Twine, to be employed in baling farm produce|商业捕鱼或海洋植物采集用、周长≤38毫米的绳索；农产品打包用绳
+Other, of a circumference not exceeding 25.4 mm|其他周长≤25.4毫米的绳索
+Of polyethylene or polypropylene|聚乙烯或聚丙烯制
+Of other synthetic fibres|其他合成纤维制
+Other, of a circumference not exceeding 25.4 mm; Other, of jute or other textile bast fibres of heading 53.03|其他周长≤25.4毫米的绳索；其他黄麻或品目53.03的纺织韧皮纤维制绳索
+Knotted netting of twine, cordage or rope; made up fishing nets and other made up nets, of textile materials|纺织材料线绳索制结网；制成的渔网及其他网
+Of man-made textile materials|化学纤维纺织材料制
+Made up fishing nets|制成的渔网
+To be employed in commercial fishing|商业捕鱼用
+Netting, to be employed in commercial fishing or in the commercial harvesting of marine plants; Made up nets, solely of polyethylene monofilament, to be employed in the protection of fruit crops from birds|商业捕鱼或海洋植物采集用网；保护果树免受鸟害的纯聚乙烯单丝制成网
+Knotted netting, open square mesh, of tubular braided twine of polyethylene filaments, for use in the manufacture of tennis nets|网球网制造用聚乙烯长丝管状编织绳制方孔结网
+Fishing nets and netting, to be employed in commercial fishing or in the commercial harvesting of marine plants|商业捕鱼或海洋植物采集用渔网及网料
+Articles of yarn, strip or the like of heading 54.04 or 54.05, twine, cordage, rope or cables, not elsewhere specified or included|其他未列名纱线、品目54.04或54.05的扁条等及线绳索缆制品
+Carpets and other textile floor coverings, knotted, whether or not made up|打结地毯及其他纺织铺地制品（不论是否制成成品）
+Machine knotted|机器打结
+Carpets and other textile floor coverings, woven, not tufted or flocked, whether or not made up, including "Kelem", "Schumacks", "Karamanie" and similar hand-woven rugs|机织地毯及其他纺织铺地制品（非簇绒或植绒，不论是否制成成品，包括基里姆、舒马克、卡拉马尼等手织地毯）
+"Kelem", "Schumacks", "Karamanie" and similar hand-woven rugs|基里姆、舒马克、卡拉马尼及类似手织地毯
+Floor coverings of coconut fibres (coir)|椰壳纤维铺地制品
+Other, of pile construction, not made up|其他起绒结构、未制成成品
+Other, of pile construction, made up|其他起绒结构、已制成成品
+Other, not of pile construction, not made up|其他非起绒结构、未制成成品
+Other, not of pile construction, made up|其他非起绒结构、已制成成品
+Of straw, hemp, flax tow or jute|稻草、大麻、亚麻短纤或黄麻制
+Carpets and other textile floor coverings (including turf), tufted, whether or not made up|簇绒地毯及其他纺织铺地制品（包括人造草皮，不论是否制成成品）
+Machine tufted|机器簇绒
+Turf|人造草皮
+For automotive use|汽车用
+Tiles, having a maximum surface area of 0.3 m²|块状，单块面积≤0.3平方米
+Of other man-made textile materials|其他化学纤维纺织材料制
+Carpets and other textile floor coverings, of felt, not tufted or flocked, whether or not made up|毡制地毯及其他铺地制品（非簇绒或植绒，不论是否制成成品）
+Tiles, having a maximum surface area exceeding 0.3 m² but not exceeding 1 m²|块状，0.3平方米<单块面积≤1平方米
+Needle punched|针刺
+Setts, curbstones and flagstones, of natural stone (except slate)|天然石料制铺路石、路缘石及铺面石（板岩除外）
+Worked monumental or building stone (except slate) and articles thereof, other than goods of heading 68.01; mosaic cubes and the like, of natural stone (including slate), whether or not on a backing; artificially coloured granules, chippings and powder, of natural stone (including slate)|加工的碑石、建筑石及制品（板岩及品目68.01除外）；天然石材（包括板岩）马赛克块等（可有衬底）；人工着色天然石材颗粒、碎屑及粉末
+Tiles, cubes and similar articles, whether or not rectangular (including square), the largest face of which is capable of being enclosed in a square the side of which is less than 7 cm; artificially coloured granules, chippings and powder|砖、块及类似制品（最大面可置于边长<7厘米的正方形内，不限形状）；人工着色颗粒、碎屑及粉末
+Other monumental or building stone and articles thereof, simply cut or sawn, with a flat or even surface|其他仅切割或锯切、表面平整的碑石或建筑石及制品
+Marble, travertine and alabaster|大理石、石灰华及雪花石膏
+Other calcareous stone|其他钙质石料
+Granite|花岗岩
+Other stone|其他石料
+Building stone|建筑石
+Monuments, bases and markers, finished|制成的纪念碑、底座及标石
+Artificially coloured roofing granules|人工着色屋面颗粒
+Worked slate and articles of slate or of agglomerated slate|加工板岩及板岩或凝聚板岩制品
+Roofing slate; Slate for use in the manufacture of billiard tables|屋面板岩；台球桌制造用板岩
+Millstones, grindstones, grinding wheels and the like, without frameworks, for grinding, sharpening, polishing, trueing or cutting, hand sharpening or polishing stones, and parts thereof, of natural stone, of agglomerated natural or artificial abrasives, or of ceramics, with or without parts of other materials|天然石料、凝聚天然或人造磨料或陶瓷制无框磨石、砂轮等及手用磨石和零件，用于研磨、刃磨、抛光、修整或切割（可含其他材料零件）
+Other millstones, grindstones, grinding wheels and the like|其他磨石、砂轮及类似品
+Natural or artificial abrasive powder or grain, on a base of textile material, of paper, of paperboard or of other materials, whether or not cut to shape or sewn or otherwise made up|以纺织材料、纸、纸板或其他材料为底的天然或人造磨料粉或颗粒（不论是否裁形、缝合或制成成品）
+Slag wool, rock wool and similar mineral wools; exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials; mixtures and articles of heat-insulating, sound-insulating or sound-absorbing mineral materials, other than those of heading 68.11 or 68.12 or of Chapter 69|矿渣棉、岩棉及类似矿物棉；膨胀蛭石、膨胀黏土、泡沫矿渣等；隔热、隔音或吸音矿物材料混合物及制品（品目68.11、68.12及第69章除外）
+Insulation products|隔热制品
+Acoustical pads or boards|隔音或吸音垫及板
+Expanded perlite|膨胀珍珠岩
+Articles of asphalt or of similar material (for example, petroleum bitumen or coal tar pitch)|沥青或类似材料（如石油沥青、煤焦沥青）制品
+Asphalt shingles|沥青瓦
+Panels, boards, tiles, blocks and similar articles of vegetable fibre, of straw or of shavings, chips, particles, sawdust or other waste, of wood, agglomerated with cement, plaster or other mineral binders|以水泥、石膏或其他矿物胶结料凝聚植物纤维、稻草或木刨花、木片、木粒、锯屑及其他木废料制成的板、砖、块及类似品
+Articles of plaster or of compositions based on plaster|石膏或石膏基混合物制品
+Boards, sheets, panels, tiles and similar articles, not ornamented|未装饰的板、片、砖及类似品
+Gypsum wallboard|石膏墙板
+Models and casts, of a kind used in the manufacture of dental prostheses|义齿制造用模型及铸模
+Other articles|其他制品
+Articles of cement, of concrete or of artificial stone, whether or not reinforced|水泥、混凝土或人造石制品（不论是否加强）
+Tiles, flagstones, bricks and similar articles|砖、铺面板及类似制品
+Building blocks and bricks|建筑砌块及砖
+Prefabricated structural components for building or civil engineering|建筑或土木工程用预制结构构件
+Signs|标牌
+Articles of asbestos-cement, of cellulose fibre-cement or the like|石棉水泥、纤维素纤维水泥或类似材料制品
+Containing asbestos|含石棉
+Not containing asbestos|不含石棉
+Corrugated sheets|波纹板
+Other sheets, panels, tiles and similar articles|其他板、片、砖及类似制品
+Fabricated asbestos fibres; mixtures with a basis of asbestos or with a basis of asbestos and magnesium carbonate; articles of such mixtures or of asbestos (for example, thread, woven fabric, clothing, headgear, footwear, gaskets), whether or not reinforced, other than goods of heading 68.11 or 68.13|加工石棉纤维；石棉基或石棉及碳酸镁基混合物及制品，如线、织物、服装、帽、鞋靴及垫片（不论是否加强，品目68.11或68.13除外）
+Of crocidolite|青石棉制
+Clothing, clothing accessories, footwear and headgear|服装、服饰配件、鞋靴及帽类
+Friction material and articles thereof (for example, sheets, rolls, strips, segments, discs, washers, pads), not mounted, for brakes, for clutches or the like, with a basis of asbestos, of other mineral substances or of cellulose, whether or not combined with textile or other materials|石棉、其他矿物或纤维素基未装配制动器、离合器等用摩擦材料及制品（如片、卷、带、节、盘、垫圈、衬垫，可结合纺织或其他材料）
+Brake linings and pads|制动衬片及衬垫
+For motor vehicles of heading 87.02, 87.03, 87.04 or 87.05|品目87.02、87.03、87.04或87.05的机动车用
+Worked mica and articles of mica, including agglomerated or reconstituted mica, whether or not on a support of paper, paperboard or other materials|加工云母及其制品（包括凝聚或再造云母，可有纸、纸板或其他材料衬底）
+Plates, sheets and strips of agglomerated or reconstituted mica, whether or not on a support|凝聚或再造云母板、片及带（可有衬底）
+Articles of stone or of other mineral substances (including carbon fibres, articles of carbon fibres and articles of peat), not elsewhere specified or included|其他未列名石料或矿物制品（包括碳纤维、碳纤维制品及泥炭制品）
+Carbon fibres; articles of carbon fibres for non-electrical uses; other articles of graphite or other carbon for non-electrical uses|碳纤维；非电气用碳纤维制品；其他非电气用石墨或其他碳制品
+Carbon fibres|碳纤维
+Fabrics of carbon fibres|碳纤维织物
+Other articles of carbon fibres|其他碳纤维制品
+Articles of peat|泥炭制品
+Containing magnesite, magnesia in the form of periclase, dolomite including in the form of dolime, or chromite|含菱镁矿、方镁石形态的氧化镁、白云石（包括煅烧白云石）或铬铁矿
+Refractory bricks, blocks, tiles and similar refractory constructional products to be employed in the production of metallurgical coke, iron and steel; Other articles containing magnesite, dolomite or chromite|冶金焦、钢铁生产用耐火砖、块及类似耐火建筑制品；其他含菱镁矿、白云石或铬铁矿的制品
+Foundry facings; Models and casts, of a kind used in the manufacture of dental prostheses; Olivine panels for use in the manufacture of wood waste incinerators; Refractory bricks, blocks, tiles and similar refractory constructional products to be employed in the production of metallurgical coke, iron and steel|铸造涂料；义齿制造用模型及铸模；木废料焚烧炉制造用橄榄石板；冶金焦及钢铁生产用耐火砖、块及类似耐火建筑制品
+Copper mattes; cement copper (precipitated copper)|铜锍；沉淀铜
+Unrefined copper; copper anodes for electrolytic refining|未精炼铜；电解精炼用铜阳极
+Refined copper and copper alloys, unwrought|未锻轧精炼铜及铜合金
+Refined copper|精炼铜
+Cathodes and sections of cathodes|阴极及阴极型材
+Wire-bars|线锭
+Copper alloys|铜合金
+Copper-zinc base alloys (brass)|铜锌合金（黄铜）
+Copper-tin base alloys (bronze)|铜锡合金（青铜）
+Other copper alloys (other than master alloys of heading 74.05)|其他铜合金（品目74.05的铜母合金除外）
+Copper waste and scrap|铜废碎料
+Not alloyed|非合金
+Spent anodes, not alloyed; With a copper content of less than 94% by weight, not alloyed|非合金废阳极；其他铜含量<94%的非合金铜废料
+With a copper content of less than 94% by weight|铜含量<94%
+Copper-zinc base alloys (brass) with a copper content of less than 94% by weight|铜含量<94%的铜锌合金（黄铜）
+Master alloys of copper|铜母合金
+Copper powders and flakes|铜粉及铜片状粉末
+Copper bars, rods and profiles|铜条、杆及型材
+Of refined copper|精炼铜制
+Of copper alloys|铜合金制
+Of copper-zinc base alloys (brass)|铜锌合金（黄铜）制
+Of copper-tin base alloys (bronze)|铜锡合金（青铜）制
+Of other copper alloys|其他铜合金制
+Of copper-nickel base alloys (cupro-nickel) or copper-nickel-zinc base alloys (nickel silver)|铜镍合金（白铜）或铜镍锌合金（德银）制
+Bars and rods of a maximum cross-sectional dimension exceeding 12.7 mm, unworked|未经进一步加工的条杆，最大截面尺寸>12.7毫米
+Bars and rods, of a maximum cross-sectional dimension exceeding 12.7 mm, unworked|未经进一步加工的条杆，最大截面尺寸>12.7毫米
+Bars and rods, of which the maximum cross-sectional dimension exceeds 12.7 mm, unworked|未经进一步加工的条杆，最大截面尺寸>12.7毫米
+Bars and rods, of a maximum cross-sectional dimension not exceeding 12.7 mm, unworked|未经进一步加工的条杆，最大截面尺寸≤12.7毫米
+Bars, rods or solid profiles, worked|经加工的条、杆或实心型材
+Hollow profiles|空心型材
+Other, unworked|其他未经进一步加工
+Worked|经加工
+Copper wire|铜丝
+Of which the maximum cross-sectional dimension exceeds 6 mm|最大截面尺寸>6毫米
+Not exceeding 9.5 mm|≤9.5毫米
+Exceeding 9.5 mm but not exceeding 12.7 mm|>9.5毫米且≤12.7毫米
+Exceeding 12.7 mm|>12.7毫米
+Coated or covered|经涂覆或包覆
+Not coated or covered|未经涂覆或包覆
+Copper plates, sheets and strip, of a thickness exceeding 0.15 mm|铜板、片及带（厚度>0.15毫米）
+Of a thickness exceeding 0.15 mm but not exceeding 4.75 mm, unworked|未经进一步加工，0.15毫米<厚度≤4.75毫米
+Copper foil (whether or not printed or backed with paper, paperboard, plastics or similar backing materials), of a thickness (excluding any backing) not exceeding 0.15 mm|铜箔（厚度≤0.15毫米，不计衬底；可印刷或有纸、纸板、塑料等衬底）
+Backed|有衬底
+Not backed|无衬底
+Copper clad laminates, worked|经加工的覆铜层压板
+Copper tubes and pipes|铜管
+For plumbing, unworked|管道装配用，未经进一步加工
+In coils|成卷
+Industrial or commercial|工业或商业用
+For refrigeration or air conditioning (ACR), unworked|制冷或空调用管，未经进一步加工
+Copper tube or pipe fittings (for example, couplings, elbows, sleeves)|铜管配件（如接头、弯头、套管）
+Pressure type|承压型
+Cast|铸造
+Wrought|锻轧
+Stranded wire, cables, plaited bands and the like, of copper, not electrically insulated|非电绝缘铜绞线、缆、编织带及类似品
+Without fittings|无配件
+Stranded wire, without fittings|无配件的绞线
+Other, without fittings|其他无配件
+Nails, tacks, drawing pins, staples (other than those of heading 83.05) and similar articles, of copper or of iron or steel with heads of copper; screws, bolts, nuts, screw hooks, rivets, cotters, cotter-pins, washers (including spring washers) and similar articles, of copper|铜制或铜头钢铁制钉、平头钉、图钉、U形钉等（品目83.05除外）；铜制螺钉、螺栓、螺母、螺钩、铆钉、销、开口销、垫圈（包括弹簧垫圈）等
+Other threaded articles|其他带螺纹制品
+Screws; bolts and nuts|螺钉；螺栓及螺母
+Other articles, not threaded|其他无螺纹制品
+Nails and tacks, drawing pins, staples and similar articles|钉、平头钉、图钉、U形钉及类似品
+Washers (including spring washers)|垫圈（包括弹簧垫圈）
+Table, kitchen or other household articles and parts thereof, of copper; pot scourers and scouring or polishing pads, gloves and the like, of copper; sanitary ware and parts thereof, of copper|铜制餐桌、厨房或其他家用器具及零件；铜制锅刷、擦洗或抛光垫、手套等；铜制卫生器具及零件
+Table, kitchen or other household articles and parts thereof; pot scourers and scouring or polishing pads, gloves and the like|餐桌、厨房或其他家用器具及零件；锅刷、擦洗或抛光垫、手套等
+Sanitary ware and parts thereof|卫生器具及零件
+Other articles of copper|其他铜制品
+Cast, moulded, stamped or forged, but not further worked|经铸造、模制、冲压或锻造，未经进一步加工
+Anodes for electroplating|电镀用阳极
+Brass plumbing goods, not elsewhere specified or included|其他未列名黄铜水暖器材
+Caskets or coffins|棺材
+For use in Canadian manufactures|用于加拿大制造业
+Polypropylene filament nonwovens, weighing more than 70 but not more than 150 grams per square metre, whether or not impregnated, coated, covered or laminated|聚丙烯长丝无纺布（70克<每平方米重量≤150克，不论是否浸渍、涂覆、包覆或层压）
+Other polyethylene or polypropylene ropes: UIAA-standard climbing ropes; commercial fishing or marine-plant harvesting seine ropes of circumference at least 60 mm, consisting of multiple polypropylene ropes and twisted steel wires surrounding a multiple-polypropylene-rope core; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; twine for baling farm produce|其他聚乙烯或聚丙烯绳索：符合UIAA标准的攀登绳；商业捕鱼或海洋植物采集用周长≥60毫米、聚丙烯多绳芯外包聚丙烯多绳及绞合钢丝的围网绳；上述商业用途周长≤38毫米的绳索；农产品打包绳
+Other synthetic-fibre ropes: wholly polyester electrically conductive braided cord of circumference over 29 but not exceeding 40 mm for manufacturing or refurbishing electrical generators; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes|其他合成纤维绳索：发电机制造或翻修用纯聚酯导电编织绳（29毫米<周长≤40毫米）；商业捕鱼或海洋植物采集用周长≤38毫米的绳索；符合UIAA标准的攀登绳
+Other textile ropes: jute twine for area-carpet backing manufacture; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes|其他纺织材料绳索：块毯衬底制造用黄麻绳；商业捕鱼或海洋植物采集用周长≤38毫米的绳索；符合UIAA标准的攀登绳
+Millstones and grindstones for milling, grinding or pulping, without frameworks, of natural stone, agglomerated natural or artificial abrasives, or ceramics|碾磨、研磨或制浆用无框磨石（天然石料、凝聚天然或人造磨料或陶瓷制）
+Other millstones, grindstones, grinding wheels and the like, without frameworks, of agglomerated synthetic or natural diamond|凝聚人造或天然金刚石制其他无框磨石、砂轮及类似品
+Other millstones, grindstones, grinding wheels and the like, without frameworks, of other agglomerated abrasives or ceramics|其他凝聚磨料或陶瓷制无框磨石、砂轮及类似品
+Other millstones, grindstones, grinding wheels and the like, without frameworks, of natural stone|天然石料制其他无框磨石、砂轮及类似品
+Hand sharpening or polishing stones, of natural stone, agglomerated natural or artificial abrasives, or ceramics|手用刃磨或抛光石（天然石料、凝聚天然或人造磨料或陶瓷制）
+Natural or artificial abrasive powder or grain on a base of woven textile fabric only, whether or not cut to shape, sewn or otherwise made up|仅以机织物为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+Natural or artificial abrasive powder or grain on a base of paper or paperboard only, whether or not cut to shape, sewn or otherwise made up|仅以纸或纸板为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+Natural or artificial abrasive powder or grain on a base of other materials, whether or not cut to shape, sewn or otherwise made up|以其他材料为底的天然或人造磨料粉或颗粒（可裁形、缝合或制成成品）
+Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: insulation products|矿渣棉、岩棉及类似矿物棉（包括混合物，散装、片状或卷状）：隔热制品
+Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: other than insulation products|其他矿渣棉、岩棉及类似矿物棉（包括混合物，散装、片状或卷状；隔热制品除外）
+Expanded perlite within exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials|膨胀矿物材料中的膨胀珍珠岩
+Other exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials, including mixtures, other than expanded perlite|其他膨胀蛭石、膨胀黏土、泡沫矿渣及类似膨胀矿物材料（包括混合物；膨胀珍珠岩除外）
+Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles: acoustical pads or boards, excluding headings 68.11 and 68.12 and Chapter 69|其他隔热、隔音或吸音矿物材料混合物及制品中的隔音或吸音垫、板（品目68.11、68.12及第69章除外）
+Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles, excluding acoustical pads or boards, headings 68.11 and 68.12 and Chapter 69|其他隔热、隔音或吸音矿物材料混合物及制品（隔音或吸音垫、板及品目68.11、68.12、第69章除外）
+Articles of asphalt or similar material such as petroleum bitumen or coal tar pitch, in rolls|成卷的沥青或类似材料（如石油沥青、煤焦沥青）制品
+Unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width 137.16 cm or more|仅以纸或纸板饰面或加强的未装饰石膏墙板（宽度≥137.16厘米）
+Other unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width less than 137.16 cm|其他仅以纸或纸板饰面或加强的未装饰石膏墙板（宽度<137.16厘米）
+Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles faced or reinforced with paper or paperboard only, other than gypsum wallboard|其他仅以纸或纸板饰面或加强的未装饰石膏或石膏基板、片、砖等（石膏墙板除外）
+Other unornamented gypsum wallboard, not faced or reinforced with paper or paperboard only|其他未装饰石膏墙板（非仅以纸或纸板饰面或加强）
+Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles, not faced or reinforced with paper or paperboard only, other than gypsum wallboard|其他未装饰石膏或石膏基板、片、砖等（非仅以纸或纸板饰面或加强，且非石膏墙板）
+Copper powders of non-lamellar structure|非片状结构铜粉
+Copper powders of lamellar structure; copper flakes|片状结构铜粉；铜片状粉末
+Copper-zinc base alloy (brass) plates, sheets and strip, over 0.15 mm thick, in coils, of width not exceeding 508 mm|成卷铜锌合金（黄铜）板、片及带（厚度>0.15毫米，宽度≤508毫米）
+Articles of asphalt or similar material, not in rolls: asphalt shingles|非成卷的沥青或类似材料制品：沥青瓦
+Other articles of asphalt or similar material, not in rolls, other than asphalt shingles|其他非成卷的沥青或类似材料制品（沥青瓦除外）

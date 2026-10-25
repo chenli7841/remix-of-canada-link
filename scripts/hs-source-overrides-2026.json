@@ -188,5 +188,150 @@
     "description": "Other woven fabrics containing at least 85% by weight of textured polyester filaments, printed",
     "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch54-2026-2-eng.pdf",
     "reason": "HTML omits or truncates product qualifiers; verified against same-edition PDF."
+  },
+  "5603.13.00.20": {
+    "description": "Polypropylene filament nonwovens, weighing more than 70 but not more than 150 grams per square metre, whether or not impregnated, coated, covered or laminated",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch56-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "5607.49.10.00": {
+    "description": "Other polyethylene or polypropylene ropes: UIAA-standard climbing ropes; commercial fishing or marine-plant harvesting seine ropes of circumference at least 60 mm, consisting of multiple polypropylene ropes and twisted steel wires surrounding a multiple-polypropylene-rope core; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; twine for baling farm produce",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch56-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "5607.50.10.00": {
+    "description": "Other synthetic-fibre ropes: wholly polyester electrically conductive braided cord of circumference over 29 but not exceeding 40 mm for manufacturing or refurbishing electrical generators; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch56-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "5607.90.10.00": {
+    "description": "Other textile ropes: jute twine for area-carpet backing manufacture; ropes of circumference not exceeding 38 mm for commercial fishing or marine-plant harvesting; UIAA-standard climbing ropes",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch56-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6804.10.00.00": {
+    "description": "Millstones and grindstones for milling, grinding or pulping, without frameworks, of natural stone, agglomerated natural or artificial abrasives, or ceramics",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6804.21.00.00": {
+    "description": "Other millstones, grindstones, grinding wheels and the like, without frameworks, of agglomerated synthetic or natural diamond",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6804.22.00.00": {
+    "description": "Other millstones, grindstones, grinding wheels and the like, without frameworks, of other agglomerated abrasives or ceramics",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6804.23.00.00": {
+    "description": "Other millstones, grindstones, grinding wheels and the like, without frameworks, of natural stone",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6804.30.00.00": {
+    "description": "Hand sharpening or polishing stones, of natural stone, agglomerated natural or artificial abrasives, or ceramics",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6805.10.00.00": {
+    "description": "Natural or artificial abrasive powder or grain on a base of woven textile fabric only, whether or not cut to shape, sewn or otherwise made up",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6805.20.00.00": {
+    "description": "Natural or artificial abrasive powder or grain on a base of paper or paperboard only, whether or not cut to shape, sewn or otherwise made up",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6805.30.00.00": {
+    "description": "Natural or artificial abrasive powder or grain on a base of other materials, whether or not cut to shape, sewn or otherwise made up",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.10.00.10": {
+    "description": "Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: insulation products",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.10.00.90": {
+    "description": "Slag wool, rock wool and similar mineral wools, including mixtures, in bulk, sheets or rolls: other than insulation products",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.20.00.20": {
+    "description": "Expanded perlite within exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.20.00.90": {
+    "description": "Other exfoliated vermiculite, expanded clays, foamed slag and similar expanded mineral materials, including mixtures, other than expanded perlite",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.90.00.20": {
+    "description": "Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles: acoustical pads or boards, excluding headings 68.11 and 68.12 and Chapter 69",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6806.90.00.90": {
+    "description": "Other heat-insulating, sound-insulating or sound-absorbing mineral material mixtures and articles, excluding acoustical pads or boards, headings 68.11 and 68.12 and Chapter 69",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6807.10.00.00": {
+    "description": "Articles of asphalt or similar material such as petroleum bitumen or coal tar pitch, in rolls",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6809.11.00.11": {
+    "description": "Unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width 137.16 cm or more",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6809.11.00.19": {
+    "description": "Other unornamented gypsum wallboard faced or reinforced with paper or paperboard only, of width less than 137.16 cm",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6809.11.00.90": {
+    "description": "Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles faced or reinforced with paper or paperboard only, other than gypsum wallboard",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6809.19.00.10": {
+    "description": "Other unornamented gypsum wallboard, not faced or reinforced with paper or paperboard only",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6809.19.00.90": {
+    "description": "Other unornamented plaster or plaster-based boards, sheets, panels, tiles and similar articles, not faced or reinforced with paper or paperboard only, other than gypsum wallboard",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "7406.10.00.00": {
+    "description": "Copper powders of non-lamellar structure",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch74-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "7406.20.00.00": {
+    "description": "Copper powders of lamellar structure; copper flakes",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch74-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "7409.21.00.10": {
+    "description": "Copper-zinc base alloy (brass) plates, sheets and strip, over 0.15 mm thick, in coils, of width not exceeding 508 mm",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch74-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6807.90.00.10": {
+    "description": "Articles of asphalt or similar material, not in rolls: asphalt shingles",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
+  },
+  "6807.90.00.90": {
+    "description": "Other articles of asphalt or similar material, not in rolls, other than asphalt shingles",
+    "url": "https://www.cbsa-asfc.gc.ca/trade-commerce/tariff-tarif/2026/01-99/ch68-2026-2-eng.pdf",
+    "reason": "HTML classification omitted, truncated or retained obsolete qualifiers; checked against T2026-2 PDF."
   }
 }
