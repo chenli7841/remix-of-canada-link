@@ -103,6 +103,37 @@ test("Hosted encryption supports runtimes requiring a Buffer IV and preserves EC
   assert.equal(JSON.stringify(api.decryptHosted(encrypted)), JSON.stringify(data));
 });
 
+test("Hosted digest matches the published OTT Appendix A example", () => {
+  const signed = card.encryptHosted({
+    orderId: "1234567890", idCardName: "张三", idCardNum: "123456789012345678",
+    bankCardNum: "62000000000010", mobile: "13711111111", idCardType: "1",
+  });
+  assert.equal(signed.md5, "C12F9560769C2CB55E6954935B325916");
+});
+
+test("Hosted response mismatch logs serialization diagnostics without payment values", async () => {
+  const body = { amount: "200", codeUrl: "https://example.com/SECRET_PAYMENT_TOKEN", optional: null };
+  // Independent provider fixture: Java StringBuilder appends null as "null".
+  const md5 = crypto.createHash("md5").update("200" + body.codeUrl + "null").digest("hex").toUpperCase();
+  const key = crypto.createHash("md5").update(md5 + env.OTTPAY_SIGN_KEY).digest("hex").toUpperCase().slice(8, 24);
+  const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key), null);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(body), "utf8"), cipher.final()]).toString("base64");
+  const logs = [];
+  const api = load("src/lib/ottpay-hosted.server.ts", {}, {
+    fetch: async () => Response.json({ rsp_code: "SUCCESS", data: ciphertext, md5 }),
+    console: { error: (...args) => logs.push(args) },
+  });
+  await assert.rejects(api.hostedPost("CC_PURCHASE", "2.0", { orderId: "TEST_REF" }), /校验失败.*TEST_REF/);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][1].nullLiteralMatches, true);
+  assert.equal(logs[0][1].reference, "TEST_REF");
+  const diagnostic = JSON.stringify(logs);
+  for (const secret of [body.codeUrl, "SECRET_PAYMENT_TOKEN", md5, ciphertext, env.OTTPAY_SIGN_KEY]) {
+    assert.ok(!diagnostic.includes(secret), "Payment values must not appear in diagnostics");
+  }
+  assert.ok(diagnostic.includes('"type":"null"'));
+});
+
 test("CMP only settles captured funds with matching identity and amount", async () => {
   const tx = { id: "tx", ref_no: "TEST", amount_cad: 2, provider_payment_id: "pid", note: null };
   const valid = { paymentStatus: "success", stateCode: "P00003", paymentId: "pid", reference: "TEST", totalAmount: "200" };

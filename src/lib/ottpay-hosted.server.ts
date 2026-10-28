@@ -69,9 +69,8 @@ export function decryptHosted(payload: { data: string; md5: string }): Record<st
  * with the plaintext envelope tampered. Returns true when the supplied md5
  * matches the decrypted body.
  *
- * NOTE: if legitimate card callbacks ever start returning 401 "invalid
- * signature", this is the first suspect — OTT Pay may sign a different field
- * set. Loosening back to accept-and-log is a one-line change in the caller.
+ * Reject mismatches; use value-free diagnostics to investigate provider
+ * serialization differences without logging payment URLs or customer data.
  */
 export function hostedMd5Matches(suppliedMd5: string, decrypted: Record<string, unknown>): boolean {
   const flat: Record<string, string> = {};
@@ -104,7 +103,23 @@ export async function hostedPost(action: string, version: string, data: Record<s
     throw new Error(`OTT Pay 信用卡请求失败 (${action}): ${json?.rsp_msg ?? code ?? res.status}`);
   }
   const result = json?.data ? decryptHosted({ data: String(json.data), md5: String(json.md5) }) : {};
-  if (json?.data && !hostedMd5Matches(String(json.md5), result)) throw new Error("信用卡支付响应校验失败，请稍后查询原充值记录");
+  if (json?.data && !hostedMd5Matches(String(json.md5), result)) {
+    // Only log schema and comparison outcomes. Never log decrypted values,
+    // ciphertext, digests, credentials, or the token-bearing payment URL.
+    const fields = Object.keys(result).sort();
+    const digestMatches = (values: string[]) => md5Upper(values.join("")) === String(json.md5).toUpperCase();
+    const value = (key: string) => result[key] == null ? "" : typeof result[key] === "object" ? JSON.stringify(result[key]) : String(result[key]);
+    const reference = String(data.orderId ?? data.order_id ?? "");
+    const safeReference = /^[A-Za-z0-9_-]{1,64}$/.test(reference) ? reference : "unknown";
+    console.error("[ottpay-card] response digest mismatch", {
+      action, reference: safeReference,
+      fields: fields.map((key) => ({ key, type: result[key] === null ? "null" : Array.isArray(result[key]) ? "array" : typeof result[key] })),
+      nullLiteralMatches: digestMatches(fields.map((key) => result[key] === null ? "null" : value(key))),
+      caseInsensitiveOrderMatches: digestMatches([...fields].sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0).map(value)),
+      jsonTextMatches: md5Upper(JSON.stringify(result)) === String(json.md5).toUpperCase(),
+    });
+    throw new Error(`信用卡支付响应校验失败，请勿重复付款。参考号：${safeReference}`);
+  }
   return { rsp_code: code, rsp_msg: json?.rsp_msg, ...result };
 }
 
