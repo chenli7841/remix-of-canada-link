@@ -98,6 +98,17 @@ export const listUsers = createServerFn({ method: "POST" })
     const payload = (res ?? {}) as { users?: any[]; total?: number };
     const payloadUsers = payload.users ?? [];
     const userIds = payloadUsers.map((u: any) => u.id).filter(Boolean);
+    const repsByUser = new Map<string, { id: string | null; name: string | null }>();
+    if (userIds.length) {
+      const { data: profiles, error: profileError } = await supabaseAdmin.from("profiles")
+        .select("id, sales_rep_id").in("id", userIds);
+      if (profileError) throw new Error(profileError.message);
+      const repIds = [...new Set((profiles ?? []).map(p => p.sales_rep_id).filter((id): id is string => !!id))];
+      const reps = repIds.length ? await supabaseAdmin.from("profiles").select("id, full_name, email").in("id", repIds) : { data: [], error: null };
+      if (reps.error) throw new Error(reps.error.message);
+      const names = new Map((reps.data ?? []).map(p => [p.id, p.full_name || p.email || p.id]));
+      for (const p of profiles ?? []) repsByUser.set(p.id, { id: p.sales_rep_id, name: p.sales_rep_id ? names.get(p.sales_rep_id) ?? "已分配" : null });
+    }
     const unpaidByUser = new Map<string, { count: number; amount_cad: number }>();
     if (userIds.length) {
       const { data: invoices, error: invoiceError } = await supabaseAdmin
@@ -123,6 +134,8 @@ export const listUsers = createServerFn({ method: "POST" })
         full_name: u.full_name,
         phone: u.phone,
         customer_code: u.customer_code,
+        sales_rep_id: repsByUser.get(u.id)?.id ?? null,
+        sales_rep_name: repsByUser.get(u.id)?.name ?? null,
         created_at: u.created_at,
         vip_level: (u.vip_level ?? "normal") as VipLevel,
         points: Number(u.points ?? 0),

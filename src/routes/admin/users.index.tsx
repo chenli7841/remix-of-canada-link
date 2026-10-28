@@ -1,9 +1,10 @@
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { listUsers, type AppRole } from "@/lib/admin.functions";
+import { listUsers, getMyRoles, type AppRole } from "@/lib/admin.functions";
+import { listSalesReps, assignCustomerSalesRep } from "@/lib/admin-customer-view.functions";
 import { ROLE_LABEL, ROLE_COLOR, ASSIGNABLE_ROLES } from "@/lib/admin-roles";
 import { VIP_LEVELS, VIP_LABEL, VIP_COLOR, type VipLevel } from "@/lib/vip-levels";
 import { Search, Loader2, ArrowRight, Receipt, Ban } from "lucide-react";
@@ -15,6 +16,23 @@ export const Route = createFileRoute("/admin/users/")({
 
 function UsersPage() {
   const fetchUsers = useServerFn(listUsers);
+  const fetchRoles = useServerFn(getMyRoles);
+  const fetchReps = useServerFn(listSalesReps);
+  const assignRep = useServerFn(assignCustomerSalesRep);
+  const queryClient = useQueryClient();
+  const roles = useQuery({ queryKey: ["my-roles"], queryFn: () => fetchRoles() });
+  const canAssign = roles.data?.roles.some(r => r === "owner" || r === "manager") ?? false;
+  const reps = useQuery({ queryKey: ["sales-reps"], queryFn: () => fetchReps(), enabled: canAssign });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [repId, setRepId] = useState("");
+  const assignment = useMutation({
+    mutationFn: (userId: string) => assignRep({ data: { userId, salesRepId: repId || null } }),
+    onSuccess: async () => {
+      setEditing(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-customer-view"] });
+    },
+  });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [role, setRole] = useState<AppRole | "all">("all");
@@ -71,6 +89,7 @@ function UsersPage() {
                 "driver",
                 "pickup_point",
                 "sales",
+                "sales_rep",
                 "support",
                 "customer",
               ] as AppRole[]
@@ -124,27 +143,28 @@ function UsersPage() {
               <th className="px-4 py-2.5">未付款</th>
               <th className="px-4 py-2.5">积分</th>
               <th className="px-4 py-2.5">角色</th>
+              <th className="px-4 py-2.5">销售代表</th>
               <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {q.isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center">
+                <td colSpan={9} className="px-4 py-12 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-500" />
                 </td>
               </tr>
             )}
             {q.isError && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-rose-400">
+                <td colSpan={9} className="px-4 py-12 text-center text-rose-400">
                   {(q.error as Error).message}
                 </td>
               </tr>
             )}
             {q.data?.users.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
                   无匹配用户
                 </td>
               </tr>
@@ -205,6 +225,31 @@ function UsersPage() {
                         </span>
                       ))}
                   </div>
+                </td>
+                <td className="px-4 py-3">
+                  {editing === u.id ? (
+                    <div className="flex min-w-44 flex-col gap-2">
+                      <select aria-label="选择销售代表" value={repId} onChange={e => setRepId(e.target.value)} disabled={assignment.isPending || reps.isLoading || reps.isError}
+                        className="w-full rounded-md border border-white/15 bg-[#0E1626] p-2 text-xs text-slate-100">
+                        <option value="">未分配</option>
+                        {u.sales_rep_id && !reps.data?.items.some(r => r.id === u.sales_rep_id) && <option value={u.sales_rep_id}>{u.sales_rep_name}（当前）</option>}
+                        {reps.data?.items.map(r => <option key={r.id} value={r.id}>{r.full_name || r.email || r.id}{r.full_name && r.email ? ` · ${r.email}` : ""}</option>)}
+                      </select>
+                      {reps.isLoading && <span className="text-xs text-slate-400">加载代表名单…</span>}
+                      {reps.isError && <span role="alert" className="text-xs text-rose-300">{(reps.error as Error).message}</span>}
+                      {reps.data?.items.length === 0 && <span className="text-xs text-amber-300">暂无销售代表，请先在员工详情分配“销售代表”角色。</span>}
+                      {assignment.isError && <span role="alert" className="text-xs text-rose-300">{(assignment.error as Error).message}</span>}
+                      <div className="flex gap-2">
+                        <button type="button" disabled={assignment.isPending || !reps.data || reps.isError || repId === (u.sales_rep_id ?? "")} onClick={() => assignment.mutate(u.id)} className="rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50">{assignment.isPending ? "保存中…" : "保存"}</button>
+                        <button type="button" disabled={assignment.isPending} onClick={() => setEditing(null)} className="px-2 py-1 text-xs text-slate-300">取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-xs text-slate-300">{u.sales_rep_name ?? "未分配"}</span>
+                      {canAssign && <button type="button" disabled={assignment.isPending} onClick={() => { assignment.reset(); setRepId(u.sales_rep_id ?? ""); setEditing(u.id); }} className="text-xs text-blue-300 hover:underline">{u.sales_rep_id ? "修改" : "+ 添加销售代表"}</button>}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-2">

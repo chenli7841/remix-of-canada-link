@@ -9,6 +9,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { ROLE_LABEL, ROLE_COLOR, ASSIGNABLE_ROLES } from "@/lib/admin-roles";
 import { useApp } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { startOttTopup, startOttHostedCardTopup, syncOttTopup } from "@/lib/ottpay.functions";
@@ -338,6 +339,15 @@ function OverviewTab({
     },
   });
   const customerCode = ownProfile?.customer_code ?? null;
+  const { data: accountRoles = [] } = useQuery({
+    queryKey: ["account-special-roles", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user!.id);
+      if (error) throw error;
+      return ASSIGNABLE_ROLES.filter(role => data?.some(row => row.role === role));
+    },
+  });
 
   const { data: batchesData } = useQuery({
     queryKey: MY_BATCHES_QK,
@@ -390,6 +400,15 @@ function OverviewTab({
                   {tr("个人账户编号", "Personal account number")}
                 </div>
                 <div className="font-display text-xl font-bold tracking-widest text-brand">{customerCode}</div>
+                {accountRoles.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5" aria-label={tr("特殊身份", "Special roles")}>
+                    {accountRoles.map(role => (
+                      <span key={role} className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${ROLE_COLOR[role]}`}>
+                        {tr(ROLE_LABEL[role].zh, ROLE_LABEL[role].en)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <button

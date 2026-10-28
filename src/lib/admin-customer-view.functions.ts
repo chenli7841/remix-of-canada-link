@@ -223,7 +223,9 @@ async function assertOwnerOrManager(supabase: any, userId: string) {
 export const listSalesReps = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertCustomerViewAccess(context.supabase, context.userId);
+    const { data: isManager, error: managerError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "manager" });
+    if (managerError) throw new Error(managerError.message);
+    if (!isManager) await assertCustomerViewAccess(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: roleRows, error } = (await (supabaseAdmin as any)
       .from("user_roles")
@@ -232,11 +234,12 @@ export const listSalesReps = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const ids: string[] = Array.from(new Set((roleRows ?? []).map((r) => r.user_id)));
     if (!ids.length) return { items: [] as { id: string; full_name: string | null; email: string | null }[] };
-    const { data: profs } = await supabaseAdmin
+    const { data: profs, error: profilesError } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, email")
       .in("id", ids)
       .order("full_name", { ascending: true });
+    if (profilesError) throw new Error(profilesError.message);
     return { items: (profs ?? []) as { id: string; full_name: string | null; email: string | null }[] };
   });
 
@@ -245,7 +248,6 @@ export const assignCustomerSalesRep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string; salesRepId: string | null }) => d)
   .handler(async ({ data, context }) => {
-    await assertCustomerViewAccess(context.supabase, context.userId, data.userId);
     await assertOwnerOrManager(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const salesRepId = data.salesRepId || null;
@@ -257,11 +259,13 @@ export const assignCustomerSalesRep = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       if (!isRep) throw new Error("指定的账号不是销售代表角色");
     }
-    const { data: before } = await supabaseAdmin
+    const { data: before, error: beforeError } = await supabaseAdmin
       .from("profiles")
       .select("sales_rep_id" as any)
       .eq("id", data.userId)
       .maybeSingle();
+    if (beforeError) throw new Error(beforeError.message);
+    if (!before) throw new Error("客户不存在，请刷新列表后重试");
     const { error: updErr } = await (supabaseAdmin as any)
       .from("profiles")
       .update({ sales_rep_id: salesRepId })
