@@ -3,6 +3,25 @@
 // -> redirect cardholder -> Converge posts result to OTT Pay -> OTT Pay calls our backUrl.
 import crypto from "crypto";
 
+// JSON.parse converts 202.0/202.00 to 202. Keep number tokens from the
+// decrypted JSON for digest verification; never persist the plaintext.
+const hostedNumberTokens = new WeakMap<object, Record<string, string>>();
+
+function topLevelNumberTokens(raw: string): Record<string, string> {
+  const tokens = raw.match(/"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null|[{}\[\],:]/g) ?? [];
+  const numbers: Record<string, string> = Object.create(null);
+  let depth = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "{" || token === "[") depth++;
+    else if (token === "}" || token === "]") depth--;
+    else if (token === ":" && depth === 1 && /^-?\d/.test(tokens[i + 1] ?? "")) {
+      numbers[JSON.parse(tokens[i - 1])] = tokens[i + 1];
+    }
+  }
+  return numbers;
+}
+
 export function hostedConfig() {
   const merchantId =
     process.env["OTTPAY_MERCHANT_ID"] ?? process.env["OTTPAY_MERCHANT_NO"] ?? process.env["OTTPAY_APP_ID"];
@@ -58,7 +77,11 @@ export function decryptHosted(payload: { data: string; md5: string }): Record<st
     decipher.update(Buffer.from(payload.data, "base64")),
     decipher.final(),
   ]).toString("utf8");
-  return JSON.parse(out);
+  const parsed = JSON.parse(out);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    hostedNumberTokens.set(parsed, topLevelNumberTokens(out));
+  }
+  return parsed;
 }
 
 /**
@@ -78,7 +101,12 @@ export function hostedMd5Matches(suppliedMd5: string, decrypted: Record<string, 
     const v = decrypted[k];
     flat[k] = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
   }
-  return String(suppliedMd5).toUpperCase() === md5Upper(joinSorted(flat));
+  const expected = String(suppliedMd5).toUpperCase();
+  if (expected === md5Upper(joinSorted(flat))) return true;
+  const numbers = hostedNumberTokens.get(decrypted);
+  return !!numbers
+    && Object.entries(numbers).every(([key, token]) => Object.is(decrypted[key], Number(token)))
+    && expected === md5Upper(joinSorted({ ...flat, ...numbers }));
 }
 
 /** yyyyMMddHHmmss in UTC — must not depend on the host's local timezone,
@@ -117,6 +145,7 @@ export async function hostedPost(action: string, version: string, data: Record<s
       nullLiteralMatches: digestMatches(fields.map((key) => result[key] === null ? "null" : value(key))),
       caseInsensitiveOrderMatches: digestMatches([...fields].sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0).map(value)),
       jsonTextMatches: md5Upper(JSON.stringify(result)) === String(json.md5).toUpperCase(),
+      javaDoubleMatches: digestMatches(fields.map((key) => typeof result[key] === "number" && Number.isInteger(result[key]) ? result[key].toFixed(1) : value(key))),
     };
     console.error("[ottpay-card] response digest mismatch", diagnostics);
     throw Object.assign(new Error(`信用卡支付响应校验失败，请勿重复付款。参考号：${safeReference}`), { ottDiagnostics: diagnostics });

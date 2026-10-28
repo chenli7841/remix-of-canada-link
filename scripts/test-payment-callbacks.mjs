@@ -134,6 +134,29 @@ test("Hosted response mismatch logs serialization diagnostics without payment va
   assert.ok(diagnostic.includes('"type":"null"'));
 });
 
+test("Hosted responses verify original numeric JSON tokens and reject tampering", async () => {
+  for (const amount of ["202.0", "202.00", "2.02e2"]) {
+    const codeUrl = 'https://example.com/pay?note="amount":999.0';
+    const raw = '{"amount":' + amount + ',"codeUrl":' + JSON.stringify(codeUrl) + ',"rspCode":"SUCCESS","rspMsg":"ok"}';
+    const md5 = crypto.createHash("md5").update(amount + codeUrl + "SUCCESSok").digest("hex").toUpperCase();
+    const key = crypto.createHash("md5").update(md5 + env.OTTPAY_SIGN_KEY).digest("hex").toUpperCase().slice(8, 24);
+    const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key), null);
+    const data = Buffer.concat([cipher.update(raw, "utf8"), cipher.final()]).toString("base64");
+    const api = load("src/lib/ottpay-hosted.server.ts", {}, {
+      fetch: async () => Response.json({ rsp_code: "SUCCESS", data, md5 }),
+    });
+    const body = api.decryptHosted({ data, md5 });
+    assert.equal(body.amount, 202);
+    assert.equal(api.hostedMd5Matches(md5, body), true, amount);
+    assert.equal((await api.hostedPost("CC_PURCHASE", "2.0", { orderId: "TEST" })).codeUrl, codeUrl);
+    body.codeUrl = "https://attacker.example/pay";
+    assert.equal(api.hostedMd5Matches(md5, body), false, "Modified payment URL must fail");
+    body.codeUrl = codeUrl;
+    body.amount = 999;
+    assert.equal(api.hostedMd5Matches(md5, body), false, "Modified amount must fail");
+  }
+});
+
 test("CMP only settles captured funds with matching identity and amount", async () => {
   const tx = { id: "tx", ref_no: "TEST", amount_cad: 2, provider_payment_id: "pid", note: null };
   const valid = { paymentStatus: "success", stateCode: "P00003", paymentId: "pid", reference: "TEST", totalAmount: "200" };
