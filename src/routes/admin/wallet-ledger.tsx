@@ -3,7 +3,8 @@ import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { collectOttBatchRows, runOttBatch, type OttBatchResult } from "@/lib/ott-topup-batch";
 import { listWalletLedger, type LedgerKind } from "@/lib/wallet-ledger.functions";
 import {
   listRechargeApplications,
@@ -351,6 +352,9 @@ function RechargeApplications() {
   const [page, setPage] = useState(1);
   const pageSize = 30;
   const [busyId, setBusyId] = useState<string | null>(null);
+  const batchRunning = useRef(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkResults, setBulkResults] = useState<OttBatchResult[]>([]);
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "warn"; text: string } | null>(null);
 
   const q = useQuery({
@@ -377,6 +381,7 @@ function RechargeApplications() {
   const refresh = () => qc.invalidateQueries({ queryKey: ["recharge-apps"] });
 
   const onConfirmEmt = async (r: any) => {
+    if (batchRunning.current) return;
     if (
       !window.confirm(
         `确认客户 ${r.customer_code ?? r.customer_name ?? ""} 的 EMT 充值 CA$${r.amount_cad.toFixed(2)} 已到账？\n确认后立即入账客户钱包余额，且不可自动撤销。`,
@@ -397,6 +402,7 @@ function RechargeApplications() {
   };
 
   const onRechargeNow = async (r: any) => {
+    if (batchRunning.current) return;
     if (
       !window.confirm(
         `现在给客户 ${r.customer_code ?? r.customer_name ?? ""} 充值 CA${r.amount_cad.toFixed(2)}？
@@ -423,6 +429,7 @@ function RechargeApplications() {
   };
 
   const onVoid = async (r: any) => {
+    if (batchRunning.current) return;
     const reason = window.prompt("确认充值不成功的原因？（必填，会记录日志，并加入微信预发送通知的余额部分）");
     if (!reason?.trim()) return;
     setBusyId(r.id);
@@ -441,6 +448,7 @@ function RechargeApplications() {
   };
 
   const onQueryOtt = async (r: any) => {
+    if (batchRunning.current) return;
     setBusyId(r.id);
     setMsg(null);
     try {
@@ -452,8 +460,10 @@ function RechargeApplications() {
             ? `OTT 核验成功，已入账 CA$${r.amount_cad.toFixed(2)}`
             : "OTT 核验成功，该笔已由回调入账（未重复加余额）",
         });
-      } else if (res.status === "failed") {
-        setMsg({ kind: "warn", text: `OTT 状态：${res.provider_status ?? "失败"}，已标记无效` });
+      } else if (res.status === "failed" || res.status === "cancelled") {
+        setMsg({ kind: "warn", text: res.notificationQueued
+          ? "OTT 已确认充值不成功，微信通知已加入预发送"
+          : `已确认充值不成功，但微信通知需重试：${res.notificationError ?? "未确认通知生成"}` });
       } else if (res.status === "refund_warning") {
         setMsg({ kind: "warn", text: res.warning });
       } else if (res.status === "mismatch") {
@@ -468,6 +478,40 @@ function RechargeApplications() {
       setMsg({ kind: "err", text: e?.message ?? "查询失败" });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const onBulkQueryOtt = async () => {
+    if (batchRunning.current || busyId) return;
+    if (!window.confirm("批量查询当前筛选范围内的全部正在充值记录（仅信用卡、微信、支付宝）？\n核验成功自动入账；明确失败自动确认不成功并加入微信预发送；处理中的订单、查询异常及信息不匹配的记录保留待核验。")) return;
+    batchRunning.current = true;
+    setBulkProgress({ done: 0, total: 0 });
+    setBulkResults([]);
+    setMsg({ kind: "warn", text: "正在收集当前筛选范围内的待处理充值…" });
+    try {
+      const snapshot = await collectOttBatchRows(async (batchPage) => {
+        const result = await fetchList({ data: {
+          customerCode: customerCode || null, refNo: refNo || null, paymentId: paymentId || null,
+          channel: channel === "all" ? null : channel, status: "pending",
+          dateFrom: dateFrom || null, dateTo: dateTo || null, page: batchPage, pageSize: 200,
+        } });
+        return result as any;
+      });
+      const results = await runOttBatch(snapshot, (txId) => doQueryOtt({ data: { txId } }), (done, total) => {
+        setBulkProgress({ done, total });
+        setMsg({ kind: "warn", text: `正在向 OTT 查询：${done} / ${total}` });
+      });
+      setBulkResults(results);
+      const count = (outcome: OttBatchResult["outcome"]) => results.filter((r) => r.outcome === outcome).length;
+      setMsg({ kind: count("attention") ? "warn" : "ok", text: results.length
+        ? `批量查询完成：成功入账/已入账 ${count("completed")} 笔；确认不成功并加入微信预发送 ${count("failed")} 笔；仍在处理 ${count("pending")} 笔；需核对或通知重试 ${count("attention")} 笔。`
+        : "当前筛选范围内没有可查询的 OTT 待处理充值。" });
+    } catch (error: any) {
+      setMsg({ kind: "err", text: error?.message ?? "批量查询失败" });
+    } finally {
+      batchRunning.current = false;
+      setBulkProgress(null);
+      await refresh();
     }
   };
 
@@ -486,7 +530,7 @@ function RechargeApplications() {
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-end gap-2 text-sm">
+      <fieldset disabled={bulkProgress !== null} className="mb-3 flex flex-wrap items-end gap-2 text-sm">
         <FilterInput label="客户号" value={customerCode} onChange={setCustomerCode} onPage={setPage} />
         <FilterInput label="参考号" value={refNo} onChange={setRefNo} onPage={setPage} />
         <FilterInput label="Payment ID" value={paymentId} onChange={setPaymentId} onPage={setPage} />
@@ -549,7 +593,15 @@ function RechargeApplications() {
             />
           </div>
         </div>
-      </div>
+        <button
+          disabled={bulkProgress !== null || !!busyId || q.isFetching || !["pending", "all"].includes(status) || ["emt", "other"].includes(channel)}
+          onClick={onBulkQueryOtt}
+          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+        >
+          {bulkProgress && <Loader2 className="h-4 w-4 animate-spin" />}
+          {bulkProgress ? `批量查询中 ${bulkProgress.done}/${bulkProgress.total}` : "批量向 OTT 查询"}
+        </button>
+      </fieldset>
 
       {msg && (
         <div
@@ -563,6 +615,17 @@ function RechargeApplications() {
         >
           {msg.text}
         </div>
+      )}
+
+      {bulkResults.length > 0 && (
+        <details className="mb-3 rounded-md border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+          <summary className="cursor-pointer font-semibold">查看批量查询逐笔结果（{bulkResults.length} 笔）</summary>
+          <ul className="mt-2 max-h-64 space-y-1 overflow-auto">
+            {bulkResults.map((result) => <li key={result.id} className={result.outcome === "attention" ? "text-amber-200" : ""}>
+              <span className="font-mono">{result.reference}</span> · {result.message}
+            </li>)}
+          </ul>
+        </details>
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
@@ -598,7 +661,7 @@ function RechargeApplications() {
               </tr>
             )}
             {rows.map((r: any) => {
-              const busy = busyId === r.id;
+              const busy = busyId === r.id || bulkProgress !== null;
               const pending = r.status === "pending";
               return (
                 <tr key={r.id} className="align-top hover:bg-white/[0.03]">
@@ -681,7 +744,7 @@ function RechargeApplications() {
                           onClick={() => onVoid(r)}
                           className="rounded border border-rose-500/40 px-2 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
                         >
-                          {r.status === "cancelled" ? "重试微信通知" : "确认充值不成功"}
+                          {r.status === "cancelled" || r.status === "failed" ? "重试微信通知" : "确认充值不成功"}
                         </button>
                       )}
                       {!pending && r.status !== "failed" && (

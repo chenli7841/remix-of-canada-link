@@ -42,6 +42,9 @@ export async function verifyOttRecharge(tx: OttTx): Promise<OttDecision> {
       const { verifyHostedOrder } = await import("@/lib/ottpay-hosted.server");
       return await verifyHostedOrder(tx);
     } catch (e: any) {
+      if (e?.ottCode === "ORDER_CLOSED") {
+        return { decision: "error", error: "OTT 查询返回订单关闭，但未提供可校验的交易明细，暂不确认充值失败。若已扣款，请用 Converge/OTT 交易号人工核对" };
+      }
       return { decision: "error", error: e?.message ?? "信用卡查询失败" };
     }
   }

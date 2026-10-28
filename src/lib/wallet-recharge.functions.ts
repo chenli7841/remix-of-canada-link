@@ -272,9 +272,10 @@ export const queryOttTopup = createServerFn({ method: "POST" })
         provider_status: v.providerStatus,
         provider_response: v.providerResponse,
       });
+      if (!r?.status) throw new Error("充值入账结果未确认，请刷新后重新查询");
       return {
         ok: true,
-        status: r?.status ?? "completed",
+        status: r.status,
         settled_now: (r?.rows_changed ?? 0) === 1, // 0 = 已被回调/其他请求入账，不重复加余额
         provider_status: v.providerStatus,
       };
@@ -285,7 +286,22 @@ export const queryOttTopup = createServerFn({ method: "POST" })
     }
     if (v.decision === "fail") {
       const r = await callRpc({ op: "ott_mark_failed", tx_id: data.txId, provider_status: v.providerStatus, provider_response: v.providerResponse });
-      return { ok: true, status: r?.status ?? "failed", provider_status: v.providerStatus };
+      // A successful callback may win the lock while the query is in flight.
+      if (r?.status === "completed") return { ok: true, status: "completed", settled_now: false };
+      if (!["failed", "cancelled"].includes(r?.status)) throw new Error("充值失败状态保存未确认，请稍后重新查询");
+      const confirmed = await callRpc({
+        op: "void", tx_id: data.txId, void_status: "cancelled",
+        reason: `OTT 核验确认充值不成功（${v.providerStatus}）`,
+      });
+      if (confirmed?.status === "completed") return { ok: true, status: "completed", settled_now: false };
+      if (!["failed", "cancelled"].includes(confirmed?.status)) throw new Error("充值状态已变化，未生成失败通知，请刷新核对");
+      const { recordWecomRechargeFailure } = await import("@/lib/wecom-daily-notify.server");
+      try {
+        await recordWecomRechargeFailure(supabaseAdmin, data.txId);
+        return { ok: true, status: confirmed.status, provider_status: v.providerStatus, notificationQueued: true, notificationError: null };
+      } catch (e: any) {
+        return { ok: true, status: confirmed.status, provider_status: v.providerStatus, notificationQueued: false, notificationError: e?.message ?? "微信通知生成失败" };
+      }
     }
     // pending
     await callRpc({ op: "ott_record", tx_id: data.txId, provider_status: v.providerStatus, provider_response: v.providerResponse, provider_payment_id: v.providerPaymentId });

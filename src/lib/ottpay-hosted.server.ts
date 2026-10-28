@@ -138,7 +138,9 @@ export async function hostedPost(action: string, version: string, data: Record<s
   const json: any = await res.json().catch(() => null);
   const code = String(json?.rsp_code ?? "");
   if (!res.ok || !["SUCCESS", "PROCESSING"].includes(code)) {
-    throw new Error(`OTT Pay 信用卡请求失败 (${action}): ${json?.rsp_msg ?? code ?? res.status}`);
+    throw Object.assign(new Error(`OTT Pay 信用卡请求失败 (${action}): ${json?.rsp_msg ?? code ?? res.status}`), {
+      ottCode: code, ottHttpStatus: res.status,
+    });
   }
   const result = json?.data ? decryptHosted({ data: String(json.data), md5: String(json.md5) }) : {};
   if (json?.data && !hostedMd5Matches(String(json.md5), result)) {
@@ -193,4 +195,4 @@ export async function verifyHostedOrder(tx: { ref_no: string | null; amount_cad:
 }
 
 export const HOSTED_PAID_STATES = new Set(["success", "paid", "trade_success", "captured"]);
-export const HOSTED_FAILED_STATES = new Set(["fail", "failure", "closed", "orderclosed", "cancelled", "canceled", "revoked"]);
+export const HOSTED_FAILED_STATES = new Set(["fail", "failure", "failed", "expired", "rejected", "closed", "orderclosed", "cancelled", "canceled", "revoked"]);

@@ -486,3 +486,81 @@ test("Hosted lookup rejects mismatched merchant, currency, and gateway identity"
     assert.equal(result.decision,"mismatch");
   }
 });
+
+test("Unverifiable ORDER_CLOSED query errors never classify a paid card recharge as failed", async () => {
+  const hosted = load("src/lib/ottpay-hosted.server.ts", {}, {
+    fetch: async () => Response.json({ rsp_code: "ORDER_CLOSED", rsp_msg: "order closed" }),
+  });
+  const api = load("src/lib/ottpay-reconcile.server.ts", { "@/lib/ottpay-hosted.server": hosted });
+  const result = await api.verifyOttRecharge({ id: "tx", channel: "card", ref_no: "TEST", amount_cad: 635.2 });
+  assert.equal(result.decision, "error");
+  assert.match(result.error, /暂不确认充值失败/);
+});
+
+test("Bulk freezes all filtered pages and queries each pending OTT record once", async () => {
+  const batch = load("src/lib/ott-topup-batch.ts");
+  const row = (id, is_ott = true, status = "pending") => ({ id, ref_no: id, is_ott, status });
+  let queried = false;
+  const snapshot = await batch.collectOttBatchRows(async (page) => {
+    assert.equal(queried, false, "Collect every page before mutating statuses");
+    return { rows: page === 1 ? [row("a"), row("emt", false)] : [row("a"), row("b"), row("done", true, "completed")], total: 4, pageSize: 2 };
+  });
+  assert.deepEqual(Array.from(snapshot, (r) => r.id), ["a", "b"]);
+  const progress = [], calls = [];
+  const results = await batch.runOttBatch(snapshot, async (id) => {
+    queried = true; calls.push(id);
+    return id === "a" ? { ok: true, status: "completed", settled_now: true } : { ok: true, status: "cancelled", notificationQueued: true };
+  }, (done, total) => progress.push([done, total]));
+  assert.deepEqual(calls, ["a", "b"]);
+  assert.deepEqual(Array.from(results, (r) => r.outcome), ["completed", "failed"]);
+  assert.deepEqual(progress, [[0, 2], [1, 2], [2, 2]]);
+});
+
+test("Bulk keeps pending, mismatches, closed-query errors and notification failures separate", async () => {
+  const batch = load("src/lib/ott-topup-batch.ts");
+  const responses = [
+    { ok: false, status: "pending" },
+    { ok: false, status: "pending", error: "ORDER_CLOSED needs verification" },
+    { ok: false, status: "mismatch", warning: "amount mismatch" },
+    { ok: true, status: "cancelled", notificationQueued: false, notificationError: "queue offline" },
+    new Error("network failure"),
+    { ok: true, status: "completed", settled_now: false },
+  ];
+  const results = await batch.runOttBatch(responses.map((_, i) => ({ id: String(i), is_ott: true, status: "pending" })), async (id) => {
+    const result = responses[Number(id)]; if (result instanceof Error) throw result; return result;
+  }, () => {});
+  assert.deepEqual(Array.from(results, (r) => r.outcome), ["pending", "attention", "attention", "attention", "attention", "completed"]);
+});
+
+test("Admin OTT query confirms verified failures and queues notification only after final status", async () => {
+  for (const scenario of ["failure", "callback-wins", "queue-error", "lookup-error", "not-manager"]) {
+    let status = "pending", notified = 0;
+    const operations = [];
+    const query = { select() { return this; }, eq() { return this; }, async maybeSingle() { return { data: { id: "tx", type: "recharge", status, channel: "card", ref_no: "TEST", amount_cad: 2 } }; } };
+    const api = load("src/lib/wallet-recharge.functions.ts", {
+      "@tanstack/react-start": { createServerFn: () => ({ middleware() { return this; }, inputValidator() { return this; }, handler(fn) { return fn; } }) },
+      "@/integrations/supabase/auth-middleware": { requireSupabaseAuth: {} },
+      "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query } },
+      "@/lib/ottpay-reconcile.server": { verifyOttRecharge: async () => scenario === "lookup-error" ? { decision: "error", error: "ORDER_CLOSED" } : { decision: "fail", providerStatus: "closed", providerResponse: {} } },
+      "@/lib/wecom-daily-notify.server": { recordWecomRechargeFailure: async () => { assert.equal(status, "cancelled"); notified++; if (scenario === "queue-error") throw new Error("queue offline"); } },
+    });
+    const context = { userId: "manager", supabase: { rpc: async (name, args) => {
+      if (name === "has_role") return { data: scenario !== "not-manager" };
+      const op = args._payload.op; operations.push(op);
+      if (op === "ott_mark_failed") status = scenario === "callback-wins" ? "completed" : "failed";
+      if (op === "void") { assert.match(args._payload.reason, /OTT.*不成功/); status = "cancelled"; }
+      return { data: { ok: true, status, rows_changed: 1 } };
+    } } };
+    if (scenario === "not-manager") {
+      await assert.rejects(api.queryOttTopup({ data: { txId: "tx" }, context }), /Forbidden/);
+    } else {
+      const result = await api.queryOttTopup({ data: { txId: "tx" }, context });
+      assert.equal(result.status, scenario === "callback-wins" ? "completed" : scenario === "lookup-error" ? "pending" : "cancelled");
+      if (scenario === "failure") assert.equal(result.notificationQueued, true);
+      if (scenario === "queue-error") assert.equal(result.notificationQueued, false);
+    }
+    assert.equal(notified, ["failure", "queue-error"].includes(scenario) ? 1 : 0);
+    if (["lookup-error", "not-manager"].includes(scenario)) assert.equal(operations.length, 0);
+    assert.ok(!operations.includes("ott_settle"));
+  }
+});
