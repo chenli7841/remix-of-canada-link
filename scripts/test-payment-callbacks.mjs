@@ -389,6 +389,36 @@ test("Card requests reserve locally before gateway calls and reuse concurrent re
   row.status="completed";await assert.rejects(run(),/已处理/);
 });
 
+test("Card signature failures preserve diagnostics without settling or retrying the charge", async () => {
+  let row, calls = 0;
+  const filters = [];
+  const diagnostics = { action: "CC_PURCHASE", fields: [{ key: "optional", type: "null" }], nullLiteralMatches: true };
+  const failure = Object.assign(new Error("signature mismatch"), { ottDiagnostics: diagnostics });
+  const query = {
+    select() { return this; }, eq(...args) { filters.push(args); return this; },
+    async maybeSingle() { return { data: row }; },
+    async insert(value) { row = { ...value }; return {}; },
+    update(value) { Object.assign(row, value); return this; },
+    then(resolve) { resolve({ error: null }); },
+  };
+  const api = load("src/lib/ottpay.functions.ts", {
+    "@tanstack/react-start": { createServerFn: () => ({ middleware() { return this; }, inputValidator() { return this; }, handler(fn) { return fn; } }) },
+    "@/integrations/supabase/auth-middleware": { requireSupabaseAuth: {} },
+    "@/integrations/supabase/client.server": { supabaseAdmin: { from: () => query } },
+    "@/lib/orders.functions": { getFxCadPerCny: async () => 0.2 },
+    "@/lib/ottpay-hosted.server": { ...card, hostedPost: async () => { calls++; throw failure; } },
+  }, { Error });
+  const run = () => api.startOttHostedCardTopup({ data: { amountCad: 2, idempotencyKey: "test-card-diagnostic" }, context: { userId: "user" } });
+  await assert.rejects(run(), /signature mismatch/);
+  assert.equal(row.status, "pending");
+  assert.equal(row.pay_session.state, "verification_required");
+  assert.equal(row.pay_session.diagnostics, diagnostics);
+  assert.ok(filters.some(([key, value]) => key === "user_id" && value === "user"));
+  assert.ok(filters.some(([key, value]) => key === "status" && value === "pending"));
+  await assert.rejects(run(), /核验/);
+  assert.equal(calls, 1);
+});
+
 test("Reconciliation reports database write failure instead of settlement success", async () => {
   const query={select(){return this;},eq(){return this;},in(){return this;},gt(){return this;},lt(){return this;},order(){return this;},limit(){return this;},
     then(resolve){resolve({data:[{id:"tx",channel:"card"}]});}};

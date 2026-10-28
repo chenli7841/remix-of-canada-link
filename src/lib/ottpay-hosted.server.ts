@@ -111,14 +111,15 @@ export async function hostedPost(action: string, version: string, data: Record<s
     const value = (key: string) => result[key] == null ? "" : typeof result[key] === "object" ? JSON.stringify(result[key]) : String(result[key]);
     const reference = String(data.orderId ?? data.order_id ?? "");
     const safeReference = /^[A-Za-z0-9_-]{1,64}$/.test(reference) ? reference : "unknown";
-    console.error("[ottpay-card] response digest mismatch", {
+    const diagnostics = {
       action, reference: safeReference,
       fields: fields.map((key) => ({ key, type: result[key] === null ? "null" : Array.isArray(result[key]) ? "array" : typeof result[key] })),
       nullLiteralMatches: digestMatches(fields.map((key) => result[key] === null ? "null" : value(key))),
       caseInsensitiveOrderMatches: digestMatches([...fields].sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0).map(value)),
       jsonTextMatches: md5Upper(JSON.stringify(result)) === String(json.md5).toUpperCase(),
-    });
-    throw new Error(`信用卡支付响应校验失败，请勿重复付款。参考号：${safeReference}`);
+    };
+    console.error("[ottpay-card] response digest mismatch", diagnostics);
+    throw Object.assign(new Error(`信用卡支付响应校验失败，请勿重复付款。参考号：${safeReference}`), { ottDiagnostics: diagnostics });
   }
   return { rsp_code: code, rsp_msg: json?.rsp_msg, ...result };
 }

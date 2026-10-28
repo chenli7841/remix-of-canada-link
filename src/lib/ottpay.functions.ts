@@ -303,7 +303,9 @@ export const startOttHostedCardTopup = createServerFn({ method: "POST" })
       throw new Error("无法保存充值请求，请稍后重试");
     }
 
-    const r = await hostedPost("CC_PURCHASE", "2.0", {
+    let r: any;
+    try {
+      r = await hostedPost("CC_PURCHASE", "2.0", {
       orderId: reference,
       merchant_id: cfg.merchantId,
       operator_id: cfg.operatorId,
@@ -314,7 +316,18 @@ export const startOttHostedCardTopup = createServerFn({ method: "POST" })
       channelType: "ELAVONECOM",
       bizType: "converge_hosted",
       cc_channelType: "web",
-    });
+      });
+    } catch (error) {
+      // Preserve only our value-free signature diagnostics on the reserved
+      // request so support can inspect it without access to hosting logs.
+      if (error instanceof Error && "ottDiagnostics" in error) {
+        const stored = await supabaseAdmin.from("wallet_transactions")
+          .update({ pay_session: { mode: "redirect", hosted: true, state: "verification_required", diagnostics: error.ottDiagnostics } })
+          .eq("user_id", context.userId).eq("ref_no", reference).eq("status", "pending");
+        if (stored.error) console.error("[ottpay-card] diagnostic storage failed", reference);
+      }
+      throw error;
+    }
 
     const url = String(r.codeUrl ?? r.code_url ?? "");
     if (!url) throw new Error(`OTT Pay 未返回支付页面链接 (${r.rspMsg ?? r.rsp_msg ?? ""})`);
