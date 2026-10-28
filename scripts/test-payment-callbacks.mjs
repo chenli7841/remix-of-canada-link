@@ -157,6 +157,22 @@ test("Hosted responses verify original numeric JSON tokens and reject tampering"
   }
 });
 
+test("Hosted verifies OTT Java Double digest when response JSON emits an integer", async () => {
+  const raw = '{"amount":203,"codeUrl":"https://example.com/pay","rspCode":"SUCCESS","rspMsg":"ok"}';
+  const md5 = crypto.createHash("md5").update("203.0https://example.com/paySUCCESSok").digest("hex").toUpperCase();
+  const key = crypto.createHash("md5").update(md5 + env.OTTPAY_SIGN_KEY).digest("hex").toUpperCase().slice(8, 24);
+  const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key), null);
+  const data = Buffer.concat([cipher.update(raw, "utf8"), cipher.final()]).toString("base64");
+  const api = load("src/lib/ottpay-hosted.server.ts", {}, { fetch: async () => Response.json({ rsp_code: "SUCCESS", data, md5 }) });
+  assert.equal((await api.hostedPost("CC_PURCHASE", "2.0", { orderId: "TEST" })).amount, 203);
+  const body = api.decryptHosted({ data, md5 });
+  body.amount = 204;
+  assert.equal(api.hostedMd5Matches(md5, body), false);
+  body.amount = 203;
+  body.codeUrl = "https://attacker.example/pay";
+  assert.equal(api.hostedMd5Matches(md5, body), false);
+});
+
 test("CMP only settles captured funds with matching identity and amount", async () => {
   const tx = { id: "tx", ref_no: "TEST", amount_cad: 2, provider_payment_id: "pid", note: null };
   const valid = { paymentStatus: "success", stateCode: "P00003", paymentId: "pid", reference: "TEST", totalAmount: "200" };

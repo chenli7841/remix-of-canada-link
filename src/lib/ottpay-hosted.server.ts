@@ -103,6 +103,16 @@ export function hostedMd5Matches(suppliedMd5: string, decrypted: Record<string, 
   }
   const expected = String(suppliedMd5).toUpperCase();
   if (expected === md5Upper(joinSorted(flat))) return true;
+  // OTT signs integral numeric amounts using Java Double.toString (203.0),
+  // while its response serializer emits JSON 203. Recompute the full digest
+  // with that representation; a mismatch still fails closed.
+  const javaNumbers = { ...flat };
+  for (const key of Object.keys(decrypted)) {
+    if (typeof decrypted[key] === "number" && Number.isSafeInteger(decrypted[key])) {
+      javaNumbers[key] = decrypted[key].toFixed(1);
+    }
+  }
+  if (expected === md5Upper(joinSorted(javaNumbers))) return true;
   const numbers = hostedNumberTokens.get(decrypted);
   return !!numbers
     && Object.entries(numbers).every(([key, token]) => Object.is(decrypted[key], Number(token)))
