@@ -701,7 +701,7 @@ export const listOrders = createServerFn({ method: "POST" })
     if (data.search?.trim()) {
       const s = data.search.trim();
       q = q.or(
-        `order_no.ilike.%${s}%,customer_code.ilike.%${s}%,batch_no.ilike.%${s}%,tracking_no.ilike.%${s}%,domestic_tracking_no.ilike.%${s}%`,
+        `order_no.ilike.%${s}%,customer_code.ilike.%${s}%,batch_no.ilike.%${s}%,tracking_no.ilike.%${s}%,domestic_tracking_no.ilike.%${s}%${/^[\p{L}\p{N}-]+$/u.test(s) ? `,aliases.cs.{${s.toUpperCase()}}` : ""}`,
       );
     }
     if (data.date_from) q = q.gte("created_at", data.date_from);
@@ -852,7 +852,7 @@ export const listForwardings = createServerFn({ method: "POST" })
     if (data.search?.trim()) {
       const s = data.search.trim();
       q = q.or(
-        `request_no.ilike.%${s}%,tracking_no.ilike.%${s}%,domestic_tracking_no.ilike.%${s}%,customer_code.ilike.%${s}%,batch_no.ilike.%${s}%`,
+        `request_no.ilike.%${s}%,tracking_no.ilike.%${s}%,domestic_tracking_no.ilike.%${s}%,customer_code.ilike.%${s}%,batch_no.ilike.%${s}%${/^[\p{L}\p{N}-]+$/u.test(s) ? `,aliases.cs.{${s.toUpperCase()}}` : ""}`,
       );
     }
     const { data: rows, error, count } = await q.range((page - 1) * pageSize, page * pageSize - 1);
@@ -1132,7 +1132,7 @@ export const listWaybills = createServerFn({ method: "POST" })
     if (data.batch_id) q = q.eq("assigned_batch_id", data.batch_id);
     if (data.search?.trim()) {
       const s = data.search.trim();
-      q = q.or(`waybill_no.ilike.%${s}%,intl_tracking_no.ilike.%${s}%,batch_no.ilike.%${s}%`);
+      q = q.or(`waybill_no.ilike.%${s}%,intl_tracking_no.ilike.%${s}%,batch_no.ilike.%${s}%${/^[\p{L}\p{N}-]+$/u.test(s) ? `,aliases.cs.{${s.toUpperCase()}}` : ""}`);
     }
     const { data: rows, error, count } = await q.range((page - 1) * pageSize, page * pageSize - 1);
     if (error) throw new Error(error.message);
