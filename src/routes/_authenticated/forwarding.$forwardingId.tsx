@@ -18,6 +18,7 @@ import {
   Truck,
   Paperclip,
   Boxes,
+  ChevronDown,
   Weight,
   Ruler,
   Trash2,
@@ -396,6 +397,8 @@ function ForwardingDetailPage() {
           <Card
             title={tr("运单（含尺寸/重量/批次/轨迹）", "Waybills (dims / weight / batch / tracking)")}
             icon={<Boxes className="h-4 w-4" />}
+            sub={tr(`共 ${waybills.length} 单`, `${waybills.length} waybills`)}
+            collapsible
           >
             {waybills.length > 0 && (
               <div className="mb-3 overflow-x-auto rounded-xl border border-border">
@@ -562,12 +565,27 @@ function Card({
   icon,
   sub,
   children,
+  collapsible = false,
 }: {
   title: string;
   icon: React.ReactNode;
   sub?: string;
   children: React.ReactNode;
+  collapsible?: boolean;
 }) {
+  if (collapsible) {
+    return (
+      <details className="group/section rounded-2xl border border-border bg-surface p-5">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand [&::-webkit-details-marker]:hidden">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand/10 text-brand">{icon}</span>
+          <h2 className="min-w-0 flex-1 font-display text-sm font-bold uppercase tracking-wider">{title}</h2>
+          {sub && <span className="shrink-0 text-xs text-ink-soft">{sub}</span>}
+          <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-brand transition-transform group-open/section:rotate-180" />
+        </summary>
+        <div className="mt-4 min-w-0">{children}</div>
+      </details>
+    );
+  }
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
       <header className="mb-4 flex items-center gap-2">
