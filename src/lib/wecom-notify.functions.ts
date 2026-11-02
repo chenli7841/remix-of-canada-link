@@ -502,7 +502,7 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
       : { data: [], error: null };
     if (bindingError) throw new Error(bindingError.message);
     const boundChatIds = new Set((bindings ?? []).map((row: any) => String(row.chat_id)));
-    const chatIds = pendingChatIds.filter((chatId) => !boundChatIds.has(chatId));
+    const chatIds = pendingChatIds.filter((chatId: string) => !boundChatIds.has(chatId));
     if (!chatIds.length) return { ok: true, count: 0, remaining: 0 };
 
     const { getExternalGroupDetails } = await import("@/lib/wecom-notify/client.server");

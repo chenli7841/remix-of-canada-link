@@ -1050,8 +1050,8 @@ export type Database = {
       }
       delivery_queue: {
         Row: {
-          address_snapshot: Json | null
           added_by: string | null
+          address_snapshot: Json | null
           code: string
           created_at: string
           customer_code: string | null
@@ -1070,8 +1070,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          address_snapshot?: Json | null
           added_by?: string | null
+          address_snapshot?: Json | null
           code: string
           created_at?: string
           customer_code?: string | null
@@ -1090,8 +1090,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          address_snapshot?: Json | null
           added_by?: string | null
+          address_snapshot?: Json | null
           code?: string
           created_at?: string
           customer_code?: string | null
@@ -1207,6 +1207,33 @@ export type Database = {
         }
         Relationships: []
       }
+      document_number_migration_20261028: {
+        Row: {
+          before_row: Json
+          entity_id: string
+          entity_type: string
+          migrated_at: string
+          new_no: string
+          old_no: string | null
+        }
+        Insert: {
+          before_row: Json
+          entity_id: string
+          entity_type: string
+          migrated_at?: string
+          new_no: string
+          old_no?: string | null
+        }
+        Update: {
+          before_row?: Json
+          entity_id?: string
+          entity_type?: string
+          migrated_at?: string
+          new_no?: string
+          old_no?: string | null
+        }
+        Relationships: []
+      }
       domestic_tracking_claims: {
         Row: {
           owners: string[]
@@ -1265,10 +1292,12 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          delivery_unit_ids: string[] | null
           driver_id: string
           driver_name: string
           generated_at: string | null
           id: string
+          loading_trip_id: string | null
           origin_id: string | null
           revision: number
           route: Json | null
@@ -1278,10 +1307,12 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          delivery_unit_ids?: string[] | null
           driver_id: string
           driver_name: string
           generated_at?: string | null
           id?: string
+          loading_trip_id?: string | null
           origin_id?: string | null
           revision?: number
           route?: Json | null
@@ -1291,17 +1322,27 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          delivery_unit_ids?: string[] | null
           driver_id?: string
           driver_name?: string
           generated_at?: string | null
           id?: string
+          loading_trip_id?: string | null
           origin_id?: string | null
           revision?: number
           route?: Json | null
           route_revision?: number | null
           source?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "driver_trips_loading_trip_id_fkey"
+            columns: ["loading_trip_id"]
+            isOneToOne: false
+            referencedRelation: "driver_trips"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       express_dispatch_drafts: {
         Row: {
@@ -1628,9 +1669,9 @@ export type Database = {
       }
       forwarding_orders: {
         Row: {
-          address_snapshot: Json | null
           actual_weight_kg: number | null
           address_id: string | null
+          address_snapshot: Json | null
           aliases: string[]
           batch_no: string | null
           box_count: number
@@ -1679,9 +1720,9 @@ export type Database = {
           width_cm: number | null
         }
         Insert: {
-          address_snapshot?: Json | null
           actual_weight_kg?: number | null
           address_id?: string | null
+          address_snapshot?: Json | null
           aliases?: string[]
           batch_no?: string | null
           box_count?: number
@@ -1730,9 +1771,9 @@ export type Database = {
           width_cm?: number | null
         }
         Update: {
-          address_snapshot?: Json | null
           actual_weight_kg?: number | null
           address_id?: string | null
+          address_snapshot?: Json | null
           aliases?: string[]
           batch_no?: string | null
           box_count?: number
@@ -2544,6 +2585,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      order_tracking_snapshots: {
+        Row: {
+          events: Json
+          kind: string
+          parent_id: string
+          primary_waybill_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          events?: Json
+          kind: string
+          parent_id: string
+          primary_waybill_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          events?: Json
+          kind?: string
+          parent_id?: string
+          primary_waybill_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       orders: {
         Row: {
@@ -6062,7 +6127,22 @@ export type Database = {
         }
         Returns: Json
       }
+      create_driver_delivery_run: {
+        Args: {
+          _actor: string
+          _id: string
+          _ids: string[]
+          _loading: string
+          _revision: number
+          _route: Json
+        }
+        Returns: string
+      }
       current_fx_cny_to_cad: { Args: never; Returns: number }
+      delivery_address_snapshot: {
+        Args: { _address?: string; _user: string }
+        Returns: Json
+      }
       driver_delivery_action: {
         Args: {
           _action: string
@@ -6080,6 +6160,10 @@ export type Database = {
       }
       driver_load_unit: {
         Args: { _actor: string; _code: string; _trip: string }
+        Returns: Json
+      }
+      driver_route_without_unit: {
+        Args: { _id: string; _route: Json }
         Returns: Json
       }
       find_by_any_no: { Args: { _input: string }; Returns: Json }
@@ -6123,6 +6207,10 @@ export type Database = {
         Args: { _payload: Json; _token: string }
         Returns: Json
       }
+      order_tracking_view: {
+        Args: { _id: string; _kind: string }
+        Returns: Json
+      }
       pallet_payment_status: { Args: { _pallet_id: string }; Returns: string }
       pay_batch: { Args: { _batch_no: string }; Returns: Json }
       pay_invoice: { Args: { _invoice_id: string }; Returns: Json }
@@ -6158,6 +6246,10 @@ export type Database = {
       }
       recompute_waybill_items_summary: {
         Args: { _waybill_id: string }
+        Returns: undefined
+      }
+      refresh_order_tracking: {
+        Args: { _id: string; _kind: string }
         Returns: undefined
       }
       release_voided_express_shipment: {
@@ -6239,6 +6331,7 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       track_by_any_no: { Args: { _input: string }; Returns: Json }
+      track_order_by_any_no: { Args: { _input: string }; Returns: Json }
       unpaid_batches_summary: {
         Args: never
         Returns: {
@@ -6246,6 +6339,15 @@ export type Database = {
           shipping_method: string
           total_cny: number
         }[]
+      }
+      update_delivery_unit_address: {
+        Args: {
+          _actor: string
+          _address: Json
+          _expected: Json
+          _ids: string[]
+        }
+        Returns: Json
       }
       validate_coupon: {
         Args: { _code: string; _subtotal_cny: number }
