@@ -1,6 +1,6 @@
 import { buildConfirmedBatchInvoice, assertConfirmedInvoice } from "./confirmed-batch-invoice";
 import { assertSnapshotNumbers, assertBatchWeightSnapshot } from "./snapshot-validation";
-import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal } from "./batch-weight-snapshot";
+import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal, savedChargeableWeight } from "./batch-weight-snapshot";
 import { savedVolumetricWeight, orderVolumetricWeight } from "./saved-volumetric-weight";
 import { deliveryWeightsByCustomer } from "./bulk-delivery-weight";
 import { sumSurchargesCad } from "./surcharge-currency";
@@ -1824,6 +1824,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     weight_kg: number;
     volume_m3: number;
     volumetric_weight_kg: number | null;
+    chargeable_weight_kg: number | null;
     fee_cad: number;
     source: "direct" | "carton" | "pallet";
     carton_id: string | null;
@@ -1835,6 +1836,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     weight_kg: number;
     volume_m3: number;
     volumetric_weight_kg: number | null;
+    chargeable_weight_kg: number | null;
     scheme: "A" | "B";
     fee_cad: number;
     a_cad: number;
@@ -1848,6 +1850,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     weight_kg: number;
     volume_m3: number;
     volumetric_weight_kg: number | null;
+    chargeable_weight_kg: number | null;
     scheme: "A" | "B";
     fee_cad: number;
     a_cad: number;
@@ -2100,6 +2103,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       weight_kg: +wt.toFixed(3),
       volume_m3: +vol.toFixed(4),
       volumetric_weight_kg: savedVolumetricWeight(w.weight_snapshot),
+      chargeable_weight_kg: savedChargeableWeight(w),
       fee_cad: +fee.toFixed(2),
       source,
       carton_id: w.carton_id ?? null,
@@ -2137,6 +2141,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     b.cartons.push({
       id: c.id,
       carton_no: c.carton_no ?? "",
+      chargeable_weight_kg: scheme === "merged" ? null : weightTotal(contained.map(w => ({ chargeable_weight_kg: savedChargeableWeight(w) }))),
       volumetric_weight_kg: scheme === "merged" ? null : orderVolumetricWeight(null, contained.map(w => w.weight_snapshot)),
       weight_kg: +wt.toFixed(3),
       volume_m3: +vol.toFixed(4),
@@ -2186,6 +2191,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
     b.pallets.push({
       id: p.id,
       pallet_no: p.pallet_no ?? "",
+      chargeable_weight_kg: scheme === "merged" ? null : weightTotal([...direct, ...cartonsUnder.flatMap(c => c.wbs)].map(w => ({ chargeable_weight_kg: savedChargeableWeight(w) }))),
       volumetric_weight_kg: scheme === "merged" ? null : orderVolumetricWeight(null, [...direct, ...cartonsUnder.flatMap(c => c.wbs)].map(w => w.weight_snapshot)),
       weight_kg: +wt.toFixed(3),
       volume_m3: +vol.toFixed(4),
@@ -2261,11 +2267,11 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
           : pallets.find(p => p.id === row.id);
         row.volumetric_weight_kg = container?.self_volume_m3 == null ? null
           : +(Number(container.self_volume_m3) * 1_000_000 / divisor).toFixed(3);
+        row.chargeable_weight_kg = row.volumetric_weight_kg == null ? null : rule?.weight_mode === "actual" ? row.weight_kg : rule?.weight_mode === "volumetric" ? row.volumetric_weight_kg : Math.max(row.weight_kg, row.volumetric_weight_kg);
       }
     } else {
-      // Scheme B preserves each waybill's saved chargeable weight, but prices
-      // their sum once.  Never sum freight snapshots that already contain a
-      // per-waybill minimum charge.
+      // Scheme B sums saved per-parcel freight, including each parcel minimum.
+      // Chargeable weight is shown for transparency, not repriced as one parcel.
       const weightOrders = buildWeightOrders(
         allWbs.filter((w) => b.freight_waybill_ids.has(w.id)),
         oMap,
@@ -2274,12 +2280,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       const chargeable = weightTotal(weightOrders);
       assertSnapshotNumbers(`客户 ${b.customer_code} / ${b.route_code ?? "未指定线路"}`, {
         合计计费重量: chargeable,
-        运费单价: rule?.unit_price_cad ?? rule?.unit_price_cny,
       });
-      const unitCad = Number(rule?.unit_price_cad ?? 0);
-      const unitCny = Number(rule?.unit_price_cny ?? 0);
-      const rateCad = unitCad > 0 ? unitCad : unitCny * fx;
-      b.freight = +(Number(chargeable) * rateCad).toFixed(2);
+      b.freight = +b.freight.toFixed(2);
     }
   }
 

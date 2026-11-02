@@ -254,7 +254,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 体积重 <span className="font-mono text-slate-200">{kg(sumAll.vw)}</span>
               </span>
               <span className="text-slate-400">
-                计费重 <span className="font-mono text-slate-200">{kg(c.chargeable_weight_kg)}</span>
+                收费重量 <span className="font-mono text-slate-200">{kg(c.chargeable_weight_kg)}</span>
               </span>
               <span className="text-slate-400">
                 余额 <span className="font-mono text-emerald-300">{cad(c.balance_cad)}</span>
@@ -276,6 +276,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
               sumWeight={sumWb.w}
               sumVolume={sumWb.v}
               sumVolumetric={sumWb.vw}
+              sumChargeable={sumWb.cw}
               sumFee={sumWb.fee}
             >
               <WaybillTable rows={waybills} />
@@ -287,6 +288,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
               sumWeight={sumCt.w}
               sumVolume={sumCt.v}
               sumVolumetric={sumCt.vw}
+              sumChargeable={sumCt.cw}
               sumFee={sumCt.fee}
             >
               <ContainerTable kind="carton" rows={cartons} />
@@ -298,6 +300,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
               sumWeight={sumPl.w}
               sumVolume={sumPl.v}
               sumVolumetric={sumPl.vw}
+              sumChargeable={sumPl.cw}
               sumFee={sumPl.fee}
             >
               <ContainerTable kind="pallet" rows={pallets} />
@@ -407,17 +410,14 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
           <div className="space-y-3">
             <Card title="费用明细 (CAD)">
               <FeeRow
-                label={`本次运费${scheme === "merged" ? " · 合并计算" : " · 计费重汇总"}`}
+                label={`本次运费${scheme === "merged" ? " · 合并计算" : " · 逐单运费合计"}`}
                 value={feeFreight}
                 sub={
                   scheme === "merged"
                     ? `按线路 ${c.route_code ?? "—"} 汇总重量 ${Number(c.weight_kg ?? 0).toFixed(2)}kg · 体积 ${Number(c.volume_m3 ?? 0).toFixed(4)}m³ × 线路费率`
-                    : `各运单计费重合计 ${kg(c.chargeable_weight_kg)} × 单价 ${c.freight_rate_cad == null ? "暂无数据" : `${cad(c.freight_rate_cad)}/kg`}；汇总后计算，不逐票叠加最低收费`
+                    : `各运单运费 + 客户号箱运费 + 客户号托盘运费；保留单票最低收费。收费重量合计 ${kg(c.chargeable_weight_kg)}`
                 }
               />
-              <div className="my-2 rounded-lg border border-sky-500/20 bg-sky-500/5 p-2 text-[11px] text-slate-300">
-                左侧为原存运费参考合计 {cad(sumAll.fee)}，可能含单票最低收费；本次运费采用右侧{confirmed ? "已确认账单" : "批次计费"}金额 {cad(feeFreight)}。
-              </div>
               <FeeRow
                 label="保险"
                 value={feeInsurance}
@@ -670,10 +670,11 @@ function sumRows(rows: any[]) {
     (s, r) => ({
       w: s.w + Number(r.weight_kg || 0),
       v: s.v + Number(r.volume_m3 || 0),
+      cw: s.cw == null || r.chargeable_weight_kg == null ? null : s.cw + Number(r.chargeable_weight_kg),
       vw: s.vw == null || r.volumetric_weight_kg == null ? null : s.vw + Number(r.volumetric_weight_kg),
       fee: s.fee + Number(r.fee_cad || 0),
     }),
-    { w: 0, v: 0, vw: 0 as number | null, fee: 0 },
+    { w: 0, v: 0, vw: 0 as number | null, cw: 0 as number | null, fee: 0 },
   );
 }
 
@@ -684,6 +685,7 @@ function Section({
   sumWeight,
   sumVolume,
   sumVolumetric,
+  sumChargeable,
   sumFee,
   children,
 }: {
@@ -693,6 +695,7 @@ function Section({
   sumWeight: number;
   sumVolume: number;
   sumVolumetric: number | null;
+  sumChargeable: number | null;
   sumFee: number;
   children: React.ReactNode;
 }) {
@@ -723,7 +726,10 @@ function Section({
           Σ体积重 <span className="font-mono text-slate-100">{kg(sumVolumetric)}</span>
         </span>
         <span className="text-[10px] text-slate-400">
-          Σ原存运费 <span className="font-mono text-emerald-300">{cad(sumFee)}</span>
+          Σ收费重量 <span className="font-mono text-slate-100">{kg(sumChargeable)}</span>
+        </span>
+        <span className="text-[10px] text-slate-400">
+          Σ运费 <span className="font-mono text-emerald-300">{cad(sumFee)}</span>
         </span>
       </button>
       {open && (
@@ -744,10 +750,10 @@ function WaybillTable({ rows }: { rows: any[] }) {
           <th>来源</th>
           <th>状态</th>
           <th>付款</th>
-          <th className="text-right">体积 (m³)</th>
-          <th className="text-right">体积重 (kg)</th>
+          <th className="text-right">体积重 / 体积</th>
           <th className="text-right">重量 (kg)</th>
-          <th className="text-right">原存运费 CA$</th>
+          <th className="text-right">收费重量 (kg)</th>
+          <th className="text-right">运费 CA$</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-white/5">
@@ -763,9 +769,9 @@ function WaybillTable({ rows }: { rows: any[] }) {
             </td>
             <td className="text-slate-300">{w.status}</td>
             <td className="text-slate-300">{w.payment_status}</td>
-            <td className="text-right font-mono text-slate-400">{Number(w.volume_m3).toFixed(4)}</td>
-            <td className="text-right font-mono text-slate-400">{kg(w.volumetric_weight_kg)}</td>
+            <td className="text-right font-mono text-slate-400"><div>{kg(w.volumetric_weight_kg)}</div><div className="text-[10px]">{Number(w.volume_m3).toFixed(4)} m³</div></td>
             <td className="text-right font-mono text-slate-400">{Number(w.weight_kg).toFixed(2)}</td>
+            <td className="text-right font-mono text-slate-200">{kg(w.chargeable_weight_kg)}</td>
             <td className="text-right font-mono text-emerald-300">{cad(w.fee_cad)}</td>
           </tr>
         ))}
@@ -783,12 +789,12 @@ function ContainerTable({ kind, rows }: { kind: "carton" | "pallet"; rows: any[]
         <tr>
           <th className="py-1">{kind === "carton" ? "箱号" : "托盘号"}</th>
           <th className="text-center">方案</th>
-          <th className="text-right">体积 (m³)</th>
-          <th className="text-right">体积重 (kg)</th>
+          <th className="text-right">体积重 / 体积</th>
           <th className="text-right">重量 (kg)</th>
+          <th className="text-right">收费重量 (kg)</th>
           <th className="text-right">方案 A</th>
           <th className="text-right">方案 B</th>
-          <th className="text-right">原存运费</th>
+          <th className="text-right">运费</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-white/5">
@@ -806,9 +812,9 @@ function ContainerTable({ kind, rows }: { kind: "carton" | "pallet"; rows: any[]
                 {r.scheme}
               </span>
             </td>
-            <td className="text-right font-mono text-slate-400">{Number(r.volume_m3).toFixed(4)}</td>
-            <td className="text-right font-mono text-slate-400">{kg(r.volumetric_weight_kg)}</td>
+            <td className="text-right font-mono text-slate-400"><div>{kg(r.volumetric_weight_kg)}</div><div className="text-[10px]">{Number(r.volume_m3).toFixed(4)} m³</div></td>
             <td className="text-right font-mono text-slate-400">{Number(r.weight_kg).toFixed(2)}</td>
+            <td className="text-right font-mono text-slate-200">{kg(r.chargeable_weight_kg)}</td>
             <td
               className={`text-right font-mono ${r.scheme === "A" ? "text-emerald-300" : "text-slate-500 line-through"}`}
             >
