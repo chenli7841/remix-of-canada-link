@@ -692,35 +692,13 @@ export const addDeliveryTrackingEvent = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!item) throw new Error("记录不存在");
 
-    // If waybill and has order_id -> insert into tracking_events via shipment
-    if (item.kind === "waybill") {
-      const { data: wb } = await supabaseAdmin.from("waybills").select("order_id").eq("id", item.ref_id).maybeSingle();
-      if (wb?.order_id) {
-        let { data: ship } = await supabaseAdmin
-          .from("shipments")
-          .select("id")
-          .eq("order_id", wb.order_id)
-          .maybeSingle();
-        if (!ship) {
-          const { data: created } = await supabaseAdmin
-            .from("shipments")
-            .insert({ order_id: wb.order_id, status: "in_transit", tracking_no: item.code || "N/A" } as any)
-            .select("id")
-            .maybeSingle();
-          ship = created ?? null;
-        }
-        if (ship?.id) {
-          await supabaseAdmin.from("tracking_events").insert({
-            shipment_id: ship.id,
-            status_zh: data.statusZh,
-            status_en: data.statusZh,
-            location_zh: data.locationZh ?? null,
-            event_time: new Date().toISOString(),
-            source: "admin",
-          } as any);
-        }
-      }
-    }
+    // Resolve the actual waybills, including forwarding orders and nested cartons.
+    const { error: trackingError } = await (supabaseAdmin as any).rpc("add_delivery_unit_tracking", {
+      _queue_id: item.id,
+      _zh: data.statusZh,
+      _location: data.locationZh ?? null,
+    });
+    if (trackingError) throw new Error(`物流轨迹保存失败：${trackingError.message}`);
 
     await logAction(
       supabaseAdmin,

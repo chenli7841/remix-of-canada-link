@@ -25,7 +25,7 @@ begin
  select events into cached from order_tracking_snapshots where kind='forwarding' and parent_id=f.id;
  if not exists(select 1 from jsonb_array_elements(cached) x where x->>'status_zh'='统一轨迹测试') then raise exception 'Event was not synchronized';end if;
  update waybills set status=case when status='storage' then 'packed'::waybill_status else 'storage'::waybill_status end where id=w.id;
- if not exists(select 1 from tracking_events where shipment_id=sid and event_time>=transaction_timestamp() and status_zh in ('仓储中','已打包')) then raise exception 'Status event missing';end if;
+ if not exists(select 1 from tracking_events where shipment_id=sid and event_time>=transaction_timestamp() and status_zh in ('仓储中','已装箱')) then raise exception 'Status event missing';end if;
  if track_order_by_any_no('NONEXISTENT-UNIFIED-TRACKING-TEST') is not null then raise exception 'Unknown number found';end if;
  if has_function_privilege('anon','public.order_tracking_view(text,uuid)','execute') then raise exception 'Private function exposed';end if;
  if not has_function_privilege('anon','public.track_order_by_any_no(text)','execute') then raise exception 'Public lookup inaccessible';end if;
