@@ -69,7 +69,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
 
   const [inspection, setInspection] = useState(String(Number(c.fee_inspection_cad ?? 0)));
   const [delivery, setDelivery] = useState(
-    String(Number(c.fee_delivery_cad ?? 0) || Number(c.delivery_suggested_cad ?? 0)),
+    String(Number(c.fee_delivery_cad ?? c.delivery_suggested_cad ?? 0)),
   );
   const [discount, setDiscount] = useState(String(Number(c.fee_discount_cad ?? 0)));
   const [method, setMethod] = useState<"wallet" | "emt" | "cash">("wallet");
@@ -79,7 +79,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
 
   useEffect(() => {
     setInspection(String(Number(c.fee_inspection_cad ?? 0)));
-    setDelivery(String(Number(c.fee_delivery_cad ?? 0) || Number(c.delivery_suggested_cad ?? 0)));
+    setDelivery(String(Number(c.fee_delivery_cad ?? c.delivery_suggested_cad ?? 0)));
     setDiscount(String(Number(c.fee_discount_cad ?? 0)));
     setConfirmed(!!c.price_confirmed);
   }, [c.fee_inspection_cad, c.fee_delivery_cad, c.delivery_suggested_cad, c.fee_discount_cad, c.price_confirmed]);

@@ -2891,12 +2891,12 @@ export async function refreshBatchSettlementsForCustomer(
   batchId: string,
   customerCode: string,
   summary?: any,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; skippedConfirmed?: boolean }> {
   if (!customerCode) return { ok: false, error: "missing customer_code" };
   try {
     const {data: locked, error: lockError} = await admin.from("batch_settlements").select("confirmed").eq("batch_id",batchId).eq("customer_code",customerCode).maybeSingle();
     if(lockError) throw new Error(lockError.message);
-    if(locked?.confirmed) return {ok:true};
+    if(locked?.confirmed) return {ok:true, skippedConfirmed:true};
     const s = summary ?? (await computeBatchFeeSummary(admin, batchId));
     const byCustomer = aggregateSettlementBuckets((s?.per_customer ?? []) as any[]);
     const agg = byCustomer.get(customerCode);
@@ -3935,7 +3935,9 @@ export const saveBatchCustomerFeeDraft = createServerFn({ method: "POST" })
         .like("note", `${value.marker}%`);
       if (deleteError) throw new Error(deleteError.message);
       const amount = +value.amount.toFixed(2);
-      if (amount > 0) {
+      // Zero delivery is an explicit waiver. Keep its marker so a later
+      // calculation/confirmation does not reapply the suggested delivery fee.
+      if (amount > 0 || value.marker === "[delivery]") {
         const { error: insertError } = await supabaseAdmin.from("surcharges").insert({
           scope: "batch",
           batch_id: data.batchId,
@@ -4026,6 +4028,7 @@ export const refreshBatchCustomerSnapshot = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const r = await refreshBatchSettlementsForCustomer(supabaseAdmin, data.batchId, data.customerCode);
+    if (r.skippedConfirmed) throw new Error("价格已确认，当前快照与账单已冻结。请先取消确认，修改并保存费用，再重新确认；重新确认会同时更新账单、小计和客户快照。");
     if (!r.ok) throw new Error(r.error ?? "刷新快照失败");
     return { ok: true };
   });
