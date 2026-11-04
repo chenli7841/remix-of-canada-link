@@ -1,3 +1,6 @@
+import { useAuth } from '@/lib/auth';
+import { useServerFn } from '@tanstack/react-start';
+import { listOrderAttachments, getOrderAttachmentLink } from '@/lib/order-attachments.functions';
 import { preparePhoto } from '@/lib/prepare-photo';
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +11,7 @@ const sb = supabase as any;
 const BUCKET = "order-attachments";
 
 interface Att {
-  id: string; file_name: string; file_path: string; file_size: number;
+  id: string; user_id: string; file_name: string; file_path: string; file_size: number;
   content_type: string | null; created_at: string;
 }
 
@@ -16,6 +19,8 @@ export function OrderAttachments({
   ownerKind, ownerId, lang,
 }: { ownerKind: "order" | "forwarding"; ownerId: string; lang: "zh" | "en" }) {
   const tr = (zh: string, en: string) => (lang === "zh" ? zh : en);
+  const {user}=useAuth();
+  const readAttachments=useServerFn(listOrderAttachments), attachmentLink=useServerFn(getOrderAttachmentLink);
   const [items, setItems] = useState<Att[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -26,19 +31,15 @@ export function OrderAttachments({
   const onPreview = async (a: Att) => {
     setBusy(a.id);
     try {
-      const {data,error} = await sb.storage.from(BUCKET).createSignedUrl(a.file_path, 600);
-      if(error) throw error;
-      setPreview({name:a.file_name,url:data.signedUrl});
+      const data=await attachmentLink({data:{ownerKind,ownerId,attachmentId:a.id,download:false}});
+      setPreview({name:a.file_name,url:data.url});
     } catch(e:any) { toast.error(e.message); }
     finally {setBusy(null);}
   };
 
   const load = async () => {
-    const { data, error } = await sb.from("order_attachments").select("*")
-      .eq("owner_kind", ownerKind).eq("owner_id", ownerId)
-      .order("created_at", { ascending: false });
-    if(error) { toast.error(error.message); return; }
-    setItems(data ?? []);
+    try {setItems(await readAttachments({data:{ownerKind,ownerId}}));}
+    catch(e:any){toast.error(e.message);}
   };
   useEffect(() => { load(); }, [ownerId, ownerKind]);
 
@@ -82,10 +83,9 @@ export function OrderAttachments({
 
   const onDownload = async (a: Att) => {
     setBusy(a.id);
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(a.file_path, 60, { download: a.file_name });
-    setBusy(null);
-    if (error) return toast.error(error.message);
-    window.location.href = data.signedUrl;
+    try {const data=await attachmentLink({data:{ownerKind,ownerId,attachmentId:a.id,download:true}});window.location.href=data.url;}
+    catch(e:any){toast.error(e.message);}
+    finally{setBusy(null);}
   };
 
   const onDelete = async (a: Att) => {
@@ -99,8 +99,9 @@ export function OrderAttachments({
 
   return (
     <div>
+      <h3 className="mb-2 text-sm font-semibold">{tr("内件核对照片 / 客户上传附件", "Contents inspection photos / customer attachments")}</h3>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-ink-soft">{tr("上传相关单据、商品照片或报关材料（点击图片文件名预览）", "Upload invoices, product photos or customs docs (click image filename to preview)")}</p>
+        <p className="text-xs text-ink-soft">{tr("客户和工作人员在此上传内件核对照片、单据，可保存多张；点击图片文件名预览", "Customers and staff share these inspection photos and documents. Multiple photos supported; click a filename to preview.")}</p>
         <button type="button" onClick={()=>cameraRef.current?.click()} disabled={uploading} className="rounded-full border border-border px-3 py-1.5 text-xs">{tr("拍照上传", "Take photo")}</button>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void onUpload(f);e.target.value='';}} />
         <button type="button" onClick={onPick} disabled={uploading}
@@ -108,8 +109,8 @@ export function OrderAttachments({
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {tr("上传文件", "Upload")}
         </button>
-        <input ref={inputRef} type="file" className="hidden"
-          onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+        <input ref={inputRef} type="file" multiple className="hidden"
+          onChange={e=>{const files=Array.from(e.target.files??[]);e.target.value='';void (async()=>{for(const file of files)await onUpload(file);})();}} />
       </div>
 
       {items === null ? (
@@ -134,10 +135,10 @@ export function OrderAttachments({
                 {busy === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                 {tr("下载", "Download")}
               </button>
-              <button type="button" onClick={() => onDelete(a)} disabled={busy === a.id}
+              {a.user_id===user?.id && <button type="button" onClick={() => onDelete(a)} disabled={busy === a.id}
                 className="rounded-full p-1.5 text-ink-soft hover:bg-destructive/10 hover:text-destructive disabled:opacity-50">
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </button>}
             </li>
           ))}
         </ul>

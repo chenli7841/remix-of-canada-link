@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+let staff=true,failCarton=false;
+const files=new Map(),attachments=new Map();
+const admin={from(table){let id;return {select(){return this},eq(key,value){if(key==='id')id=value;return this},async maybeSingle(){return {data:table==='waybills'?{id:'w',waybill_no:'W',carton_id:'c',pallet_id:null,order_id:'o',forwarding_id:null}:table==='cartons'?{id:'c',pallet_id:'p'}:table==='pallets'?{id:'p'}:table==='orders'?{id:'o',user_id:'customer'}:attachments.get(id)||null}},async insert(row){attachments.set(row.id,row);return {error:null}}}},storage:{from(bucket){return {async upload(path,bytes){if(failCarton&&path.startsWith('cargo/carton'))return {error:Error('offline')};const key=bucket+'/'+path;if(files.has(key))return {error:Error('exists')};files.set(key,bytes);return {error:null}},async download(path){const bytes=files.get(bucket+'/'+path);return bytes?{data:new Blob([bytes])}:{error:Error('missing')}},async createSignedUrl(path){return {data:{signedUrl:path}}}}}}};
+function load(file){const exports={};const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('exports','require',js)(exports,name=>{if(name==='@tanstack/react-start')return {createServerFn:()=>({middleware(){return this},inputValidator(){return this},handler(fn){return fn}})};if(name.includes('auth-middleware'))return {requireSupabaseAuth:{}};if(name.includes('client.server'))return {supabaseAdmin:admin};if(name.includes('admin-log'))return {recordAdminLog:async()=>{}};return require(name)});return exports;}
+const context={userId:'staff',supabase:{rpc:async()=>({data:staff})}};
+const api=load('src/lib/measurement-photos.functions.ts');
+const data={waybillId:'w',photoId:'photo1',image:'data:image/jpeg;base64,/9j/2Q==',targets:['waybill','carton','pallet','inspection']};
+assert.deepEqual((await api.getMeasurementPhotoTargets({context,data})).map(t=>t.kind),data.targets);
+failCarton=true;let result=await api.saveMeasurementPhotos({context,data});assert.equal(result.filter(r=>r.ok).length,3);assert.equal(attachments.size,1);assert.equal(files.size,3);
+failCarton=false;result=await api.saveMeasurementPhotos({context,data});assert.ok(result.every(r=>r.ok));assert.equal(files.size,4);assert.equal(attachments.size,1);
+await api.saveMeasurementPhotos({context,data:{...data,photoId:'photo2'}});assert.equal(files.size,8);assert.equal(attachments.size,2);
+const before=files.size;staff=false;await assert.rejects(()=>api.saveMeasurementPhotos({context,data}),/工作人员/);assert.equal(files.size,before);
+const links=load('src/lib/order-attachments.functions.ts');
+await assert.rejects(()=>links.getOrderAttachmentLink({context:{...context,userId:'unrelated'},data:{ownerKind:'order',ownerId:'o',attachmentId:'photo1'}}),/权限/);
+const link=await links.getOrderAttachmentLink({context:{...context,userId:'customer'},data:{ownerKind:'order',ownerId:'o',attachmentId:'photo1'}});assert.equal(link.url,'staff/o/photo1.jpg');
+console.log('PASS: four related destinations, nested pallet resolution, partial failure, idempotent retry, multiple photos, staff-only upload, order owner can read staff inspection photos, unrelated customer denied');
+staff=true;
+const saved=files.size;
+await assert.rejects(()=>api.saveMeasurementPhotos({context,data:{...data,targets:['unknown']}}),/不属于/);
+await assert.rejects(()=>api.saveMeasurementPhotos({context,data:{...data,image:'data:image/jpeg;base64,AAAA'}}),/无效/);
+assert.equal(files.size,saved);
+console.log('PASS: invalid destinations and invalid image rejected before storage writes');

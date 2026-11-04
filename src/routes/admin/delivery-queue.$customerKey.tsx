@@ -1,3 +1,4 @@
+import { CargoPhotos } from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { DeliveryPhotoViewer } from '@/components/admin/DeliveryPhotoViewer';
 import { DeliveryBatchPhotos } from '@/components/admin/DeliveryBatchPhotos';
@@ -189,6 +190,11 @@ function CustomerDeliveryDetail() {
           })}</div>}
 
       </section>
+      <section className="mb-4 space-y-3 rounded-2xl border border-white/10 p-4">
+        <h2 className="font-semibold">包裹照片</h2>
+        {items.map(it=><div key={it.id}><p className="text-sm">{it.code}</p><CargoPhotos kind={it.kind} refId={it.ref_id} canUpload /></div>)}
+      </section>
+      <p className="text-xs text-slate-400">历史派送照片</p>
       <DeliveryPhotoViewer items={items}/>
       {Array.from(new Set(items.filter(it=>it.source_batch_id && it.customer_code).map(it=>it.source_batch_id+':'+it.customer_code))).map(key=>{
         const [photoBatch,photoCustomer]=key.split(':');

@@ -1,4 +1,4 @@
-import {CargoPhotos} from '@/components/CargoPhotos';
+import {MeasurementPhotos} from '@/components/MeasurementPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -294,7 +294,7 @@ function MeasurePage() {
                         </button>
                       </td>
                       <td className="text-xs font-mono text-slate-300">{r.box_no ?? "—"}</td>
-                      <td className="text-xs font-mono text-slate-200">{r.waybill_no}<CargoPhotos kind="waybill" refId={r.id} canUpload /></td>
+                      <td className="text-xs font-mono text-slate-200">{r.waybill_no}<MeasurementPhotos waybillId={r.id} /></td>
                       {(["length_cm","width_cm","height_cm","weight_kg"] as const).map((k, cIdx) => (
                         <td key={k} className="py-1">
                           <input type="number" step="0.01" value={(r as any)[k] ?? ""}

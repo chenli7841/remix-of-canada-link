@@ -24,14 +24,7 @@ export function DeliveryPhotoViewer({
         <div className="flex flex-wrap gap-3">
           {photos.map((p, i) => (
             <button key={p.id + ":" + i} onClick={() => setSelected(i)} className="text-left">
-              <img
-                src={p.url}
-                alt={p.code + tr(" 派送照片 ") + (i + 1)}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                className="h-24 w-24 rounded object-cover"
-              />
-              <span className="text-xs">{p.code}</span>
+              <span className="break-all text-xs text-sky-400 underline">{p.url.split('?')[0].split('/').pop() || 'photo.jpg'}</span>
             </button>
           ))}
         </div>

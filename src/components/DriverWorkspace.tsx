@@ -19,7 +19,6 @@ import {
 import { listDriverOrigins } from "@/lib/delivery-route.functions";
 import {
   actOnDriverDelivery,
-  uploadDeliveryProof,
   searchDriverDeliveries,
 } from "@/lib/driver.functions";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
@@ -681,7 +680,7 @@ export function DriverWorkspace() {
           {deliveryCard && <div role="dialog" aria-modal="true" aria-label={tr("派送确认")} className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-3">
             <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl">
               <h2 className="text-xl font-bold">{tr("派送确认")} · {customer.customer_code}</h2>
-              <CustomerTools key={tripId + ':' + customer.customer_code} tripId={tripId} customer={customer} onMessage={setMessage} selectedCount={selected.size} onClose={() => setDeliveryCard(false)} onComplete={async () => {
+              <CustomerTools key={tripId + ':' + customer.customer_code} tripId={tripId} customer={customer} units={customerUnits} onMessage={setMessage} selectedCount={selected.size} onClose={() => setDeliveryCard(false)} onComplete={async () => {
                 await dispatch({ data: { tripId, ids: [...selected] } });
                 setSelected(new Set()); setDeliveryCard(false);
                 setMessage(tr("已完成派送，可继续补传照片")); await refresh();
@@ -711,6 +710,7 @@ export function DriverWorkspace() {
 }
 
 function CustomerTools({
+  units,
   tripId,
   customer,
   onMessage,
@@ -718,6 +718,7 @@ function CustomerTools({
   onComplete,
   onClose,
 }: {
+  units: any[];
   tripId: string;
   customer: any;
   onMessage: (s: string) => void;
@@ -728,19 +729,18 @@ function CustomerTools({
   const { t: tr, money } = useDriverLanguage();
   const { user } = useAuth();
   const read = useServerFn(searchDriverDeliveries),
-    act = useServerFn(saveDriverTripNote),
-    upload = useServerFn(uploadDeliveryProof);
+    act = useServerFn(saveDriverTripNote);
   const q = useQuery({
     queryKey: ["driver-customer-live", user?.id, customer.customer_code],
     queryFn: () => read({ data: { customerCode: customer.customer_code, includeCompleted: true } }),
   });
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [version, setVersion] = useState(0);
+    [error, setError] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [uploadCount,setUploadCount]=useState(0);
   const saving = useRef(false);
   const finish = async (complete: boolean) => {
-    if (saving.current || busy) return;
+    if (saving.current || busy || uploadCount>0) return;
     if (complete && !window.confirm(tr("确认派送 {0} 个单位？运单将完成，并记录已派送及晚30秒的已完成轨迹。", selectedCount))) return;
     saving.current = true; setBusy(true); setError("");
     try {
@@ -755,45 +755,6 @@ function CustomerTools({
       {customer.groups.map((snapshot: any) => {
         const g = q.data?.find((x) => x.batch_id === snapshot.batch_id) || snapshot;
         const scope = { customerCode: customer.customer_code, batchId: g.batch_id };
-        const photo = async (file?: File) => {
-          if (!file || busy || saving.current) return;
-          saving.current = true;
-          setBusy(true);
-          setError("");
-          let url = "";
-          try {
-            if (!file.type.startsWith("image/") || file.size > 25 * 1024 * 1024)
-              throw new Error(tr("请选择25MB以内的照片"));
-            url = URL.createObjectURL(file);
-            const img = new Image();
-            img.src = url;
-            await img.decode();
-            const scale = Math.min(1, 1800 / Math.max(img.width, img.height));
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(img.width * scale));
-            canvas.height = Math.max(1, Math.round(img.height * scale));
-            const ctx = canvas.getContext("2d");
-            if (!ctx) throw new Error(tr("无法读取照片"));
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            await upload({
-              data: {
-                ...scope,
-                photoId: crypto.randomUUID(),
-                image: canvas.toDataURL("image/jpeg", 0.85),
-              },
-            });
-            setVersion((v) => v + 1);
-            onMessage(tr("照片已上传，后台派送详情可查看"));
-          } catch (e: any) {
-            setError(e.message);
-          } finally {
-            URL.revokeObjectURL(url);
-            saving.current = false;
-            setBusy(false);
-          }
-        };
         return (
           <section key={g.batch_id} className="rounded-xl border border-white/10 p-3">
             <h3 className="font-bold">{g.batch_name || g.batch_no}</h3>
@@ -812,39 +773,16 @@ function CustomerTools({
             </p>
             <label className="my-3 block">
               <span className="mb-2 block font-semibold">{tr("结算备注")}</span>
-              <textarea className={input + " min-h-24"} maxLength={2000} disabled={busy} value={notes[g.batch_id] ?? g.settlement_note ?? ""} onChange={e => setNotes(old => ({...old, [g.batch_id]: e.target.value}))} placeholder={tr("填写或修改结算备注")} />
+              <textarea className={input + " min-h-24"} maxLength={2000} disabled={busy||uploadCount>0} value={notes[g.batch_id] ?? g.settlement_note ?? ""} onChange={e => setNotes(old => ({...old, [g.batch_id]: e.target.value}))} placeholder={tr("填写或修改结算备注")} />
             </label>
-            <div className="flex flex-wrap gap-2">
-              <label className={btn + " cursor-pointer"}>
-                {tr("拍照上传")}
-                <input
-                  aria-label={tr("拍照 ") + g.batch_no}
-                  className="sr-only"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  disabled={busy}
-                  onChange={(e) => {
-                    void photo(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <label className={btn + " cursor-pointer"}>
-                {tr("选择照片")}
-                <input
-                  className="sr-only"
-                  type="file"
-                  accept="image/*"
-                  disabled={busy}
-                  onChange={(e) => {
-                    void photo(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-            <DeliveryBatchPhotos {...scope} version={version} />
+            {units.filter(x => x.unit.source_batch_id === g.batch_id).map(x => (
+              <div key={x.queue_id} className="my-3 rounded-xl border border-white/10 p-3">
+                <p className="font-semibold">{x.unit.code}</p>
+                <CargoPhotos kind={x.unit.kind} refId={x.unit.ref_id} canUpload disabled={busy} onUploadingChange={value=>setUploadCount(n=>Math.max(0,n+(value?1:-1)))} />
+              </div>
+            ))}
+            <p className="text-xs text-slate-400">{tr('历史客户批次照片（未关联具体包裹）')}</p>
+            <DeliveryBatchPhotos {...scope} />
           </section>
         );
       })}
@@ -854,7 +792,7 @@ function CustomerTools({
       </section>
       <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-white/10 bg-slate-900 py-3">
         <button disabled={busy} className={btn} onClick={onClose}>{tr("关闭")}</button>
-        <button disabled={busy || !Object.keys(notes).length} className={btn} onClick={() => void finish(false)}>{tr("保存备注")}</button>
+        <button disabled={busy || uploadCount>0 || !Object.keys(notes).length} className={btn} onClick={() => void finish(false)}>{tr("保存备注")}</button>
         <button disabled={busy || !selectedCount} className="min-h-12 flex-1 rounded-xl bg-orange-500 px-4 py-3 text-lg font-bold text-white hover:bg-orange-400 disabled:opacity-40" onClick={() => void finish(true)}>{tr("完成派送（{0}）", selectedCount)}</button>
       </div>
       {busy && <p role="status">{tr("正在保存…")}</p>}
