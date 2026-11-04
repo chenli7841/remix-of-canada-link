@@ -105,13 +105,16 @@ function SelectedGroupsSendPanel({
 
 function WecomNotifyPage() {
   const routeSearch = Route.useSearch();
-  const [tab, setTab] = useState<Tab>(routeSearch.tab ?? "bindings");
+  const [selectedTab, setTab] = useState<Tab>(routeSearch.tab ?? "compose");
   const fetchStatus = useServerFn(getWecomNotifyStatus);
   const statusQ = useQuery({ queryKey: ["wecom-notify-status"], queryFn: () => fetchStatus() });
   const testConnection = useServerFn(testWecomNotifyConnection);
   const [testingConnection, setTestingConnection] = useState(false);
   const status = statusQ.data as
-    { configured: boolean; enabled: boolean; usingGateway: boolean } | undefined;
+    { configured: boolean; enabled: boolean; usingGateway: boolean; canManage: boolean } | undefined;
+
+  const canManage = !!status?.canManage;
+  const tab = canManage || selectedTab === "compose" || selectedTab === "history" ? selectedTab : "compose";
 
   const doTestConnection = async () => {
     setTestingConnection(true);
@@ -130,7 +133,7 @@ function WecomNotifyPage() {
       title="群发通知（企业微信客户群）"
       subtitle="EPLUS群发通知 · 独立应用 AgentId 1000005 · 仅测试域名，与微信 AI 客服完全独立"
     >
-      {statusQ.isSuccess && (!status?.enabled || !status?.configured) && (
+      {statusQ.isSuccess && canManage && (!status?.enabled || !status?.configured) && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <div>
@@ -144,7 +147,7 @@ function WecomNotifyPage() {
         </div>
       )}
 
-      {statusQ.isSuccess && (
+      {statusQ.isSuccess && canManage && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
           <span>出口方式：{status?.usingGateway ? "固定出口网关" : "Lovable/Cloudflare 直连"}</span>
           <button
@@ -167,7 +170,7 @@ function WecomNotifyPage() {
             ["compose", "新建群发"],
             ["history", "历史任务"],
           ] as [Tab, string][]
-        ).map(([key, label]) => (
+        ).filter(([key]) => canManage || key === "compose" || key === "history").map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}

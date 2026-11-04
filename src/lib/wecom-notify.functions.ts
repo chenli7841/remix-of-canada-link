@@ -14,6 +14,15 @@ async function assertOwner(supabase: any, userId: string) {
   if (!data) throw new Error("Forbidden: owner only");
 }
 
+async function assertNotifySender(supabase: any, userId: string) {
+  for (const role of ["owner", "manager"]) {
+    const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: role });
+    if (error) throw new Error(error.message);
+    if (data) return role;
+  }
+  throw new Error("仅负责人或主管可以发送微信通知");
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ============ 状态 ============
@@ -21,11 +30,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const getWecomNotifyStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertOwner(context.supabase, context.userId);
+    const role = await assertNotifySender(context.supabase, context.userId);
     const { wecomNotifyConfig } = await import("@/lib/wecom-notify/config.server");
     const config = wecomNotifyConfig();
     return {
       configured: wecomNotifyConfigured(config),
+      canManage: role === "owner",
       enabled: wecomNotifyEnabled(),
       usingGateway: Boolean(config.gatewayUrl),
     };
@@ -45,7 +55,7 @@ export const testWecomNotifyConnection = createServerFn({ method: "POST" })
 export const listWecomGroups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
@@ -432,7 +442,7 @@ export const sendSelectedWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { chatIds: string[]; content: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
     if (!wecomNotifyEnabled()) throw new Error("WECOM_ENABLED 尚未开启，禁止真实发送");
     const chatIds = [...new Set(data.chatIds.map((id) => id.trim()).filter(Boolean))];
@@ -548,7 +558,7 @@ export const enrichWecomGroups = createServerFn({ method: "POST" })
 export const listWecomBindings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
@@ -776,7 +786,7 @@ export const searchCustomersForBinding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { query: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const q = data.query.trim();
     if (!q) return { items: [] };
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
@@ -942,7 +952,7 @@ export const previewWecomMessage = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const template = data.contentTemplate.trim();
     if (!template) throw new Error("消息内容不能为空");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
@@ -963,7 +973,7 @@ export const createWecomMessageDraft = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const template = data.contentTemplate.trim();
     if (!template) throw new Error("消息内容不能为空");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
@@ -1002,7 +1012,7 @@ export const createWecomMessageDraft = createServerFn({ method: "POST" })
 export const listDailyWecomDraftDates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
@@ -1041,7 +1051,7 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { serviceDate: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.serviceDate)) throw new Error("发送日期格式不正确");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
@@ -1090,7 +1100,7 @@ export const updateDailyWecomDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { draftId: string; content: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!UUID_RE.test(data.draftId)) throw new Error("预发送信息 ID 格式不正确");
     const content = data.content.trim();
     if (!content) throw new Error("发送内容不能为空");
@@ -1119,7 +1129,7 @@ export const sendDailyWecomDraftsNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { serviceDate: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.serviceDate)) throw new Error("发送日期格式不正确");
     const { sendDueDailyWecomDrafts } = await import("@/lib/wecom-daily-send.server");
     return sendDueDailyWecomDrafts({ serviceDate: data.serviceDate, bypassHour: true, retryFailed: true });
@@ -1128,7 +1138,7 @@ export const sendDailyWecomDraftsNow = createServerFn({ method: "POST" })
 export const listWecomMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
     };
@@ -1145,7 +1155,7 @@ export const getWecomMessageDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { messageId: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
@@ -1173,7 +1183,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { messageId: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
     const { supabaseAdmin } = (await import("@/integrations/supabase/client.server")) as {
       supabaseAdmin: any;
@@ -1355,7 +1365,7 @@ export const refreshWecomMessageStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { messageId: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertOwner(context.supabase, context.userId);
+    await assertNotifySender(context.supabase, context.userId);
     if (!UUID_RE.test(data.messageId)) throw new Error("消息 ID 格式不正确");
     if (!wecomNotifyConfigured() || !wecomNotifyEnabled()) {
       throw new Error("企业微信连接未启用，无法刷新发送状态");
