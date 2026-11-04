@@ -14,6 +14,9 @@
  * 文档重新确认一遍。
  */
 import { wecomNotifyConfig } from "./config.server";
+import type { WecomImage } from "@/lib/wecom-images";
+import { wecomImagesSchema } from "@/lib/wecom-images";
+import { loadWecomImages } from "@/lib/wecom-images.server";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -132,6 +135,28 @@ async function callApi(path: string, body: unknown, retry = true): Promise<any> 
     return callApi(path, body, false);
   }
   return json;
+}
+
+async function uploadImageMedia(image: { name: string; base64: string }, retry = true): Promise<string> {
+  const token = await getAccessToken();
+  const { apiBaseUrl } = wecomNotifyConfig();
+  const bytes = Buffer.from(image.base64, "base64");
+  const form = new FormData();
+  form.append("media", new Blob([bytes], { type: "image/jpeg" }), image.name.replace(/[^\w.-]+/g, "_") || "image.jpg");
+  const response = await fetchWithTimeout(
+    `${apiBaseUrl}/media/upload?access_token=${encodeURIComponent(token)}&type=image`,
+    { method: "POST", body: form },
+  );
+  if (!response.ok) throw new Error(`wecom_media_upload_http_${response.status}`);
+  const json: any = await response.json();
+  if (retry && (json?.errcode === 40014 || json?.errcode === 42001)) {
+    await getAccessToken(true);
+    return uploadImageMedia(image, false);
+  }
+  if (json?.errcode || !json?.media_id) {
+    throw new Error(`wecom_media_upload_failed_${json?.errcode ?? "missing_media_id"}:${json?.errmsg ?? ""}`);
+  }
+  return String(json.media_id);
 }
 
 export async function testWecomConnection(): Promise<{ ok: true }> {
@@ -275,23 +300,34 @@ export async function sendGroupMsgTemplate(params: {
   senderUserId: string;
   chatIds: string[];
   content: string;
+  images?: WecomImage[];
 }): Promise<{ ok: boolean; msgid?: string; raw: any }> {
   const originalContent = params.content.trim();
   const content = originalContent.includes(DYNAMIC_MESSAGE_OPT_OUT)
     ? originalContent
     : `${originalContent}\n\n${DYNAMIC_MESSAGE_OPT_OUT}`;
-  const gateway = await gatewayCall<{ ok: boolean; msgid: string }>("/v1/wecom/messages", {
+  const imageRows = wecomImagesSchema.parse(params.images ?? []);
+  const loadedImages = imageRows.length ? await loadWecomImages(await admin(), imageRows) : [];
+  const gatewayPath = loadedImages.length ? "/v1/wecom/messages/images" : "/v1/wecom/messages";
+  const gateway = await gatewayCall<{ ok: boolean; msgid: string }>(gatewayPath, {
     request_id: randomUUID(),
     sender_user_id: params.senderUserId,
     chat_ids: params.chatIds,
     content,
+    ...(loadedImages.length ? { images: loadedImages } : {}),
   });
   if (gateway) return { ok: true, msgid: gateway.msgid, raw: gateway };
+  const attachments = [];
+  for (const image of loadedImages) {
+    const mediaId = await uploadImageMedia(image);
+    attachments.push({ msgtype: "image", image: { media_id: mediaId } });
+  }
   const json = await callApi("/externalcontact/add_msg_template", {
     chat_type: "group",
     sender: params.senderUserId,
     chat_id_list: params.chatIds,
     text: { content },
+    ...(attachments.length ? { attachments } : {}),
   });
   if (json?.errcode) return { ok: false, raw: json };
   return { ok: true, msgid: json?.msgid, raw: json };

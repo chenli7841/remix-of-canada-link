@@ -33,7 +33,7 @@ export async function sendDueDailyWecomDrafts(options?: {
   const { sendGroupMsgTemplate } = await import("@/lib/wecom-notify/client.server");
   let query = (supabaseAdmin as any)
     .from("wecom_daily_notification_drafts")
-    .select("id,service_date,customer_code,rendered_content,edited_content,status")
+    .select("id,service_date,customer_code,rendered_content,edited_content,images,status")
     .order("service_date", { ascending: true })
     .order("customer_code", { ascending: true })
     .limit(500);
@@ -57,7 +57,9 @@ export async function sendDueDailyWecomDrafts(options?: {
       .update({ status: "submitted", submitted_at: claimedAt, updated_at: claimedAt, failure_reason: null })
       .eq("id", draft.id)
       .eq("status", previousStatus)
-      .select("id")
+      // Return the claimed row itself. This guarantees that an edit committed
+      // immediately before the claim is the exact content/images submitted.
+      .select("id,customer_code,rendered_content,edited_content,images")
       .maybeSingle();
     if (claimError) throw new Error(claimError.message);
     if (!claimed) continue;
@@ -78,12 +80,13 @@ export async function sendDueDailyWecomDrafts(options?: {
       if (!group) throw new Error("绑定的企业微信群不存在");
       if (group.is_blocked) throw new Error("客户群已屏蔽");
       if (!group.owner_userid) throw new Error("已绑定群，但群主 ID 尚未获取");
-      const content = String(draft.edited_content ?? draft.rendered_content ?? "").trim();
+      const content = String(claimed.edited_content ?? claimed.rendered_content ?? "").trim();
       if (!content) throw new Error("预发送内容为空");
       const result = await sendGroupMsgTemplate({
         senderUserId: group.owner_userid,
         chatIds: [binding.chat_id],
         content,
+        images: claimed.images ?? [],
       });
       if (!result.ok) throw new Error(JSON.stringify(result.raw));
       submitted += 1;

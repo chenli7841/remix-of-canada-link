@@ -31,13 +31,108 @@ import {
   listDailyWecomDrafts,
   updateDailyWecomDraft,
   sendDailyWecomDraftsNow,
+  uploadWecomImage,
+  previewWecomImage,
 } from "@/lib/wecom-notify.functions";
+import type { WecomImage } from "@/lib/wecom-images";
+import { preparePhoto } from "@/lib/prepare-photo";
 import { Page, Card, fmtDate } from "@/lib/admin-shared";
-import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Link2, Unlink, Search, Ban } from "lucide-react";
+import { AlertTriangle, RefreshCw, Loader2, Plus, X, Send, Link2, Unlink, Search, Ban, Camera, Images, Eye, Paperclip } from "lucide-react";
 
 type Tab = "bindings" | "groups" | "problems" | "blocked" | "compose" | "history";
 
 const tabs: Tab[] = ["bindings", "groups", "problems", "blocked", "compose", "history"];
+
+function WecomImagePicker({
+  images,
+  onChange,
+  disabled = false,
+}: {
+  images: WecomImage[];
+  onChange?: (images: WecomImage[]) => void;
+  disabled?: boolean;
+}) {
+  const upload = useServerFn(uploadWecomImage);
+  const preview = useServerFn(previewWecomImage);
+  const [uploading, setUploading] = useState(false);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files?.length || !onChange) return;
+    const remaining = 9 - images.length;
+    if (remaining <= 0) return toast.error("最多添加 9 张图片");
+    setUploading(true);
+    try {
+      const added: WecomImage[] = [];
+      for (const file of Array.from(files).slice(0, remaining)) {
+        const image = await preparePhoto(file);
+        const row = await upload({ data: { name: file.name || `照片-${Date.now()}.jpg`, image } });
+        added.push(row as WecomImage);
+      }
+      onChange([...images, ...added]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "图片上传失败");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const showPreview = async (image: WecomImage) => {
+    setPreviewing(image.path);
+    try {
+      const result = await preview({ data: image });
+      setPreviewUrl(result.url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "图片预览失败");
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
+  if (disabled && images.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-white/10 bg-black/10 p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Paperclip className="h-4 w-4 text-slate-400" />
+        <span className="text-xs text-slate-300">图片附件（最多 9 张）</span>
+        {!disabled && onChange && <>
+          <label className="cursor-pointer rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:border-brand/50">
+            <Camera className="mr-1 inline h-3.5 w-3.5" />手机拍照
+            <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploading} onChange={(event) => { void addFiles(event.target.files); event.currentTarget.value = ""; }} />
+          </label>
+          <label className="cursor-pointer rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:border-brand/50">
+            <Images className="mr-1 inline h-3.5 w-3.5" />相册/文件
+            <input type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void addFiles(event.target.files); event.currentTarget.value = ""; }} />
+          </label>
+        </>}
+        {uploading && <span className="inline-flex items-center gap-1 text-xs text-brand"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span>}
+      </div>
+      {images.length ? (
+        <div className="space-y-1.5">
+          {images.map((image, index) => (
+            <div key={image.path} className="flex items-center justify-between gap-2 rounded-md bg-white/[0.035] px-2.5 py-1.5 text-xs">
+              <button type="button" onClick={() => void showPreview(image)} className="min-w-0 flex-1 truncate text-left text-slate-200 hover:text-brand" title={image.name}>
+                <Eye className="mr-1.5 inline h-3.5 w-3.5" />{image.name}
+              </button>
+              {!disabled && onChange && <button type="button" onClick={() => onChange(images.filter((_, i) => i !== index))} className="text-slate-500 hover:text-rose-300" aria-label={`删除 ${image.name}`}><X className="h-3.5 w-3.5" /></button>}
+              {previewing === image.path && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />}
+            </div>
+          ))}
+        </div>
+      ) : <div className="text-xs text-slate-500">暂无图片；页面平时只显示文件名，点击文件名可预览。</div>}
+      {previewUrl && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewUrl(null)}>
+          <div className="relative max-h-[90vh] max-w-4xl" onClick={(event) => event.stopPropagation()}>
+            <img src={previewUrl} alt="企业微信附件预览" className="max-h-[88vh] max-w-full rounded-xl object-contain" />
+            <button type="button" onClick={() => setPreviewUrl(null)} className="absolute right-2 top-2 rounded-full bg-black/70 p-2 text-white"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/admin/wecom-notify")({
   validateSearch: (search: Record<string, unknown>): { tab?: Tab } => ({
@@ -57,6 +152,7 @@ function SelectedGroupsSendPanel({
 }) {
   const sendSelected = useServerFn(sendSelectedWecomGroups);
   const [content, setContent] = useState("");
+  const [images, setImages] = useState<WecomImage[]>([]);
   const [sending, setSending] = useState(false);
   const pageIds = pageRows.map((row) => row.chat_id);
   const allPageSelected = Boolean(pageIds.length) && pageIds.every((id) => selectedChatIds.includes(id));
@@ -69,13 +165,14 @@ function SelectedGroupsSendPanel({
   const submit = async () => {
     if (!selectedChatIds.length) return toast.error("请先勾选群");
     if (!content.trim()) return toast.error("请填写群发文案");
-    if (!window.confirm(`将向 ${selectedChatIds.length} 个群提交真实消息。\n\n消息内容：\n${content}\n\n确认继续吗？`)) return;
+    if (!window.confirm(`将向 ${selectedChatIds.length} 个群提交真实消息。\n\n消息内容：\n${content}\n\n图片：${images.length} 张\n\n确认继续吗？`)) return;
     setSending(true);
     try {
-      const result: any = await sendSelected({ data: { chatIds: selectedChatIds, content } });
+      const result: any = await sendSelected({ data: { chatIds: selectedChatIds, content, images } });
       toast.success(`已向企业微信提交 ${result.groupCount} 个群，等待群主确认发送`);
       setSelectedChatIds([]);
       setContent("");
+      setImages([]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "群发提交失败");
     } finally {
@@ -95,6 +192,7 @@ function SelectedGroupsSendPanel({
         <span className="text-xs text-slate-400">已选择 {selectedChatIds.length} 个群</span>
       </div>
       <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={3} maxLength={2000} placeholder="填写要发送的群发文案……" className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand" />
+      <WecomImagePicker images={images} onChange={setImages} />
       <button type="button" onClick={submit} disabled={sending || !selectedChatIds.length || !content.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
         <Send className="h-4 w-4" />{sending ? "提交中…" : "发送到已选群"}
       </button>
@@ -1369,6 +1467,7 @@ function ComposeTab() {
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [editingImages, setEditingImages] = useState<WecomImage[]>([]);
   const [saving, setSaving] = useState(false);
   const [sendingDate, setSendingDate] = useState<string | null>(null);
   const [failureDate, setFailureDate] = useState<string | null>(null);
@@ -1416,9 +1515,10 @@ function ComposeTab() {
     if (!editingId || !editingContent.trim()) return;
     setSaving(true);
     try {
-      await saveDraft({ data: { draftId: editingId, content: editingContent } });
+      await saveDraft({ data: { draftId: editingId, content: editingContent, images: editingImages } });
       toast.success("预发送信息已保存");
       setEditingId(null);
+      setEditingImages([]);
       await qc.invalidateQueries({ queryKey: ["wecom-daily-drafts", selectedDate] });
       await qc.invalidateQueries({ queryKey: ["wecom-daily-draft-dates"] });
     } catch (error) {
@@ -1500,7 +1600,7 @@ function ComposeTab() {
   return (
     <Card title={`${selectedDate} · 客户预发送信息`}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => { setSelectedDate(null); setEditingId(null); }} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-200">← 返回日期列表</button>
+        <button type="button" onClick={() => { setSelectedDate(null); setEditingId(null); setEditingImages([]); }} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-200">← 返回日期列表</button>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索客户号、群名或消息内容" className="min-w-64 flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-brand" />
         <span className="text-xs text-slate-400">共 {filteredRows.length} 个客户</span>
       </div>
@@ -1521,17 +1621,23 @@ function ComposeTab() {
                   <span className={`rounded-full px-2.5 py-1 text-xs ${editable ? "bg-amber-500/15 text-amber-300" : "bg-slate-500/15 text-slate-300"}`}>{statusLabel[row.status] ?? row.status}</span>
                 </div>
                 {editing ? (
-                  <textarea value={editingContent} onChange={(event) => setEditingContent(event.target.value)} rows={12} maxLength={4000} className="w-full rounded-lg border border-brand/50 bg-slate-950/40 px-3 py-2 font-mono text-xs leading-5 text-slate-100 outline-none" />
+                  <>
+                    <textarea value={editingContent} onChange={(event) => setEditingContent(event.target.value)} rows={12} maxLength={4000} className="w-full rounded-lg border border-brand/50 bg-slate-950/40 px-3 py-2 font-mono text-xs leading-5 text-slate-100 outline-none" />
+                    <WecomImagePicker images={editingImages} onChange={setEditingImages} />
+                  </>
                 ) : (
-                  <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-950/40 px-3 py-3 text-xs leading-5 text-slate-200">{row.content}</pre>
+                  <>
+                    <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-950/40 px-3 py-3 text-xs leading-5 text-slate-200">{row.content}</pre>
+                    <WecomImagePicker images={(row.images ?? []) as WecomImage[]} disabled />
+                  </>
                 )}
                 {editable && (
                   <div className="mt-3 flex gap-2">
                     {editing ? <>
                       <button type="button" onClick={save} disabled={saving || !editingContent.trim()} className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{saving ? "保存中…" : "保存修改"}</button>
-                      <button type="button" onClick={() => setEditingId(null)} disabled={saving} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300">取消</button>
+                      <button type="button" onClick={() => { setEditingId(null); setEditingImages([]); }} disabled={saving} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300">取消</button>
                     </> : (
-                      <button type="button" onClick={() => { setEditingId(row.id); setEditingContent(row.content); }} className="rounded-md border border-brand/40 px-3 py-1.5 text-xs text-brand">修改发送内容</button>
+                      <button type="button" onClick={() => { setEditingId(row.id); setEditingContent(row.content); setEditingImages((row.images ?? []) as WecomImage[]); }} className="rounded-md border border-brand/40 px-3 py-1.5 text-xs text-brand">修改发送内容</button>
                     )}
                     {row.is_edited && <span className="self-center text-xs text-amber-300">已人工修改</span>}
                   </div>
@@ -1760,6 +1866,7 @@ function HistoryTab({ enabled }: { enabled: boolean }) {
           {detailQ.isLoading && <Loader2 className="h-5 w-5 animate-spin text-slate-500" />}
           {detailQ.isSuccess && (
             <div className="max-h-96 space-y-2 overflow-y-auto text-xs">
+              <WecomImagePicker images={(((detailQ.data as any)?.message?.images ?? []) as WecomImage[])} disabled />
               {((detailQ.data as any)?.targets ?? []).map((t: any) => (
                 <div key={t.customer_code} className="rounded-md border border-white/10 p-2">
                   <div className="flex justify-between text-slate-300">

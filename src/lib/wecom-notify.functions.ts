@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { wecomImagesSchema, wecomImageSchema, type WecomImage } from './wecom-images';
 // EPLUS 群发通知（企业微信客户群发，独立应用 AgentId 1000005）后台管理函数。
 // 跟现有「微信客服 AI」（wechat-kf 那一整套）完全独立，互不调用、互不影响；
 // 本阶段只服务测试域名，WECOM_ENABLED 默认 false——同步群列表 / 真正发送这两个
@@ -440,7 +442,7 @@ export const autoMatchSingleWecomGroup = createServerFn({ method: "POST" })
 // 填写正文并通过最终确认时才能从这个入口发送，普通群发仍严格排除屏蔽群。
 export const sendSelectedWecomGroups = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { chatIds: string[]; content: string }) => d)
+  .inputValidator((d: { chatIds: string[]; content: string; images?: WecomImage[] }) => d)
   .handler(async ({ data, context }) => {
     await assertNotifySender(context.supabase, context.userId);
     if (!wecomNotifyConfigured()) throw new Error("企业微信凭证尚未配置");
@@ -472,7 +474,7 @@ export const sendSelectedWecomGroups = createServerFn({ method: "POST" })
     const { sendGroupMsgTemplate } = await import("@/lib/wecom-notify/client.server");
     const results = [];
     for (const [senderUserId, ownerChatIds] of byOwner) {
-      const result = await sendGroupMsgTemplate({ senderUserId, chatIds: ownerChatIds, content });
+      const result = await sendGroupMsgTemplate({ senderUserId, chatIds: ownerChatIds, content, images:wecomImagesSchema.parse(data.images ?? []) });
       if (!result.ok) throw new Error(`企业微信提交失败：${JSON.stringify(result.raw)}`);
       results.push({ senderUserId, chatIds: ownerChatIds, msgid: result.msgid ?? null });
     }
@@ -480,7 +482,7 @@ export const sendSelectedWecomGroups = createServerFn({ method: "POST" })
       entity_type: "wecom_notify_test",
       entity_id: results.map((result) => result.msgid).filter(Boolean).join(",") || "submitted",
       action: "send_selected_groups",
-      after: { chat_ids: chatIds, group_count: chatIds.length, content, results },
+      after: { chat_ids: chatIds, group_count: chatIds.length, content, images: data.images ?? [], results },
       operator_id: context.userId,
       note: "管理员在群列表中明确勾选群并确认群发",
     });
@@ -949,6 +951,7 @@ export const previewWecomMessage = createServerFn({ method: "POST" })
       targetScope: "all_bound" | "selected";
       targetCustomerCodes: string[];
       contentTemplate: string;
+      images?: WecomImage[];
     }) => d,
   )
   .handler(async ({ data, context }) => {
@@ -970,6 +973,7 @@ export const createWecomMessageDraft = createServerFn({ method: "POST" })
       targetScope: "all_bound" | "selected";
       targetCustomerCodes: string[];
       contentTemplate: string;
+      images?: WecomImage[];
     }) => d,
   )
   .handler(async ({ data, context }) => {
@@ -987,6 +991,7 @@ export const createWecomMessageDraft = createServerFn({ method: "POST" })
       .insert({
         title: data.title.trim() || "(未命名)",
         content_template: template,
+        images: wecomImagesSchema.parse(data.images ?? []),
         target_scope: data.targetScope,
         target_customer_codes: data.targetScope === "selected" ? data.targetCustomerCodes : [],
         status: "previewed",
@@ -1058,7 +1063,7 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
     };
     const { data: drafts, error } = await supabaseAdmin
       .from("wecom_daily_notification_drafts")
-      .select("id,service_date,customer_code,rendered_content,edited_content,status,failure_reason,updated_at,submitted_at,sent_at")
+      .select("id,service_date,customer_code,rendered_content,edited_content,images,status,failure_reason,updated_at,submitted_at,sent_at")
       .eq("service_date", data.serviceDate)
       .order("customer_code", { ascending: true });
     if (error) throw new Error(error.message);
@@ -1098,7 +1103,7 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
 
 export const updateDailyWecomDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { draftId: string; content: string }) => d)
+  .inputValidator((d: { draftId: string; content: string; images?: WecomImage[] }) => d)
   .handler(async ({ data, context }) => {
     await assertNotifySender(context.supabase, context.userId);
     if (!UUID_RE.test(data.draftId)) throw new Error("预发送信息 ID 格式不正确");
@@ -1118,7 +1123,7 @@ export const updateDailyWecomDraft = createServerFn({ method: "POST" })
     if (draft.status !== "draft") throw new Error("该信息已提交或发送，只能查看，不能修改");
     const { error } = await supabaseAdmin
       .from("wecom_daily_notification_drafts")
-      .update({ edited_content: content, updated_at: new Date().toISOString() })
+      .update({ edited_content: content, ...(data.images !== undefined ? {images:wecomImagesSchema.parse(data.images)} : {}), updated_at: new Date().toISOString() })
       .eq("id", data.draftId)
       .eq("status", "draft");
     if (error) throw new Error(error.message);
@@ -1144,7 +1149,7 @@ export const listWecomMessages = createServerFn({ method: "GET" })
     };
     const { data, error } = await supabaseAdmin
       .from("wecom_notify_messages")
-      .select("id, title, target_scope, status, created_at, sent_at")
+      .select("id, title, target_scope, images, status, created_at, sent_at")
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) throw new Error(error.message);
@@ -1190,7 +1195,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
     };
     const { data: msg, error } = await supabaseAdmin
       .from("wecom_notify_messages")
-      .select("id, status, content_template")
+      .select("id, status, content_template, images")
       .eq("id", data.messageId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -1308,6 +1313,7 @@ export const sendWecomMessage = createServerFn({ method: "POST" })
       try {
         const r = await sendGroupMsgTemplate({
           senderUserId: g.senderUserId,
+          images: msg.images ?? [],
           chatIds: g.chatIds,
           content: g.content,
         });
@@ -1426,3 +1432,26 @@ export const refreshWecomMessageStatus = createServerFn({ method: "POST" })
       .eq("id", data.messageId);
     return { ok: true, status: finalStatus };
   });
+
+export const uploadWecomImage = createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
+ .inputValidator(z.object({name:z.string().min(1).max(180), image:z.string().max(2800000)}))
+ .handler(async({data,context})=>{
+  await assertNotifySender(context.supabase,context.userId);
+  const match=/^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(data.image);
+  if(!match)throw new Error('请上传JPEG图片');
+  const bytes=Uint8Array.from(atob(match[1]),c=>c.charCodeAt(0));
+  if(bytes.length>2*1024*1024||bytes.length<4||bytes[0]!==255||bytes[1]!==216||bytes.at(-2)!==255||bytes.at(-1)!==217)throw new Error('图片无效或超过2MB');
+  const {supabaseAdmin:admin}=await import('@/integrations/supabase/client.server');
+  const path='wecom-notify/'+context.userId+'/'+crypto.randomUUID()+'.jpg';
+  const put=await admin.storage.from('delivery-proofs').upload(path,bytes,{contentType:'image/jpeg',upsert:false});
+  if(put.error)throw new Error('图片上传失败');
+  return {path,name:data.name};
+ });
+export const previewWecomImage = createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
+ .inputValidator(wecomImageSchema).handler(async({data,context})=>{
+  await assertNotifySender(context.supabase,context.userId);
+  const {supabaseAdmin:admin}=await import('@/integrations/supabase/client.server');
+  const result=await admin.storage.from('delivery-proofs').createSignedUrl(data.path,600);
+  if(result.error)throw new Error('图片预览失败');
+  return {url:result.data.signedUrl};
+ });
