@@ -27,10 +27,10 @@ export const listCargoPhotos=createServerFn({method:'GET'}).middleware([requireS
  for(let offset=0;;offset+=100){
   const r=await admin.storage.from('delivery-proofs').list(prefix(data),{limit:100,offset,sortBy:{column:'created_at',order:'desc'}});
   if(r.error)throw new Error('货物照片读取失败');
-  for(const p of r.data||[]){if(!p.name.endsWith('.jpg'))continue;const signed=await admin.storage.from('delivery-proofs').createSignedUrl(`${prefix(data)}/${p.name}`,600);if(signed.error)throw new Error('照片链接生成失败');photos.push({id:p.id,url:signed.data.signedUrl});}
+  for(const p of r.data||[]){if(!p.name.endsWith('.jpg'))continue;const signed=await admin.storage.from('delivery-proofs').createSignedUrl(`${prefix(data)}/${p.name}`,600);if(signed.error)throw new Error('照片链接生成失败');photos.push({id:p.id,name:p.name,url:signed.data.signedUrl});}
   if(r.data.length<100)break;
  }
- return photos as {id:string;url:string}[];
+ return photos as {id:string;name:string;url:string}[];
 });
 export const uploadCargoPhoto=createServerFn({method:'POST'}).middleware([requireSupabaseAuth]).inputValidator(scope.extend({photoId:z.string().uuid(),image:z.string().max(8400000)})).handler(async({data,context})=>{
  const admin=await authorize(context,data);
