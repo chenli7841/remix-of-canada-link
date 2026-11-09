@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import {
   getReceivingDetail, scanReceive, removeReceivingScan,
-  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScan,
+  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScan, dismissReceivingIssue,
 } from "@/lib/receivings.functions";
 import { prepareDelivery } from "@/lib/delivery-queue.functions";
 import { listBatches } from "@/lib/orders.functions";
@@ -61,6 +61,7 @@ function ReceivingDetail() {
   const matchAll = useReturnReminder(matchAllReceiving);
   const removeScan = useServerFn(removeReceivingScan);
   const mergeScan = useReturnReminder(mergeReceivingScan);
+  const dismissIssue = useServerFn(dismissReceivingIssue);
   const confirm = useReturnReminder(confirmReceiving);
   const match = useServerFn(matchReceivingBatch);
   const update = useServerFn(updateReceiving);
@@ -98,7 +99,7 @@ function ReceivingDetail() {
   if (q.isLoading) return <div className="grid place-items-center p-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>;
   if (q.isError) return <div className="p-6 text-rose-400">{(q.error as Error).message}</div>;
 
-  const { receiving: r, scans, expected, direct, secondary, diff } = q.data!;
+  const { receiving: r, scans, expected, direct, secondary, diff, issues } = q.data!;
   const isFinal = r.status === "confirmed" || r.status === "closed";
 
   const onScan = async (e?: React.FormEvent, manualCode?: string) => {
@@ -110,6 +111,7 @@ function ReceivingDetail() {
       const res: any = await scan({ data: { receivingId, code: c } });
       setLog(l => [{ time, code: c, ok: true, info: res.info, extra: res.extra }, ...l].slice(0, 50));
       if (res.extra) playAlertBeep();
+      if (res.needsSelection) window.alert(res.info);
       await refresh();
     } catch (err: any) {
       playAlertBeep();
@@ -273,7 +275,7 @@ function ReceivingDetail() {
             <>
               <form onSubmit={onScan} className="flex gap-2">
                 <input ref={inputRef} value={code} onChange={(e) => setCode(e.target.value)}
-                  placeholder="运单号 / 单运单订单号 / 箱号 / 托盘号"
+                  placeholder="运单号 / 单运单订单号 / 国内单号 / 箱号 / 托盘号"
                   className="min-w-0 flex-1 rounded-md border border-brand/40 bg-white/5 px-3 py-2.5 text-sm text-slate-100 focus:border-brand focus:outline-none"
                   autoComplete="off" />
                 <button type="submit" disabled={!code.trim() || busy}
@@ -345,10 +347,28 @@ function ReceivingDetail() {
           onConfirm={value => onScan(undefined,value)} onRemove={onRemove} />
       </Card>
 
-      {diff.extra_scans.length>0 && <Card title={`未匹配单子（${diff.extra_scans.length}）`}>
+      {(diff.extra_scans.length>0 || issues.length>0) && <Card title={`多扫 / 差异（${diff.extra_scans.length + issues.length}）`}>
         <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。合并仅纳入此项及内部明细，保留原批次。</p>
-        <div className="space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
-          <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">未匹配</span>
+        <div className="space-y-2">{issues.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-rose-500/20 p-3 text-xs">
+          <span className="break-all font-mono">{item.code}</span><span className="text-rose-300">{item.reason}</span>
+          {item.matches?.map((match:any)=><div key={match.kind+match.ref_id} className="w-full rounded bg-white/5 p-2 text-sky-200">
+            运单 {match.code} {match.carton_no && ' · 箱号 '+match.carton_no} {match.pallet_no && ' · 托盘 '+match.pallet_no}
+            <span className="ml-2">所属批次：{match.batch ? <Link to="/admin/batches/$batchId" params={{batchId:match.batch.id}} className="underline">{receivingBatchLabel(match.batch)}</Link> : '未分配批次'}</span>
+          </div>)}
+          <span className="text-slate-400">{fmtDate(item.scanned_at)}</span>
+          {!isFinal && <>
+            <button disabled={busy} className="rounded bg-sky-600 px-3 py-2 disabled:opacity-50" onClick={()=>onScan(undefined,item.code)}>重新识别</button>
+            <button disabled={busy} className="rounded border border-rose-500/40 px-3 py-2 text-rose-300" onClick={async()=>{
+              if(!window.confirm('从差异中踢出 '+item.code+'？'))return;
+              setBusy(true);try{await dismissIssue({data:{receivingId,code:item.code}});await refresh();}catch(e:any){alert(e.message);}finally{setBusy(false);}
+            }}>踢出去</button>
+          </>}
+        </div>)}</div>
+        <div className="mt-2 space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
+          <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">不在本次匹配范围</span>
+          <span className="text-sky-200">所属批次：{item.batch ? <Link to="/admin/batches/$batchId" params={{batchId:item.batch.id}} className="underline">{receivingBatchLabel(item.batch)}</Link> : '未分配批次'}</span>
+          {item.carton_no && <span className="text-slate-300">箱号 {item.carton_no}</span>}
+          {item.pallet_no && <span className="text-slate-300">托盘 {item.pallet_no}</span>}
           <span className="text-slate-400">{fmtDate(item.scanned_at)}</span>
           {!isFinal && <>
             <button disabled={busy} className="ml-auto rounded bg-emerald-600 px-3 py-2 disabled:opacity-50" onClick={async()=>{

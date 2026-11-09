@@ -1,3 +1,6 @@
+export class ReceivingCodeError extends Error {
+  constructor(message:string, public candidates:{kind:string;ref_id:string;code?:string}[]=[]){super(message);}
+}
 // Resolve actual records rather than guessing from prefixes (legacy box numbers are numeric).
 export async function resolveReceivingCode(db: any, raw: string) {
   const code = raw.trim().toUpperCase();
@@ -22,19 +25,37 @@ export async function resolveReceivingCode(db: any, raw: string) {
   }
   const hitResult = parent ? {data:parent,error:null} : await db.rpc('find_by_any_no',{_input:code});
   if (hitResult.error) throw new Error(hitResult.error.message);
-  const hit = hitResult.data;
+  let hit = hitResult.data;
+  if (!hit) {
+    const candidates: {kind:string;id:string}[]=[];
+    for (const [table,kind] of [['orders','order'],['forwarding_orders','forwarding']]) {
+      const result=await db.from(table).select('id').eq('domestic_tracking_no',code).limit(2);
+      if(result.error) throw new Error(result.error.message);
+      candidates.push(...(result.data ?? []).map((r:any)=>({kind,id:r.id})));
+    }
+    if(candidates.length>1) {
+      const units:any[]=[];
+      for(const candidate of candidates){
+        const result=await db.from('waybills').select('id,waybill_no').eq(candidate.kind==='order'?'order_id':'forwarding_id',candidate.id).limit(2);
+        if(result.error)throw new Error(result.error.message);
+        units.push(...(result.data ?? []).map((w:any)=>({kind:'waybill',ref_id:w.id,code:w.waybill_no})));
+      }
+      throw new ReceivingCodeError('国内单号对应多个订单，请扫描具体运单号（下方为部分匹配结果）',units);
+    }
+    hit=candidates[0];
+  }
   let w: any;
   if (hit?.kind === 'order' || hit?.kind === 'forwarding') {
     const result = await db.from('waybills').select('id,waybill_no,assigned_batch_id,carton_id,pallet_id')
       .eq(hit.kind === 'order' ? 'order_id' : 'forwarding_id',hit.id).limit(2);
     if (result.error) throw new Error(result.error.message);
-    if (!result.data?.length) throw new Error('该订单尚无运单，不能扫描确认');
+    if (!result.data?.length) throw new ReceivingCodeError('该订单尚无运单，不能扫描确认');
     if (result.data.length > 1) throw new Error('该订单下有多个运单，不能扫描订单号，请逐个扫描具体运单号');
     w=result.data[0];
   } else if (hit?.kind === 'waybill') {
     w=await one('waybills','id,waybill_no,assigned_batch_id,carton_id,pallet_id','id',hit.id);
   }
-  if (!w) throw new Error('未找到对应的运单、订单、箱号或托盘');
+  if (!w) throw new ReceivingCodeError('未找到对应的运单、订单、国内单号、箱号或托盘');
   let batchId=w.assigned_batch_id;
   const carton=w.carton_id ? await one('cartons','batch_id,pallet_id','id',w.carton_id) : null;
   batchId ||= carton?.batch_id;

@@ -105,8 +105,23 @@ export const scanReceive = createServerFn({ method: "POST" })
     if (recvError || !recv) throw new Error('收货单读取失败');
     if (!['open','matched'].includes(recv.status)) throw new Error('收货单已确认，不能继续扫描');
     const batchIds: string[] = recv.batch_ids ?? (recv.batch_id ? [recv.batch_id] : []);
-    const { resolveReceivingCode } = await import('./receiving-scan.server');
-    const item = await resolveReceivingCode(supabaseAdmin, code);
+    const { resolveReceivingCode, ReceivingCodeError } = await import('./receiving-scan.server');
+    let item;
+    try {item = await resolveReceivingCode(supabaseAdmin, code);}
+    catch(error) {
+      if(!(error instanceof ReceivingCodeError)) throw error;
+      const saved = await (supabaseAdmin as any).rpc('record_receiving_scan_issue',{
+        _receiving_id:data.receivingId,_code:code,_reason:error.message,_operator_id:context.userId,_matches:error.candidates,
+      });
+      if(saved.error) throw new Error('未能保存差异，请重新扫描：'+saved.error.message);
+      return {ok:true,kind:'unknown',extra:true,needsSelection:error.message.includes('多个'),scan_id:null,info:error.message+'；已保存到多扫/差异'};
+    }
+    const resolveIssue = async()=>{
+      const result=await (supabaseAdmin as any).rpc('record_receiving_scan_issue',{
+        _receiving_id:data.receivingId,_code:code,_reason:'',_operator_id:context.userId,_status:'resolved',
+      });
+      if(result.error) throw new Error('收货已记录，但差异更新失败，请重新扫描：'+result.error.message);
+    };
     const { kind, ref_id, label } = item;
     if (kind === 'batch') {
       const { error } = await (supabaseAdmin as any).rpc('set_receiving_batches', {
@@ -137,12 +152,14 @@ export const scanReceive = createServerFn({ method: "POST" })
         {onConflict:'receiving_id,kind,ref_id',ignoreDuplicates:true});
       if(error) throw new Error(error.message);
       await recordAdminLog(supabaseAdmin,{entity_type:'receiving',entity_id:data.receivingId,action:'unmatched_scan',after:{kind,ref_id,code:label},operator_id:context.userId});
+      await resolveIssue();
       return {ok:true,kind,extra:true,scan_id:null,info:label+' 不属于匹配清单，已单独列入未匹配单子，等待合并或踢出去'};
     }
     const {error: scanError} = await (supabaseAdmin as any).rpc('scan_receiving_hierarchy', {
       _receiving_id:data.receivingId, _kind:kind, _ref_id:ref_id, _operator_id:context.userId,
     });
     if (scanError) throw new Error(scanError.message);
+    await resolveIssue();
     return {ok:true,kind,extra:false,scan_id:null,info:SCAN_KIND_LABEL[kind]+' '+label+' 已确认，已同步内部明细及收齐的上层容器'};
   });
 
@@ -273,7 +290,16 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
     const matched = hierarchyBatchIds.length ? await supabaseAdmin.from('batches')
       .select('id,batch_no,display_name,planned_ship_date,shipping_method,status,destination_code').in('id',hierarchyBatchIds) : {data:[],error:null};
     if (matched.error) throw new Error(matched.error.message);
-    return { receiving: {...recv, batch_ids:batchIds, matched_batches:(matched.data ?? []).filter(b=>batchIds.includes(b.id)), hierarchy_batches:matched.data ?? []}, scans: scans ?? [], expected, direct, secondary, diff };
+    const issues:any[]=[];
+    for(let offset=0;;offset+=500){
+      const result=await (supabaseAdmin as any).from('receiving_scan_issues').select('*').eq('receiving_id',data.receivingId).eq('status','pending').order('scanned_at',{ascending:false}).order('id').range(offset,offset+499);
+      if(result.error) throw new Error(result.error.message);
+      issues.push(...(result.data ?? []));if((result.data ?? []).length<500) break;
+    }
+    const {receivingDifferenceDetails}=await import('./receiving-differences.server');
+    diff.extra_scans=await receivingDifferenceDetails(supabaseAdmin,diff.extra_scans);
+    const candidates=await receivingDifferenceDetails(supabaseAdmin,issues.flatMap(i=>(i.matches ?? []).map((m:any)=>({...m,issue_id:i.id}))));
+    return { issues:issues.map(i=>({...i,matches:candidates.filter(c=>c.issue_id===i.id)})), receiving: {...recv, batch_ids:batchIds, matched_batches:(matched.data ?? []).filter(b=>batchIds.includes(b.id)), hierarchy_batches:matched.data ?? []}, scans: scans ?? [], expected, direct, secondary, diff };
   });
 
 // ===== Confirm receiving: mark batch arrived + sync waybills + add tracking event =====
@@ -345,3 +371,12 @@ export const mergeReceivingScan = createServerFn({method:'POST'})
     if(result.error) throw new Error(result.error.message);
     return {ok:true};
   });
+
+export const dismissReceivingIssue=createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
+.inputValidator((d:{receivingId:string;code:string})=>d).handler(async({data,context})=>{
+ await assertStaff(context.supabase,context.userId);
+ const {supabaseAdmin}=await import('@/integrations/supabase/client.server');
+ const result=await (supabaseAdmin as any).rpc('record_receiving_scan_issue',{_receiving_id:data.receivingId,_code:data.code,_reason:'',_operator_id:context.userId,_status:'dismissed'});
+ if(result.error)throw new Error(result.error.message);
+ return {ok:true};
+});
