@@ -373,9 +373,14 @@ export const mergeReceivingScan = createServerFn({method:'POST'})
   });
 
 export const dismissReceivingIssue=createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
-.inputValidator((d:{receivingId:string;code:string})=>d).handler(async({data,context})=>{
+.inputValidator((d:{receivingId:string;code:string;onlyUnrecognized?:boolean})=>d).handler(async({data,context})=>{
  await assertStaff(context.supabase,context.userId);
  const {supabaseAdmin}=await import('@/integrations/supabase/client.server');
+ if(data.onlyUnrecognized){
+   const {data:issue,error}=await (supabaseAdmin as any).from('receiving_scan_issues').select('status,matches').eq('receiving_id',data.receivingId).eq('code',data.code).maybeSingle();
+   if(error)throw new Error(error.message);
+   if(!issue || issue.status!=='pending' || issue.matches?.length)return {ok:true,skipped:true};
+ }
  const result=await (supabaseAdmin as any).rpc('record_receiving_scan_issue',{_receiving_id:data.receivingId,_code:data.code,_reason:'',_operator_id:context.userId,_status:'dismissed'});
  if(result.error)throw new Error(result.error.message);
  return {ok:true};

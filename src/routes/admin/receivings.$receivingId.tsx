@@ -102,6 +102,7 @@ function ReceivingDetail() {
 
   const { receiving: r, scans, expected, direct, secondary, diff, issues } = q.data!;
   const isFinal = r.status === "confirmed" || r.status === "closed";
+  const unrecognizedIssues = issues.filter((item:any)=>!item.matches?.length);
 
   const onScan = async (e?: React.FormEvent, manualCode?: string) => {
     e?.preventDefault();
@@ -347,6 +348,19 @@ function ReceivingDetail() {
 
 <div id="receiving-differences" className="scroll-mt-24">
       {(diff.extra_scans.length>0 || issues.length>0) && <Card title={`多扫 / 差异（${diff.extra_scans.length + issues.length}）`}>
+        {!isFinal && unrecognizedIssues.length>0 && <button disabled={busy} className="mb-3 rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-300 disabled:opacity-50" onClick={async()=>{
+          if(busy || !window.confirm(`剔除全部 ${unrecognizedIssues.length} 条未识别差异？已识别的多扫包裹保留，扫描历史仍会保存。`))return;
+          setBusy(true);
+          let removed=0;
+          try{
+            for(const item of unrecognizedIssues){
+              const result=await dismissIssue({data:{receivingId,code:item.code,onlyUnrecognized:true}});
+              if(!('skipped' in result && result.skipped))removed++;
+            }
+            alert(`已剔除 ${removed} 条未识别差异。`);
+          }catch(e:any){alert(`已剔除 ${removed} 条，其余未处理：${e.message}`);}
+          finally{await refresh();setBusy(false);}
+        }}>一键剔除未识别差异（{unrecognizedIssues.length}）</button>}
         <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。单箱/单件合并先核对付款及完成状态：已付款保留原付款记录，未付款标记待特殊处理，已完成也可重新收货；整批次合并会加入所属批次并匹配整批到货。上方统计与未到清单同步更新，最后仍需确认到件。</p>
         <div className="mt-2 space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
           <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">不在本次匹配范围</span>
