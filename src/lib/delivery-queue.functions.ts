@@ -89,7 +89,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
 
     const { data: recv, error: receivingError } = await supabaseAdmin
       .from("receivings")
-      .select("id, batch_id, status")
+      .select("id, batch_id, batch_ids, status")
       .eq("id", data.receivingId)
       .maybeSingle();
     if (receivingError) throw new Error('收货单读取失败：' + receivingError.message);
@@ -97,7 +97,9 @@ export const prepareDelivery = createServerFn({ method: "POST" })
     if (!recv.batch_id) throw new Error("请先匹配批次");
     if (recv.status !== 'confirmed') throw new Error('请先确认到件，再准备派送');
 
-    const batchId = recv.batch_id;
+    const totals = {waybills:0,cartons:0,pallets:0,inserted:0,skipped:0};
+    let notifiedCustomers = 0;
+    for (const batchId of ((recv as any).batch_ids ?? [recv.batch_id]) as string[]) {
 
     const { loadReceivingContents } = await import('./receiving-bulk.server');
     const contents = await loadReceivingContents(supabaseAdmin, batchId);
@@ -270,17 +272,14 @@ export const prepareDelivery = createServerFn({ method: "POST" })
       });
     }
 
-    return {
-      ok: true,
-      counts: {
-        waybills: waybillsToAdd.length,
-        cartons: cartonsCust.length,
-        pallets: palletsCust.length,
-        inserted,
-        skipped,
-      },
-      notifiedCustomers: unitsByCustomer.size,
-    };
+    totals.waybills += waybillsToAdd.length;
+    totals.cartons += cartonsCust.length;
+    totals.pallets += palletsCust.length;
+    totals.inserted += inserted;
+    totals.skipped += skipped;
+    notifiedCustomers += unitsByCustomer.size;
+    }
+    return {ok:true,counts:totals,notifiedCustomers};
   });
 
 // ===== Update item status =====

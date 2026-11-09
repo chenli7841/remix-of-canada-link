@@ -86,7 +86,7 @@ function ReceivingDetail() {
     return () => window.clearInterval(timer);
   }, [confirming]);
   const [showMatch, setShowMatch] = useState(false);
-  const [pickBatchId, setPickBatchId] = useState("");
+  const [pickBatchIds, setPickBatchIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["receiving", receivingId] });
@@ -125,12 +125,12 @@ function ReceivingDetail() {
 
   const onMatchAll = async () => {
     if (busy || isFinal || !r.batch_id) return;
-    const label = r.batches ? receivingBatchLabel(r.batches) : '当前批次';
+    const label = r.matched_batches.map(receivingBatchLabel).join('、');
     if (!window.confirm('第一次确认：将“' + label + '”的全部运单、箱号和托盘视为到货，包括箱内及托盘内明细。是否继续？')) return;
     if (!window.confirm('第二次确认：请确认整批货物确实全部到齐。执行后将自动补齐收货匹配记录，无需逐件扫描。确定执行一键匹配？')) return;
     setBusy(true);
     try {
-      const res = await matchAll({ data: { receivingId, batchId: r.batch_id } });
+      const res = await matchAll({ data: { receivingId } });
       const info = '全部到货已匹配：' + res.counts.waybills + ' 单 / ' + res.counts.cartons + ' 箱 / ' + res.counts.pallets + ' 托；已有记录保留。';
       setLog(l => [{ time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), code: '一键匹配', ok: true, info }, ...l].slice(0, 50));
       await refresh();
@@ -172,9 +172,12 @@ function ReceivingDetail() {
   };
 
   const onMatch = async () => {
-    await match({ data: { receivingId, batchId: pickBatchId || null } });
-    setShowMatch(false);
-    await refresh();
+    setBusy(true);
+    try {
+      await match({ data: { receivingId, batchIds: pickBatchIds } });
+      setShowMatch(false);
+      await refresh();
+    } catch (e: any) { alert(e.message); } finally { setBusy(false); }
   };
 
   const onRemove = async (id: string) => {
@@ -189,7 +192,7 @@ function ReceivingDetail() {
   };
   const onPrepare = async () => {
     if (!r.batch_id) { alert("请先匹配批次"); return; }
-    if (!window.confirm("将按规则把本批次的运单 / 有客户号箱号 / 有客户号托盘 添加到「待派送列表」？")) return;
+    if (!window.confirm("将按规则把匹配的全部批次的运单 / 有客户号箱号 / 有客户号托盘 添加到「待派送列表」？")) return;
     setBusy(true);
     try {
       const res: any = await prepare({ data: { receivingId } });
@@ -219,13 +222,13 @@ function ReceivingDetail() {
         </div>
         <div className="flex gap-2">
           {!isFinal && (
-            <button disabled={busy} onClick={() => { setPickBatchId(r.batch_id ?? ""); setShowMatch(true); }}
+            <button disabled={busy} onClick={() => { setPickBatchIds(r.batch_ids); setShowMatch(true); }}
               className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10">
-              {r.batch_id ? "更换批次" : "匹配批次"}
+              {r.batch_id ? "管理匹配批次" : "匹配批次"}
             </button>
           )}
           {/* 确认到件后可重复同步批次内容；已进入队列或已派送的项目会跳过。 */}
-          <button onClick={onPrepare} disabled={busy || !r.batch_id || r.status !== 'confirmed'} title={r.status !== 'confirmed' ? '请先确认到件' : '将本批次加入待派送列表，已加入的项目不会重复添加'}
+          <button onClick={onPrepare} disabled={busy || !r.batch_id || r.status !== 'confirmed'} title={r.status !== 'confirmed' ? '请先确认到件' : '将匹配的全部批次加入待派送列表，已加入的项目不会重复添加'}
             className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20 disabled:opacity-50">
             <Truck className="h-3.5 w-3.5" />准备派送
           </button>
@@ -255,15 +258,13 @@ function ReceivingDetail() {
 
       {/* Matched batch summary */}
       <Card title="匹配批次">
-        {r.batches ? (
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Link to="/admin/batches/$batchId" params={{ batchId: r.batches.id }} className="font-mono text-brand hover:underline">{receivingBatchLabel(r.batches)}</Link>
-            <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={r.batches.status} />
-            <span className="text-xs text-slate-400">{METHOD_LABEL[r.batches.shipping_method] ?? r.batches.shipping_method} · 发货 {r.batches.planned_ship_date} · 目的地 {r.batches.destination_code ?? "—"}</span>
+        {r.matched_batches.length ? r.matched_batches.map((batch: any) => (
+          <div key={batch.id} className="flex flex-wrap items-center gap-3 py-1 text-sm">
+            <Link to="/admin/batches/$batchId" params={{batchId:batch.id}} className="font-mono text-brand hover:underline">{receivingBatchLabel(batch)}</Link>
+            <StatusBadge map={BATCH_STATUS_LABEL} color={BATCH_STATUS_COLOR} value={batch.status} />
           </div>
-        ) : (
-          <div className="text-sm text-slate-400">尚未匹配批次（仅可匹配「已发货」状态的批次；扫描首个运单/箱号/托盘后会自动匹配）</div>
-        )}
+        )) : <p className="text-sm text-slate-400">尚未匹配批次，扫描首件会自动匹配所属批次。</p>}
+        <p className="mt-2 text-xs text-slate-400">可勾选多个已发货或已到件批次，也可扫描批次号追加匹配。扫描订单号仅在订单下恰有一个运单时有效，与扫描该运单号等效。多个运单的订单请逐单扫描。</p>
       </Card>
 
       {/* Scan input + summary */}
@@ -275,7 +276,7 @@ function ReceivingDetail() {
             <>
               <form onSubmit={onScan} className="flex gap-2">
                 <input ref={inputRef} value={code} onChange={(e) => setCode(e.target.value)}
-                  placeholder="扫描或输入运单号 / 箱号 (BOX...) / 托盘号 (PAL...) — 自动识别，或点击确认加入"
+                  placeholder="运单号 / 单运单订单号 / 箱号 / 托盘号"
                   className="min-w-0 flex-1 rounded-md border border-brand/40 bg-white/5 px-3 py-2.5 text-sm text-slate-100 focus:border-brand focus:outline-none"
                   autoComplete="off" />
                 <button type="submit" disabled={!code.trim() || busy}
@@ -389,19 +390,19 @@ function ReceivingDetail() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0A0F1A] p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold inline-flex items-center gap-2"><ScanLine className="h-4 w-4 text-brand" />匹配批次（仅已发货）</h2>
+              <h2 className="font-display text-lg font-bold inline-flex items-center gap-2"><ScanLine className="h-4 w-4 text-brand" />匹配多个批次</h2>
               <button onClick={() => setShowMatch(false)}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
-            <select value={pickBatchId} onChange={(e) => setPickBatchId(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-slate-100 [&>option]:bg-[#0E1626]">
-              <option value="">— 解除匹配 —</option>
-              {batchesQ.data?.batches
-                .filter((b: any) => b.status === "shipped")
-                .map((b: any) => (
-                  <option key={b.id} value={b.id}>{receivingBatchLabel(b)} · {METHOD_LABEL[b.shipping_method] ?? b.shipping_method} · {BATCH_STATUS_LABEL[b.status]}</option>
-                ))}
-            </select>
-            <button onClick={onMatch} className="mt-3 w-full rounded-md bg-brand py-2 text-sm font-semibold text-white hover:bg-brand/90">保存</button>
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {batchesQ.data?.batches.filter((b: any) => ['shipped','arrived'].includes(b.status) || r.batch_ids.includes(b.id)).map((b: any) => (
+                <label key={b.id} className="flex items-start gap-2 rounded-md border border-white/10 p-2 text-sm">
+                  <input type="checkbox" checked={pickBatchIds.includes(b.id)} onChange={e => setPickBatchIds(ids => e.target.checked ? [...ids,b.id] : ids.filter(id => id !== b.id))} />
+                  <span>{receivingBatchLabel(b)} · {BATCH_STATUS_LABEL[b.status]}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">已选择 {pickBatchIds.length} 个批次，取消全部勾选可解除匹配。</p>
+            <button disabled={busy} onClick={onMatch} className="mt-3 w-full rounded-md bg-brand py-2 text-sm font-semibold text-white hover:bg-brand/90">保存</button>
           </div>
         </div>
       )}

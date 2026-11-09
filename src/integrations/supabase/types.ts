@@ -3745,6 +3745,7 @@ export type Database = {
       receivings: {
         Row: {
           batch_id: string | null
+          batch_ids: string[]
           confirmed_at: string | null
           created_at: string
           created_by: string | null
@@ -3757,6 +3758,7 @@ export type Database = {
         }
         Insert: {
           batch_id?: string | null
+          batch_ids?: string[]
           confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -3769,6 +3771,7 @@ export type Database = {
         }
         Update: {
           batch_id?: string | null
+          batch_ids?: string[]
           confirmed_at?: string | null
           created_at?: string
           created_by?: string | null

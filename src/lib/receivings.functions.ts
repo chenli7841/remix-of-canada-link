@@ -7,7 +7,7 @@ async function assertStaff(supabase: any, userId: string) {
   if (!data) throw new Error("Forbidden");
 }
 
-import { detectScanKind, SCAN_KIND_LABEL } from "@/lib/scan-detect";
+import { SCAN_KIND_LABEL } from "@/lib/scan-detect";
 
 // ===== List receivings =====
 export const listReceivings = createServerFn({ method: "GET" })
@@ -18,12 +18,15 @@ export const listReceivings = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("receivings")
       .select(
-        "id, receiving_no, batch_id, warehouse_code, status, notes, confirmed_at, created_at, batches:batch_id(batch_no, display_name, planned_ship_date, shipping_method, status)",
+        "id, receiving_no, batch_id, batch_ids, warehouse_code, status, notes, confirmed_at, created_at, batches:batch_id(batch_no, display_name, planned_ship_date, shipping_method, status)",
       )
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
-    return { receivings: data ?? [] };
+    const ids = [...new Set((data ?? []).flatMap(r => r.batch_ids ?? (r.batch_id ? [r.batch_id] : [])))];
+    const batches = ids.length ? await supabaseAdmin.from('batches').select('id,batch_no,display_name,planned_ship_date,shipping_method,status').in('id',ids) : {data:[],error:null};
+    if (batches.error) throw new Error(batches.error.message);
+    return { receivings: (data ?? []).map(r => ({...r, matched_batches:(batches.data ?? []).filter(b => (r.batch_ids ?? []).includes(b.id))})) };
   });
 
 // ===== Create receiving =====
@@ -67,23 +70,20 @@ export const createReceiving = createServerFn({ method: "POST" })
 // ===== Match a batch (or unmatch when batch_id null) =====
 export const matchReceivingBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { receivingId: string; batchId: string | null }) => d)
+  .inputValidator((d: { receivingId: string; batchId?: string | null; batchIds?: string[] }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("receivings")
-      .update({
-        batch_id: data.batchId,
-        status: data.batchId ? "matched" : "open",
-      })
-      .eq("id", data.receivingId);
+    const batchIds = data.batchIds ?? (data.batchId ? [data.batchId] : []);
+    const { error } = await (supabaseAdmin as any).rpc('set_receiving_batches', {
+      _receiving_id: data.receivingId, _batch_ids: batchIds, _operator_id: context.userId,
+    });
     if (error) throw new Error(error.message);
     await recordAdminLog(supabaseAdmin, {
       entity_type: "receiving",
       entity_id: data.receivingId,
-      action: data.batchId ? "match_batch" : "unmatch_batch",
-      after: { batch_id: data.batchId },
+      action: batchIds.length ? "match_batch" : "unmatch_batch",
+      after: { batch_ids: batchIds },
       operator_id: context.userId,
     });
     return { ok: true };
@@ -100,83 +100,36 @@ export const scanReceive = createServerFn({ method: "POST" })
     await assertReturnReminder(supabaseAdmin, 'scanReceive', data, { code: data.code });
     const code = data.code.trim();
     if (!code) throw new Error("空扫描");
-    const kind = detectScanKind(code);
-
-    // 扫描批次号 → 直接把本次入库匹配到该批次
-    if (kind === "batch") {
-      const { data: b } = await supabaseAdmin
-        .from("batches")
-        .select("id, batch_no")
-        .eq("batch_no", code)
-        .maybeSingle();
-      if (!b) throw new Error(`批次 ${code} 不存在`);
-      await supabaseAdmin
-        .from("receivings")
-        .update({ batch_id: b.id, status: "matched" })
-        .eq("id", data.receivingId);
-      await recordAdminLog(supabaseAdmin, {
-        entity_type: "receiving",
-        entity_id: data.receivingId,
-        action: "scan_match_batch",
-        after: { batch_id: b.id, batch_no: b.batch_no },
-        operator_id: context.userId,
-        note: `扫码匹配批次 ${b.batch_no}`,
+    const { data: recv, error: recvError } = await (supabaseAdmin as any).from('receivings')
+      .select('batch_id,batch_ids,status').eq('id', data.receivingId).single();
+    if (recvError || !recv) throw new Error('收货单读取失败');
+    if (!['open','matched'].includes(recv.status)) throw new Error('收货单已确认，不能继续扫描');
+    const batchIds: string[] = recv.batch_ids ?? (recv.batch_id ? [recv.batch_id] : []);
+    const { resolveReceivingCode } = await import('./receiving-scan.server');
+    const item = await resolveReceivingCode(supabaseAdmin, code);
+    const { kind, ref_id, label } = item;
+    if (kind === 'batch') {
+      const { error } = await (supabaseAdmin as any).rpc('set_receiving_batches', {
+        _receiving_id: data.receivingId, _batch_ids: [ref_id], _operator_id: context.userId, _append: true,
       });
-      return { ok: true, kind, extra: false, scan_id: null, info: `批次 ${b.batch_no} 已匹配` };
+      if (error) throw new Error(error.message);
+      await recordAdminLog(supabaseAdmin, { entity_type:'receiving', entity_id:data.receivingId,
+        action:'scan_match_batch', after:{batch_id:ref_id}, operator_id:context.userId });
+      return { ok:true,kind,extra:false,scan_id:null,info: '已添加匹配批次 ' + label };
     }
-
-    let ref_id: string | null = null;
-    let label: string = code;
-    let itemBatch: string | null = null;
-    if (kind === "carton") {
-      const { data: c } = await supabaseAdmin
-        .from("cartons")
-        .select("id, carton_no, batch_id")
-        .eq("carton_no", code)
-        .maybeSingle();
-      if (!c) throw new Error(`箱号 ${code} 不存在`);
-      ref_id = c.id;
-      label = c.carton_no ?? code;
-      itemBatch = (c as any).batch_id ?? null;
-    } else if (kind === "pallet") {
-      const { data: p } = await supabaseAdmin
-        .from("pallets")
-        .select("id, pallet_no, batch_id")
-        .eq("pallet_no", code)
-        .maybeSingle();
-      if (!p) throw new Error(`托盘 ${code} 不存在`);
-      ref_id = p.id;
-      label = p.pallet_no ?? code;
-      itemBatch = (p as any).batch_id ?? null;
-    } else {
-      let w: any = (
-        await supabaseAdmin
-          .from("waybills")
-          .select("id, waybill_no, assigned_batch_id")
-          .eq("waybill_no", code)
-          .maybeSingle()
-      ).data;
-      if (!w) {
-        try {
-          const { data: hit } = await supabaseAdmin.rpc("find_by_any_no", { _input: code });
-          if (hit && (hit as any).kind === "waybill") {
-            w = (
-              await supabaseAdmin
-                .from("waybills")
-                .select("id, waybill_no, assigned_batch_id")
-                .eq("id", (hit as any).id)
-                .maybeSingle()
-            ).data;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      if (!w) throw new Error(`运单 ${code} 不存在`);
-      ref_id = w.id;
-      label = w.waybill_no ?? code;
-      itemBatch = w.assigned_batch_id ?? null;
+    // Infer membership through all nesting levels, including legacy cartons without batch IDs.
+    const { loadReceivingContents } = await import('./receiving-bulk.server');
+    let currentBatchIds = batchIds;
+    if (!batchIds.length && item.batchId) {
+      const { error } = await (supabaseAdmin as any).rpc('set_receiving_batches', {
+        _receiving_id:data.receivingId, _batch_ids:[item.batchId], _operator_id:context.userId, _append:true,
+      });
+      if (error) throw new Error(error.message);
+      currentBatchIds = [item.batchId];
     }
+    const contents = await loadReceivingContents(supabaseAdmin, currentBatchIds);
+    const collection = kind === 'carton' ? contents.cartons : kind === 'pallet' ? contents.pallets : contents.waybills;
+    const extra = currentBatchIds.length > 0 && !collection.some(x => x.id === ref_id);
 
     // upsert (idempotent)
     const { data: scanRow, error: upErr } = await supabaseAdmin
@@ -190,10 +143,10 @@ export const scanReceive = createServerFn({ method: "POST" })
           operator_id: context.userId,
           scanned_at: new Date().toISOString(),
         },
-        { onConflict: "receiving_id,kind,ref_id" },
+        { onConflict: "receiving_id,kind,ref_id", ignoreDuplicates: true },
       )
       .select("id")
-      .single();
+      .maybeSingle();
     if (upErr) throw new Error(upErr.message);
     await recordAdminLog(supabaseAdmin, {
       entity_type: "receiving",
@@ -203,22 +156,6 @@ export const scanReceive = createServerFn({ method: "POST" })
       operator_id: context.userId,
       note: `扫码收货 ${label}`,
     });
-
-    // Auto-match batch: if receiving has no batch & scanned item belongs to a batch
-    const { data: recv } = await supabaseAdmin
-      .from("receivings")
-      .select("batch_id")
-      .eq("id", data.receivingId)
-      .maybeSingle();
-    if (recv && !recv.batch_id && itemBatch) {
-      await supabaseAdmin
-        .from("receivings")
-        .update({ batch_id: itemBatch, status: "matched" })
-        .eq("id", data.receivingId);
-    }
-
-    const currentBatch = recv?.batch_id ?? itemBatch;
-    const extra = !!currentBatch && itemBatch !== currentBatch;
 
     return {
       ok: true,
@@ -232,21 +169,21 @@ export const scanReceive = createServerFn({ method: "POST" })
 // ===== Record all expected items as received, without finalizing the receiving =====
 export const matchAllReceiving = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { receivingId: string; batchId: string }) => d)
+  .inputValidator((d: { receivingId: string; batchId?: string }) => d)
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const recv = await supabaseAdmin.from('receivings').select('batch_id,status').eq('id', data.receivingId).single();
+    const recv = await supabaseAdmin.from('receivings').select('batch_id,batch_ids,status').eq('id', data.receivingId).single();
     if (recv.error || !recv.data) throw new Error('收货单读取失败');
-    if (!recv.data.batch_id || recv.data.batch_id !== data.batchId) throw new Error('请先匹配批次，或刷新后重试');
+    if (!recv.data.batch_id || (data.batchId && recv.data.batch_id !== data.batchId)) throw new Error('请先匹配批次，或刷新后重试');
     if (!['open', 'matched'].includes(recv.data.status)) throw new Error('收货单已确认，不能一键匹配');
     const { assertReturnReminder } = await import('./return-reminder.server');
-    await assertReturnReminder(supabaseAdmin, 'matchAllReceiving', data, { batchIds: [data.batchId] });
+    await assertReturnReminder(supabaseAdmin, 'matchAllReceiving', data, { batchIds: (recv.data as any).batch_ids ?? [recv.data.batch_id] });
     const { recordAllReceivingScans } = await import('./receiving-bulk.server');
-    const counts = await recordAllReceivingScans(supabaseAdmin, data.receivingId, data.batchId, context.userId);
+    const counts = await recordAllReceivingScans(supabaseAdmin, data.receivingId, (recv.data as any).batch_ids ?? [recv.data.batch_id], context.userId);
     await recordAdminLog(supabaseAdmin, {
       entity_type: 'receiving', entity_id: data.receivingId, action: 'match_all_receiving',
-      after: { batch_id: data.batchId, ...counts }, operator_id: context.userId,
+      after: { batch_ids: recv.data.batch_ids, ...counts }, operator_id: context.userId,
       note: '一键匹配全部到货（含内部运单、箱号及托盘），已有扫描记录保留',
     });
     return { ok: true, counts };
@@ -305,7 +242,7 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
     let expected = { waybills: [] as any[], cartons: [] as any[], pallets: [] as any[] };
     if (recv.batch_id) {
       const { loadReceivingContents } = await import('./receiving-bulk.server');
-      expected = await loadReceivingContents(supabaseAdmin, recv.batch_id);
+      expected = await loadReceivingContents(supabaseAdmin, (recv as any).batch_ids ?? [recv.batch_id]);
     }
 
     const scanned = {
@@ -354,7 +291,11 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
       ),
     };
 
-    return { receiving: recv, scans: scans ?? [], expected, direct, secondary, diff };
+    const batchIds = (recv as any).batch_ids ?? (recv.batch_id ? [recv.batch_id] : []);
+    const matched = batchIds.length ? await supabaseAdmin.from('batches')
+      .select('id,batch_no,display_name,planned_ship_date,shipping_method,status,destination_code').in('id',batchIds) : {data:[],error:null};
+    if (matched.error) throw new Error(matched.error.message);
+    return { receiving: {...recv, batch_ids:batchIds, matched_batches:matched.data ?? []}, scans: scans ?? [], expected, direct, secondary, diff };
   });
 
 // ===== Confirm receiving: mark batch arrived + sync waybills + add tracking event =====
@@ -366,7 +307,7 @@ export const confirmReceiving = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: recv } = await supabaseAdmin
       .from("receivings")
-      .select("id, batch_id, status, warehouse_code")
+      .select("id, batch_id, batch_ids, status, warehouse_code")
       .eq("id", data.receivingId)
       .maybeSingle();
     if (!recv) throw new Error("收货单不存在");
@@ -374,11 +315,12 @@ export const confirmReceiving = createServerFn({ method: "POST" })
     if (recv.status === "confirmed" || recv.status === "closed") throw new Error("收货单已确认");
 
     const { assertReturnReminder } = await import('./return-reminder.server');
-    await assertReturnReminder(supabaseAdmin, 'confirmReceiving', data, { batchIds: [recv.batch_id] });
+    await assertReturnReminder(supabaseAdmin, 'confirmReceiving', data, { batchIds: (recv as any).batch_ids ?? [recv.batch_id] });
 
-    const { data: result, error } = await (supabaseAdmin as any).rpc("confirm_receiving_atomic", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("confirm_receiving_multi_atomic", {
       _receiving_id: data.receivingId,
       _batch_id: recv.batch_id,
+      _expected_batch_ids: recv.batch_ids,
       _operator_id: context.userId,
       _location: data.location_zh || null,
     });

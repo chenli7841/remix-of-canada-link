@@ -1,5 +1,6 @@
 // Read every page, including contents nested in boxes/pallets without a batch ID.
-export async function loadReceivingContents(db: any, batchId: string) {
+export async function loadReceivingContents(db: any, batchId: string | string[]) {
+  const batchIds = Array.isArray(batchId) ? batchId : [batchId];
   async function read(table: string, fields: string, column: string, ids: string[]) {
     const found = new Map<string, any>();
     for (let start = 0; start < ids.length; start += 100) {
@@ -13,16 +14,16 @@ export async function loadReceivingContents(db: any, batchId: string) {
     }
     return [...found.values()];
   }
-  const pallets = await read('pallets', 'id,pallet_no', 'batch_id', [batchId]);
+  const pallets = await read('pallets', 'id,pallet_no', 'batch_id', batchIds);
   const cartonFields = 'id,carton_no,pallet_id';
   const cartons = [...new Map([
-    ...await read('cartons', cartonFields, 'batch_id', [batchId]),
+    ...await read('cartons', cartonFields, 'batch_id', batchIds),
     ...await read('cartons', cartonFields, 'pallet_id', pallets.map(p => p.id)),
   ].map(c => [c.id, c])).values()];
   // Customer numbers belong to parent orders, not the waybills table.
   const wbFields = 'id,waybill_no,status,carton_id,pallet_id,forwarding_orders:forwarding_id(customer_code),orders:order_id(customer_code)';
   const waybills = [...new Map([
-    ...await read('waybills', wbFields, 'assigned_batch_id', [batchId]),
+    ...await read('waybills', wbFields, 'assigned_batch_id', batchIds),
     ...await read('waybills', wbFields, 'carton_id', cartons.map(c => c.id)),
     ...await read('waybills', wbFields, 'pallet_id', pallets.map(p => p.id)),
   ].map(w => [w.id, w])).values()];
@@ -35,7 +36,7 @@ export async function loadReceivingContents(db: any, batchId: string) {
   };
 }
 
-export async function recordAllReceivingScans(db: any, receivingId: string, batchId: string, operatorId: string) {
+export async function recordAllReceivingScans(db: any, receivingId: string, batchId: string | string[], operatorId: string) {
   const contents = await loadReceivingContents(db, batchId);
   const scannedAt = new Date().toISOString();
   const rows = [
@@ -46,8 +47,8 @@ export async function recordAllReceivingScans(db: any, receivingId: string, batc
   if (!rows.length) throw new Error('当前批次没有可匹配的运单、箱号或托盘');
   if (rows.some(row => !row.code)) throw new Error('批次中存在缺少编号的记录，请先补全编号');
   // Recheck after loading: refuse stale pages and finalized receivings.
-  const recv = await db.from('receivings').select('batch_id,status').eq('id', receivingId).single();
-  if (recv.error || recv.data?.batch_id !== batchId || !['open', 'matched'].includes(recv.data?.status)) {
+  const recv = await db.from('receivings').select('batch_id,batch_ids,status').eq('id', receivingId).single();
+  if (recv.error || JSON.stringify([...(recv.data?.batch_ids ?? [recv.data?.batch_id])].sort()) !== JSON.stringify([...(Array.isArray(batchId) ? batchId : [batchId])].sort()) || !['open', 'matched'].includes(recv.data?.status)) {
     throw new Error('收货单状态或匹配批次已变化，请刷新后重试');
   }
   // One atomic insert; repeat clicks never overwrite existing scan operators/times.

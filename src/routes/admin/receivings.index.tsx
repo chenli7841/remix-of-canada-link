@@ -62,7 +62,7 @@ function ReceivingsPage() {
               <StatusBadge map={RECV_LABEL} color={RECV_COLOR} value={r.status}/>
             </div>
             <div className="mt-3 break-words text-sm font-semibold text-slate-100">
-              {r.batches ? receivingBatchLabel(r.batches) : "— 未匹配批次 —"}
+              {r.matched_batches?.length ? r.matched_batches.map(receivingBatchLabel).join('、') : "— 未匹配批次 —"}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span>{r.batches?.shipping_method ? METHOD_LABEL[r.batches.shipping_method] : "方式未指定"}</span>

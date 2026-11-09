@@ -64,7 +64,7 @@ test('either confirmation can cancel without making a request',async()=>{
  const code=ts.transpileModule(src.slice(start,end)+'\nonMatchAll();',{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
  for(const answers of [[false],[true,false],[true,true]]) {
   let calls=0,confirms=0;
-  await vm.runInNewContext(code,{busy:false,isFinal:false,r:{batch_id:'b'},receivingId:'r',window:{confirm:()=>answers[confirms++]},setBusy(){},matchAll:async()=>{calls++;return{counts:{waybills:1,cartons:0,pallets:0}}},setLog(){},refresh:async()=>{},alert(){},Date});
+  await vm.runInNewContext(code,{receivingBatchLabel:()=>"batch",busy:false,isFinal:false,r:{matched_batches:[],batch_id:'b'},receivingId:'r',window:{confirm:()=>answers[confirms++]},setBusy(){},matchAll:async()=>{calls++;return{counts:{waybills:1,cartons:0,pallets:0}}},setLog(){},refresh:async()=>{},alert(){},Date});
   assert.equal(calls,answers.every(Boolean)?1:0);assert.equal(confirms,answers.length);
  }
 });
@@ -77,4 +77,12 @@ test('customer numbers come from forwarding/order parents; unlinked waybills rem
  assert.equal(result.waybills.find(w=>w.id==='0000').customer_code,'05342');
  assert.equal(result.waybills.find(w=>w.id==='0001').customer_code,'00123');
  assert.equal(result.waybills.find(w=>w.id==='0002').customer_code,null);
+});
+
+test('multiple batches include both contents and reject changed selection',async()=>{
+ const db=database();db.tables.receivings[0].batch_ids=['b','b2'];
+ db.tables.waybills.push({id:'w2',waybill_no:'W2',assigned_batch_id:'b2'});
+ const result=await exports.recordAllReceivingScans(db,'r',['b','b2'],'staff');
+ assert.equal(result.waybills,1102);
+ await assert.rejects(exports.recordAllReceivingScans(db,'r',['b'],'staff'),/批次已变化/);
 });
