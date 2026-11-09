@@ -327,13 +327,16 @@ function ReceivingDetail() {
                     ...diff.missing_pallets.map((p: any) => `托盘 ${p.pallet_no}`),
                   ]} />
               )}
-              {diff.extra_scans.length > 0 && (
-                <DiffBlock title="多扫 / 差异 (Extra)" cls="text-amber-300 bg-amber-500/10"
-                  items={diff.extra_scans.map((s: any) => `${s.kind === 'waybill' ? '运单' : s.kind === 'carton' ? '箱号' : '托盘'} ${s.code}`)} />
+              {(diff.extra_scans.length + issues.length) > 0 && (
+                <a href="#receiving-differences" className="block rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200 hover:bg-amber-500/20">
+                  <div className="font-semibold">多扫 / 差异（{diff.extra_scans.length + issues.length}）</div>
+                  <div className="mt-1 text-xs">已识别多扫 {diff.extra_scans.length} 条 · 扫描错误 / 待核对 {issues.length} 条</div>
+                  <div className="mt-2 text-xs underline">查看全部差异及操作 ↓</div>
+                </a>
               )}
               {direct.waybills.length + direct.cartons.length + direct.pallets.length > 0
                 && diff.missing_waybills.length === 0 && diff.missing_cartons.length === 0
-                && diff.missing_pallets.length === 0 && diff.extra_scans.length === 0 && (
+                && diff.missing_pallets.length === 0 && diff.extra_scans.length === 0 && issues.length === 0 && (
                   <div className="rounded-md bg-emerald-500/10 p-2 text-xs text-emerald-300">✓ 直挂层全部匹配</div>
                 )}
             </div>
@@ -341,12 +344,7 @@ function ReceivingDetail() {
         </Card>
       </div>
 
-      <Card title={`分级确认 / 扫描明细（已记录 ${scans.length} 项）`}>
-        <p className="mb-3 text-xs text-slate-400">按批次展开托盘、箱号和运单。确认容器会同步内部全部明细，逐单收齐后自动确认上层。撤销容器会撤销内部确认。</p>
-        <ReceivingHierarchy batches={r.hierarchy_batches} expected={expected} scans={scans} disabled={isFinal || busy}
-          onConfirm={value => onScan(undefined,value)} onRemove={onRemove} />
-      </Card>
-
+<div id="receiving-differences" className="scroll-mt-24">
       {(diff.extra_scans.length>0 || issues.length>0) && <Card title={`多扫 / 差异（${diff.extra_scans.length + issues.length}）`}>
         <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。合并仅纳入此项及内部明细，保留原批次。</p>
         <div className="space-y-2">{issues.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-rose-500/20 p-3 text-xs">
@@ -379,6 +377,14 @@ function ReceivingDetail() {
           </>}
         </div>)}</div>
       </Card>}
+
+</div>
+
+      <Card title={`分级确认 / 扫描明细（已记录 ${scans.length} 项）`}>
+        <p className="mb-3 text-xs text-slate-400">按批次展开托盘、箱号和运单。确认容器会同步内部全部明细，逐单收齐后自动确认上层。撤销容器会撤销内部确认。</p>
+        <ReceivingHierarchy batches={r.hierarchy_batches} expected={expected} scans={scans} disabled={isFinal || busy}
+          onConfirm={value => onScan(undefined,value)} onRemove={onRemove} />
+      </Card>
 
       <Card title="备注">
         <NotesEditor initial={r.notes ?? ""} disabled={isFinal || busy} onSave={onSaveNotes} />
