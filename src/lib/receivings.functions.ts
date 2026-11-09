@@ -380,3 +380,24 @@ export const dismissReceivingIssue=createServerFn({method:'POST'}).middleware([r
  if(result.error)throw new Error(result.error.message);
  return {ok:true};
 });
+
+// Merge only the scanned unit's batch; other matched batches are never marked scanned here.
+export const mergeReceivingScanBatch = createServerFn({method:'POST'})
+.middleware([requireSupabaseAuth])
+.inputValidator((d:{scanId:string;batchId:string})=>d)
+.handler(async({data,context})=>{
+ await assertStaff(context.supabase,context.userId);
+ const {supabaseAdmin}=await import('@/integrations/supabase/client.server');
+ const found=await supabaseAdmin.from('receiving_scans').select('*').eq('id',data.scanId).single();
+ if(found.error||!found.data)throw new Error('扫描记录不存在');
+ const scan=found.data;
+ const {receivingDifferenceDetails}=await import('./receiving-differences.server');
+ const details=await receivingDifferenceDetails(supabaseAdmin,[scan]);
+ const batchId=details[0]?.batch?.id;
+ if(!batchId||batchId!==data.batchId)throw new Error('所属批次已变化或尚未分配，请刷新后重试');
+ const {assertReturnReminder}=await import('./return-reminder.server');
+ await assertReturnReminder(supabaseAdmin,'mergeReceivingScanBatch',data,{batchIds:[batchId]});
+ const result=await (supabaseAdmin as any).rpc('merge_receiving_batch',{_receiving_id:scan.receiving_id,_kind:scan.kind,_ref_id:scan.ref_id,_batch_id:batchId,_operator_id:context.userId});
+ if(result.error)throw new Error(result.error.message);
+ return {ok:true};
+});

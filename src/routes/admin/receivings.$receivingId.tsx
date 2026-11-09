@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import {
   getReceivingDetail, scanReceive, removeReceivingScan,
-  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScan, dismissReceivingIssue,
+  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScanBatch, mergeReceivingScan, dismissReceivingIssue,
 } from "@/lib/receivings.functions";
 import { prepareDelivery } from "@/lib/delivery-queue.functions";
 import { listBatches } from "@/lib/orders.functions";
@@ -60,6 +60,7 @@ function ReceivingDetail() {
   const scan = useReturnReminder(scanReceive);
   const matchAll = useReturnReminder(matchAllReceiving);
   const removeScan = useServerFn(removeReceivingScan);
+  const mergeBatch = useReturnReminder(mergeReceivingScanBatch);
   const mergeScan = useReturnReminder(mergeReceivingScan);
   const dismissIssue = useServerFn(dismissReceivingIssue);
   const confirm = useReturnReminder(confirmReceiving);
@@ -346,7 +347,7 @@ function ReceivingDetail() {
 
 <div id="receiving-differences" className="scroll-mt-24">
       {(diff.extra_scans.length>0 || issues.length>0) && <Card title={`多扫 / 差异（${diff.extra_scans.length + issues.length}）`}>
-        <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。合并仅纳入此项及内部明细，保留原批次。</p>
+        <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。单箱/单件合并仅纳入当前项及内部明细；整批次合并会加入所属批次并匹配整批到货。上方统计与未到清单同步更新，最后仍需确认到件。</p>
         <div className="mt-2 space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
           <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">不在本次匹配范围</span>
           <span className="text-sky-200">所属批次：{item.batch ? <Link to="/admin/batches/$batchId" params={{batchId:item.batch.id}} className="underline">{receivingBatchLabel(item.batch)}</Link> : '未分配批次'}</span>
@@ -357,7 +358,11 @@ function ReceivingDetail() {
             <button disabled={busy} className="ml-auto rounded bg-emerald-600 px-3 py-2 disabled:opacity-50" onClick={async()=>{
               if(!window.confirm('合并 '+item.code+' 及内部明细到本次收货？原所属批次保持不变。'))return;
               setBusy(true);try{await mergeScan({data:{scanId:item.id}});await refresh();}catch(e:any){alert(e.message);}finally{setBusy(false);}
-            }}>合并进来</button>
+            }}>{item.kind==='carton'?'单箱合并':item.kind==='pallet'?'单托合并':'单件合并'}</button>
+            <button disabled={busy || !item.batch} title={!item.batch?'未分配批次，不能整批合并':undefined} className="rounded bg-blue-600 px-3 py-2 disabled:opacity-40" onClick={async()=>{
+              if(!item.batch || !window.confirm('整批次合并：将 '+receivingBatchLabel(item.batch)+' 加入本收货单，并将该批次全部托盘、箱号及运单匹配到货。其他批次保持不变。确认整批已到齐？'))return;
+              setBusy(true);try{await mergeBatch({data:{scanId:item.id,batchId:item.batch.id}});await refresh();}catch(e:any){alert(e.message);await refresh();}finally{setBusy(false);}
+            }}>整批次合并</button>
             <button disabled={busy} className="rounded border border-rose-500/40 px-3 py-2 text-rose-300 disabled:opacity-50" onClick={()=>onRemove(item.id)}>踢出去</button>
           </>}
         </div>)}</div>
