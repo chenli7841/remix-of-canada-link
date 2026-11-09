@@ -365,8 +365,8 @@ export const mergeReceivingScan = createServerFn({method:'POST'})
     if(error || !scan) throw new Error('扫描记录不存在');
     const {assertReturnReminder}=await import('./return-reminder.server');
     await assertReturnReminder(supabaseAdmin,'mergeReceivingScan',data,{code:scan.code});
-    const result=await (supabaseAdmin as any).rpc('scan_receiving_hierarchy',{
-      _receiving_id:scan.receiving_id,_kind:scan.kind,_ref_id:scan.ref_id,_operator_id:context.userId,_include:true,
+    const result=await (supabaseAdmin as any).rpc('merge_receiving_unit_checked',{
+      _receiving_id:scan.receiving_id,_kind:scan.kind,_ref_id:scan.ref_id,_operator_id:context.userId,
     });
     if(result.error) throw new Error(result.error.message);
     return {ok:true};

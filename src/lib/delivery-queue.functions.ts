@@ -101,6 +101,11 @@ export const prepareDelivery = createServerFn({ method: "POST" })
     let notifiedCustomers = 0;
     const matchedIds:string[] = (recv as any).batch_ids ?? [recv.batch_id];
     const included:any[] = (recv as any).included_units ?? [];
+    const {loadReceivingContents: loadSpecialContents}=await import('./receiving-bulk.server');
+    const special=await loadSpecialContents(supabaseAdmin,[],included.filter(x=>x.handling_status==='pending_special'));
+    const blockedWays=new Set(special.waybills.map(w=>w.id));
+    const blockedCartons=new Set([...special.cartons.map(c=>c.id),...special.waybills.map(w=>w.carton_id)].filter(Boolean));
+    const blockedPallets=new Set([...special.pallets.map(p=>p.id),...special.cartons.map(c=>c.pallet_id),...special.waybills.map(w=>w.pallet_id)].filter(Boolean));
     for (const batchId of [...new Set([...matchedIds,...included.map(x=>x.batch_id ?? null)])]) {
 
     const { loadReceivingContents } = await import('./receiving-bulk.server');
@@ -182,7 +187,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
         added_by: context.userId,
         status: "pending" as const,
       })),
-    ];
+    ].filter(row=>row.kind==='waybill'?!blockedWays.has(row.ref_id):row.kind==='carton'?!blockedCartons.has(row.ref_id):!blockedPallets.has(row.ref_id));
 
     // Keep batches independent; retrying preparation must not overwrite another queue entry.
     let inserted = 0,

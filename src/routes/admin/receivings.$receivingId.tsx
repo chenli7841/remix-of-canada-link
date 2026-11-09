@@ -347,7 +347,7 @@ function ReceivingDetail() {
 
 <div id="receiving-differences" className="scroll-mt-24">
       {(diff.extra_scans.length>0 || issues.length>0) && <Card title={`多扫 / 差异（${diff.extra_scans.length + issues.length}）`}>
-        <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。单箱/单件合并仅纳入当前项及内部明细；整批次合并会加入所属批次并匹配整批到货。上方统计与未到清单同步更新，最后仍需确认到件。</p>
+        <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。单箱/单件合并先核对付款及完成状态：已付款保留原付款记录，未付款标记待特殊处理，已完成也可重新收货；整批次合并会加入所属批次并匹配整批到货。上方统计与未到清单同步更新，最后仍需确认到件。</p>
         <div className="mt-2 space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
           <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">不在本次匹配范围</span>
           <span className="text-sky-200">所属批次：{item.batch ? <Link to="/admin/batches/$batchId" params={{batchId:item.batch.id}} className="underline">{receivingBatchLabel(item.batch)}</Link> : '未分配批次'}</span>
@@ -385,6 +385,12 @@ function ReceivingDetail() {
 
 </div>
 
+      {(r.included_units as any[] ?? []).some(u=>u.handling_status) && <Card title="单件合并 · 付款核对">
+        <div className="space-y-2">{(r.included_units as any[] ?? []).filter(u=>u.handling_status).map(u=><div key={u.kind+u.ref_id} className="rounded border border-slate-700 p-3 text-sm">
+          <span className="font-mono">{u.code}</span> · 已付款 {u.paid_count}/{u.waybill_count} · 原已完成 {u.completed_count}
+          <div className={u.handling_status==='pending_special'?'text-amber-300':'text-emerald-300'}>{u.handling_status==='pending_special'?'待特殊处理：已纳入收货，暂不生成普通派送；后续转特殊处理批次结算。':'已付款：保留原付款记录，重新收货与派送只更新物流状态。'}</div>
+        </div>)}</div>
+      </Card>}
       <Card title={`分级确认 / 扫描明细（已记录 ${scans.length} 项）`}>
         <p className="mb-3 text-xs text-slate-400">按批次展开托盘、箱号和运单。确认容器会同步内部全部明细，逐单收齐后自动确认上层。撤销容器会撤销内部确认。</p>
         <ReceivingHierarchy batches={r.hierarchy_batches} expected={expected} scans={scans} disabled={isFinal || busy}
