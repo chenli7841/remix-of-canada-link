@@ -101,7 +101,7 @@ export const scanReceive = createServerFn({ method: "POST" })
     const code = data.code.trim();
     if (!code) throw new Error("空扫描");
     const { data: recv, error: recvError } = await (supabaseAdmin as any).from('receivings')
-      .select('batch_id,batch_ids,status').eq('id', data.receivingId).single();
+      .select('batch_id,batch_ids,included_units,status').eq('id', data.receivingId).single();
     if (recvError || !recv) throw new Error('收货单读取失败');
     if (!['open','matched'].includes(recv.status)) throw new Error('收货单已确认，不能继续扫描');
     const batchIds: string[] = recv.batch_ids ?? (recv.batch_id ? [recv.batch_id] : []);
@@ -127,43 +127,23 @@ export const scanReceive = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       currentBatchIds = [item.batchId];
     }
-    const contents = await loadReceivingContents(supabaseAdmin, currentBatchIds);
+    const contents = await loadReceivingContents(supabaseAdmin, currentBatchIds, recv.included_units ?? []);
     const collection = kind === 'carton' ? contents.cartons : kind === 'pallet' ? contents.pallets : contents.waybills;
     const extra = currentBatchIds.length > 0 && !collection.some(x => x.id === ref_id);
 
-    // upsert (idempotent)
-    const { data: scanRow, error: upErr } = await supabaseAdmin
-      .from("receiving_scans")
-      .upsert(
-        {
-          receiving_id: data.receivingId,
-          kind,
-          ref_id: ref_id!,
-          code: label,
-          operator_id: context.userId,
-          scanned_at: new Date().toISOString(),
-        },
-        { onConflict: "receiving_id,kind,ref_id", ignoreDuplicates: true },
-      )
-      .select("id")
-      .maybeSingle();
-    if (upErr) throw new Error(upErr.message);
-    await recordAdminLog(supabaseAdmin, {
-      entity_type: "receiving",
-      entity_id: data.receivingId,
-      action: "scan",
-      after: { kind, ref_id, code: label },
-      operator_id: context.userId,
-      note: `扫码收货 ${label}`,
+    if (extra) {
+      const {error} = await supabaseAdmin.from('receiving_scans').upsert({receiving_id:data.receivingId,kind,ref_id,
+        code:label,operator_id:context.userId,scanned_at:new Date().toISOString()},
+        {onConflict:'receiving_id,kind,ref_id',ignoreDuplicates:true});
+      if(error) throw new Error(error.message);
+      await recordAdminLog(supabaseAdmin,{entity_type:'receiving',entity_id:data.receivingId,action:'unmatched_scan',after:{kind,ref_id,code:label},operator_id:context.userId});
+      return {ok:true,kind,extra:true,scan_id:null,info:label+' 不属于匹配清单，已单独列入未匹配单子，等待合并或踢出去'};
+    }
+    const {error: scanError} = await (supabaseAdmin as any).rpc('scan_receiving_hierarchy', {
+      _receiving_id:data.receivingId, _kind:kind, _ref_id:ref_id, _operator_id:context.userId,
     });
-
-    return {
-      ok: true,
-      kind,
-      extra,
-      scan_id: scanRow?.id ?? null,
-      info: `${SCAN_KIND_LABEL[kind]} ${label} ${extra ? "⚠ 不属于当前批次" : "已记录"}`,
-    };
+    if (scanError) throw new Error(scanError.message);
+    return {ok:true,kind,extra:false,scan_id:null,info:SCAN_KIND_LABEL[kind]+' '+label+' 已确认，已同步内部明细及收齐的上层容器'};
   });
 
 // ===== Record all expected items as received, without finalizing the receiving =====
@@ -201,15 +181,12 @@ export const removeReceivingScan = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.scanId)
       .maybeSingle();
-    const { error } = await supabaseAdmin.from("receiving_scans").delete().eq("id", data.scanId);
-    if (error) throw new Error(error.message);
-    await recordAdminLog(supabaseAdmin, {
-      entity_type: "receiving",
-      entity_id: before?.receiving_id ?? data.scanId,
-      action: "remove_scan",
-      before,
-      operator_id: context.userId,
+    if (!before) throw new Error('扫描记录不存在');
+    const {error} = await (supabaseAdmin as any).rpc('scan_receiving_hierarchy', {
+      _receiving_id:before.receiving_id, _kind:before.kind, _ref_id:before.ref_id,
+      _operator_id:context.userId, _remove:true,
     });
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -242,7 +219,7 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
     let expected = { waybills: [] as any[], cartons: [] as any[], pallets: [] as any[] };
     if (recv.batch_id) {
       const { loadReceivingContents } = await import('./receiving-bulk.server');
-      expected = await loadReceivingContents(supabaseAdmin, (recv as any).batch_ids ?? [recv.batch_id]);
+      expected = await loadReceivingContents(supabaseAdmin, (recv as any).batch_ids ?? [recv.batch_id], (recv as any).included_units ?? []);
     }
 
     const scanned = {
@@ -292,10 +269,11 @@ export const getReceivingDetail = createServerFn({ method: "GET" })
     };
 
     const batchIds = (recv as any).batch_ids ?? (recv.batch_id ? [recv.batch_id] : []);
-    const matched = batchIds.length ? await supabaseAdmin.from('batches')
-      .select('id,batch_no,display_name,planned_ship_date,shipping_method,status,destination_code').in('id',batchIds) : {data:[],error:null};
+    const hierarchyBatchIds = [...new Set([...batchIds,...expected.pallets.map(x=>x.batch_id),...expected.cartons.map(x=>x.batch_id),...expected.waybills.map(x=>x.assigned_batch_id)].filter(Boolean))];
+    const matched = hierarchyBatchIds.length ? await supabaseAdmin.from('batches')
+      .select('id,batch_no,display_name,planned_ship_date,shipping_method,status,destination_code').in('id',hierarchyBatchIds) : {data:[],error:null};
     if (matched.error) throw new Error(matched.error.message);
-    return { receiving: {...recv, batch_ids:batchIds, matched_batches:matched.data ?? []}, scans: scans ?? [], expected, direct, secondary, diff };
+    return { receiving: {...recv, batch_ids:batchIds, matched_batches:(matched.data ?? []).filter(b=>batchIds.includes(b.id)), hierarchy_batches:matched.data ?? []}, scans: scans ?? [], expected, direct, secondary, diff };
   });
 
 // ===== Confirm receiving: mark batch arrived + sync waybills + add tracking event =====
@@ -348,4 +326,22 @@ export const updateReceiving = createServerFn({ method: "POST" })
       operator_id: context.userId,
     });
     return { ok: true };
+  });
+
+// Include only the explicitly selected unit and descendants; never its entire foreign batch.
+export const mergeReceivingScan = createServerFn({method:'POST'})
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d:{scanId:string})=>d)
+  .handler(async({data,context})=>{
+    await assertStaff(context.supabase,context.userId);
+    const {supabaseAdmin}=await import('@/integrations/supabase/client.server');
+    const {data:scan,error}=await supabaseAdmin.from('receiving_scans').select('*').eq('id',data.scanId).single();
+    if(error || !scan) throw new Error('扫描记录不存在');
+    const {assertReturnReminder}=await import('./return-reminder.server');
+    await assertReturnReminder(supabaseAdmin,'mergeReceivingScan',data,{code:scan.code});
+    const result=await (supabaseAdmin as any).rpc('scan_receiving_hierarchy',{
+      _receiving_id:scan.receiving_id,_kind:scan.kind,_ref_id:scan.ref_id,_operator_id:context.userId,_include:true,
+    });
+    if(result.error) throw new Error(result.error.message);
+    return {ok:true};
   });

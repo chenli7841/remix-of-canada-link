@@ -1,3 +1,4 @@
+import { ReceivingHierarchy } from "@/components/admin/ReceivingHierarchy";
 import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -7,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import {
   getReceivingDetail, scanReceive, removeReceivingScan,
-  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving,
+  confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScan,
 } from "@/lib/receivings.functions";
 import { prepareDelivery } from "@/lib/delivery-queue.functions";
 import { listBatches } from "@/lib/orders.functions";
@@ -59,6 +60,7 @@ function ReceivingDetail() {
   const scan = useReturnReminder(scanReceive);
   const matchAll = useReturnReminder(matchAllReceiving);
   const removeScan = useServerFn(removeReceivingScan);
+  const mergeScan = useReturnReminder(mergeReceivingScan);
   const confirm = useReturnReminder(confirmReceiving);
   const match = useServerFn(matchReceivingBatch);
   const update = useServerFn(updateReceiving);
@@ -96,24 +98,18 @@ function ReceivingDetail() {
   if (q.isLoading) return <div className="grid place-items-center p-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>;
   if (q.isError) return <div className="p-6 text-rose-400">{(q.error as Error).message}</div>;
 
-  const { receiving: r, scans, direct, secondary, diff } = q.data!;
+  const { receiving: r, scans, expected, direct, secondary, diff } = q.data!;
   const isFinal = r.status === "confirmed" || r.status === "closed";
 
-  const onScan = async (e?: React.FormEvent) => {
+  const onScan = async (e?: React.FormEvent, manualCode?: string) => {
     e?.preventDefault();
-    const c = code.trim(); if (!c || busy) return;
+    const c = (manualCode ?? code).trim(); if (!c || busy) return;
     setBusy(true);
     const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
     try {
       const res: any = await scan({ data: { receivingId, code: c } });
       setLog(l => [{ time, code: c, ok: true, info: res.info, extra: res.extra }, ...l].slice(0, 50));
-      if (res.extra) {
-        playAlertBeep();
-        const keep = window.confirm(`⚠ 差异警告\n\n${res.info}\n\n该件不属于当前匹配批次。\n\n确定要保留这条扫描记录吗？\n（取消将删除该记录）`);
-        if (!keep && res.scan_id) {
-          await removeScan({ data: { scanId: res.scan_id } });
-        }
-      }
+      if (res.extra) playAlertBeep();
       await refresh();
     } catch (err: any) {
       playAlertBeep();
@@ -145,7 +141,7 @@ function ReceivingDetail() {
     if (hasMissing || hasPendingSecondary) {
       const parts: string[] = [];
       if (hasMissing) parts.push(`直挂未到 ${diff.missing_waybills.length} 单 / ${diff.missing_cartons.length} 箱 / ${diff.missing_pallets.length} 托`);
-      if (hasPendingSecondary) parts.push(`待二次确认 ${secondary.pending_count} 项`);
+      if (hasPendingSecondary) parts.push(`内部尚未确认 ${secondary.pending_count} 项`);
       playAlertBeep();
       if (!window.confirm(`⚠ 仍有差异：\n${parts.join("\n")}\n\n仍确认到件？`)) return;
     } else {
@@ -181,9 +177,10 @@ function ReceivingDetail() {
   };
 
   const onRemove = async (id: string) => {
-    if (!window.confirm("移除该扫描？")) return;
-    await removeScan({ data: { scanId: id } });
-    await refresh();
+    if (!window.confirm("撤销此项确认？容器内的确认会同时撤销，所属箱号和托盘也会恢复为待确认。")) return;
+    setBusy(true);
+    try {await removeScan({ data: { scanId: id } });await refresh();}
+    catch(e:any){alert(e.message);}finally{setBusy(false);}
   };
 
   const onSaveNotes = async (notes: string) => {
@@ -206,7 +203,7 @@ function ReceivingDetail() {
   const directCtScanned = direct.cartons.filter((c: any) => scans.some((s: any) => s.kind === "carton" && s.ref_id === c.id)).length;
   const directPlScanned = direct.pallets.filter((p: any) => scans.some((s: any) => s.kind === "pallet" && s.ref_id === p.id)).length;
 
-  const secondaryAllDone = secondary.total_count > 0 && secondary.pending_count === 0;
+
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
@@ -285,7 +282,7 @@ function ReceivingDetail() {
                 </button>
               </form>
         <CameraScanButton disabled={busy} onScan={setCode} />
-              <p className="mt-1.5 text-[11px] text-slate-500">扫描箱号/托盘号仅确认外层；内部明细需进入下方「待二次扫描确认」逐件再次扫描。</p>
+              <p className="mt-1.5 text-[11px] text-slate-500">扫描或手动确认托盘/箱号会同步确认内部明细；逐单扫描时，内部全部收齐后自动确认所属箱号/托盘。</p>
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                 <button type="button" onClick={onMatchAll} disabled={busy || !r.batch_id}
                   className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-40">
@@ -342,45 +339,26 @@ function ReceivingDetail() {
         </Card>
       </div>
 
-      {/* 待二次扫描确认 */}
-      {r.batch_id && secondary.total_count > 0 && (
-        <Card title={
-          <span className="inline-flex items-center gap-2">
-            待二次扫描确认
-            <span className="text-xs text-slate-400">（{secondary.total_count - secondary.pending_count}/{secondary.total_count}）</span>
-            {secondaryAllDone && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                <CheckCircle2 className="h-3 w-3" />全部确认
-              </span>
-            )}
-          </span> as any
-        }>
-          <p className="mb-3 text-[11px] text-slate-500">扫描箱号/托盘号后，需要在统一扫描入口逐件确认内部运单号/箱号。点击编号可一键复制。</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            {secondary.inner_waybills.length > 0 && (
-              <SecondaryList
-                title={`箱内运单 (${secondary.inner_waybills.filter((x: any) => !x.scanned).length} 待扫)`}
-                items={secondary.inner_waybills.map((w: any) => ({ id: w.id, label: w.waybill_no, sub: w.customer_code, scanned: w.scanned }))}
-              />
-            )}
-            {secondary.inner_cartons.length > 0 && (
-              <SecondaryList
-                title={`托盘内箱号 (${secondary.inner_cartons.filter((x: any) => !x.scanned).length} 待扫)`}
-                items={secondary.inner_cartons.map((c: any) => ({ id: c.id, label: c.carton_no, sub: null, scanned: c.scanned }))}
-              />
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* Scan detail — horizontal split */}
-      <Card title={`扫描明细 (${scans.length})`}>
-        <div className="grid gap-3 lg:grid-cols-3">
-          <ScanCol kind="waybill" title="直挂运单" scans={scans} isFinal={isFinal || busy} onRemove={onRemove} />
-          <ScanCol kind="carton" title="直挂箱号" scans={scans} isFinal={isFinal} onRemove={onRemove} />
-          <ScanCol kind="pallet" title="直挂托盘号" scans={scans} isFinal={isFinal} onRemove={onRemove} />
-        </div>
+      <Card title={`分级确认 / 扫描明细（已记录 ${scans.length} 项）`}>
+        <p className="mb-3 text-xs text-slate-400">按批次展开托盘、箱号和运单。确认容器会同步内部全部明细，逐单收齐后自动确认上层。撤销容器会撤销内部确认。</p>
+        <ReceivingHierarchy batches={r.hierarchy_batches} expected={expected} scans={scans} disabled={isFinal || busy}
+          onConfirm={value => onScan(undefined,value)} onRemove={onRemove} />
       </Card>
+
+      {diff.extra_scans.length>0 && <Card title={`未匹配单子（${diff.extra_scans.length}）`}>
+        <p className="mb-3 text-xs text-amber-300">以下项目不属于当前匹配清单，暂不计入收货。合并仅纳入此项及内部明细，保留原批次。</p>
+        <div className="space-y-2">{diff.extra_scans.map((item:any)=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 p-3 text-xs">
+          <span className="break-all font-mono">{item.code}</span><span className="text-amber-300">未匹配</span>
+          <span className="text-slate-400">{fmtDate(item.scanned_at)}</span>
+          {!isFinal && <>
+            <button disabled={busy} className="ml-auto rounded bg-emerald-600 px-3 py-2 disabled:opacity-50" onClick={async()=>{
+              if(!window.confirm('合并 '+item.code+' 及内部明细到本次收货？原所属批次保持不变。'))return;
+              setBusy(true);try{await mergeScan({data:{scanId:item.id}});await refresh();}catch(e:any){alert(e.message);}finally{setBusy(false);}
+            }}>合并进来</button>
+            <button disabled={busy} className="rounded border border-rose-500/40 px-3 py-2 text-rose-300 disabled:opacity-50" onClick={()=>onRemove(item.id)}>踢出去</button>
+          </>}
+        </div>)}</div>
+      </Card>}
 
       <Card title="备注">
         <NotesEditor initial={r.notes ?? ""} disabled={isFinal || busy} onSave={onSaveNotes} />
@@ -409,49 +387,6 @@ function ReceivingDetail() {
 
 <EntityActionLogs entityType="receiving" entityId={receivingId} />
 </div>
-  );
-}
-
-function ScanCol({ kind, title, scans, isFinal, onRemove }: { kind: "waybill" | "carton" | "pallet"; title: string; scans: any[]; isFinal: boolean; onRemove: (id: string) => void }) {
-  const items = scans.filter((s: any) => s.kind === kind);
-  return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02]">
-      <div className="border-b border-white/5 px-3 py-2 text-xs font-semibold text-slate-300">{title} <span className="text-slate-500">({items.length})</span></div>
-      {items.length === 0 ? <div className="py-6 text-center text-[11px] text-slate-500">暂无</div> : (
-        <ul className="max-h-80 divide-y divide-white/5 overflow-y-auto">
-          {items.map((s: any) => (
-            <li key={s.id} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-white/[0.03]">
-              <div className="min-w-0">
-                <div className="truncate font-mono text-slate-200">{s.code}</div>
-                <div className="text-[10px] text-slate-500">{fmtDate(s.scanned_at)}</div>
-              </div>
-              {!isFinal && <button onClick={() => onRemove(s.id)} className="text-rose-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function SecondaryList({ title, items }: { title: string; items: { id: string; label: string; sub?: string | null; scanned: boolean }[] }) {
-  return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02]">
-      <div className="border-b border-white/5 px-3 py-2 text-xs font-semibold text-slate-300">{title}</div>
-      <ul className="max-h-72 divide-y divide-white/5 overflow-y-auto">
-        {items.map((it) => (
-          <li key={it.id} className={`flex items-center justify-between px-3 py-1.5 text-xs ${it.scanned ? "bg-emerald-500/5" : ""}`}>
-            <button onClick={() => navigator.clipboard?.writeText(it.label)} className="text-left">
-              <div className="font-mono text-slate-200 hover:text-brand">{it.label}</div>
-              {it.sub && <div className="text-[10px] text-slate-500">{it.sub}</div>}
-            </button>
-            {it.scanned
-              ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300"><Check className="h-3 w-3" />已确认</span>
-              : <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">待扫描</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

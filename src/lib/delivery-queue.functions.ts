@@ -89,7 +89,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
 
     const { data: recv, error: receivingError } = await supabaseAdmin
       .from("receivings")
-      .select("id, batch_id, batch_ids, status")
+      .select("id, batch_id, batch_ids, included_units, status")
       .eq("id", data.receivingId)
       .maybeSingle();
     if (receivingError) throw new Error('收货单读取失败：' + receivingError.message);
@@ -99,10 +99,12 @@ export const prepareDelivery = createServerFn({ method: "POST" })
 
     const totals = {waybills:0,cartons:0,pallets:0,inserted:0,skipped:0};
     let notifiedCustomers = 0;
-    for (const batchId of ((recv as any).batch_ids ?? [recv.batch_id]) as string[]) {
+    const matchedIds:string[] = (recv as any).batch_ids ?? [recv.batch_id];
+    const included:any[] = (recv as any).included_units ?? [];
+    for (const batchId of [...new Set([...matchedIds,...included.map(x=>x.batch_id ?? null)])]) {
 
     const { loadReceivingContents } = await import('./receiving-bulk.server');
-    const contents = await loadReceivingContents(supabaseAdmin, batchId);
+    const contents = await loadReceivingContents(supabaseAdmin, batchId && matchedIds.includes(batchId) ? [batchId] : [], included.filter(x=>x.batch_id===batchId));
     const [pallets, cartons, waybills] = await Promise.all([
       readDeliveryRows(supabaseAdmin, 'pallets', 'id,pallet_no,customer_user_id,customer_code', 'id', contents.pallets.map(p=>p.id)),
       readDeliveryRows(supabaseAdmin, 'cartons', 'id,carton_no,pallet_id,customer_user_id,customer_code', 'id', contents.cartons.map(c=>c.id)),
@@ -142,7 +144,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
       customer_user_id: string | null;
       customer_code: string | null;
       source_receiving_id: string;
-      source_batch_id: string;
+      source_batch_id: string | null;
       added_by: string;
       status: "pending";
     };
@@ -262,6 +264,7 @@ export const prepareDelivery = createServerFn({ method: "POST" })
     );
     const { recordWecomDailyDeliveryReady } = await import("./wecom-daily-notify.server");
     for (const [customerCode, unitCount] of unitsByCustomer) {
+      if (!batchId) continue;
       const customerUserId = userByCustomer.get(customerCode);
       await recordWecomDailyDeliveryReady(supabaseAdmin, {
         receivingId: recv.id,
