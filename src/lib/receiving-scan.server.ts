@@ -1,9 +1,11 @@
+import { resolveScanInput } from "./scan-resolve.server";
+
 export class ReceivingCodeError extends Error {
   constructor(message:string, public candidates:{kind:string;ref_id:string;code?:string}[]=[]){super(message);}
 }
 // Resolve actual records rather than guessing from prefixes (legacy box numbers are numeric).
 export async function resolveReceivingCode(db: any, raw: string) {
-  const code = raw.trim().toUpperCase();
+  const code = await resolveScanInput(db, raw);
   async function one(table: string, fields: string, column: string, value: string) {
     const result = await db.from(table).select(fields).eq(column,value).maybeSingle();
     if (result.error) throw new Error(result.error.message);

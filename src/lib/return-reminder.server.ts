@@ -1,3 +1,4 @@
+import { resolveScanInput } from "./scan-resolve.server";
 import { createHash } from 'node:crypto';
 
 type Targets = { forwardingIds?: string[]; orderIds?: string[]; waybillIds?: string[]; cartonIds?: string[]; palletIds?: string[]; batchIds?: string[]; code?: string };
@@ -21,13 +22,14 @@ export async function collectReturnReminders(db: any, targets: Targets) {
   const pallets = [...(targets.palletIds ?? [])], cartons = [...(targets.cartonIds ?? [])];
   const waybills = [...(targets.waybillIds ?? [])], forwardings = [...(targets.forwardingIds ?? [])];
   const batches = [...(targets.batchIds ?? [])];
-  if (targets.code?.trim()) {
+  const code = targets.code?.trim() ? await resolveScanInput(db, targets.code) : "";
+  if (code) {
     for (const [table, column, dest] of [
       ['waybills', 'waybill_no', waybills], ['cartons', 'carton_no', cartons],
       ['pallets', 'pallet_no', pallets], ['forwarding_orders', 'request_no', forwardings],
       ['batches', 'batch_no', batches],
     ] as const) {
-      const r = await db.from(table).select('id').eq(column, targets.code.trim());
+      const r = await db.from(table).select('id').eq(column, code);
       if (r.error) throw new Error('退运提醒读取失败，操作尚未执行');
       dest.push(...(r.data ?? []).map((v: any) => v.id));
     }

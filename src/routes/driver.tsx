@@ -16,6 +16,8 @@ import {
   useDriverLanguage,
 } from "@/lib/driver-language";
 
+type Group = Awaited<ReturnType<typeof searchDriverDeliveries>>[number];
+
 export const Route = createFileRoute("/driver")({
   head: () => ({
     meta: [

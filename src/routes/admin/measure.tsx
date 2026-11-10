@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import {MeasurementPhotos} from '@/components/MeasurementPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
@@ -62,7 +63,7 @@ function MeasurePage() {
 
   const onSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const c = code.trim(); if (!c || busy) return;
+    const c = normalizeScanCode(code); if (!c || busy) return;
     setBusy(true); setMsg(null);
     try {
       const r: any = await lookup({ data: { code: c } });
@@ -193,7 +194,7 @@ function MeasurePage() {
         pickup_warehouse: parent?.pickup_warehouse ?? parent?.warehouse ?? null,
         destination_code: parent?.destination_code ?? null,
       }});
-      const refreshed: any = await lookup({data:{code:code.trim()}});
+      const refreshed: any = await lookup({data:{code:normalizeScanCode(code)}});
       setRows(refreshed.waybills);
       setSelected(new Set());
       setMsg({ ok: true, text: `✓ 已创建 ${r.pallets.length} 个托盘，装入 ${allocation.total} 票，剩余 ${remaining} 票未装托` });

@@ -91,7 +91,8 @@ export const inventoryIntakeCheckWaybill = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const code = data.code.trim();
+    const { resolveScanInput } = await import("./scan-resolve.server");
+    const code = await resolveScanInput(supabaseAdmin, data.code);
     if (!code) throw new Error("空扫描");
     const { order, items } = await loadOrder(supabaseAdmin, data.forwardingId);
 

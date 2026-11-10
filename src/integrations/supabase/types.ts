@@ -6428,6 +6428,9 @@ export type Database = {
         Returns: Json
       }
       resolve_login_email: { Args: { p_identifier: string }; Returns: string }
+      resolve_scan_code: { Args: { _input: string }; Returns: string }
+      scan_key: { Args: { _input: string }; Returns: string }
+      scan_normalize: { Args: { _input: string }; Returns: string }
       scan_receiving_hierarchy: {
         Args: {
           _include?: boolean

@@ -4,6 +4,8 @@ import { insuranceCad } from "./insurance";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { detectScanKind, type ScanKind } from "@/lib/scan-detect";
+import { normalizeScanCode } from "@/lib/scan-normalize";
+import { resolveScanInput } from "@/lib/scan-resolve.server";
 import { recordWecomDailyIntake, recordWecomDailyMeasurements } from "@/lib/wecom-daily-notify.server";
 
 async function assertStaff(supabase: any, userId: string) {
@@ -64,12 +66,12 @@ export const scanAddToContainer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const returnTargets = { code: data.code };
+    const code = await resolveScanInput(supabaseAdmin, data.code);
+    const returnTargets = { code };
     if (returnTargets) {
       const { assertReturnReminder } = await import('./return-reminder.server');
       await assertReturnReminder(supabaseAdmin, 'scanAddToContainer', data, returnTargets);
     }
-    const code = data.code.trim();
     if (!code) throw new Error("空扫描");
     const kind = await resolveScanCode(supabaseAdmin, code, detectScanKind(code));
     if (kind === "batch") {
@@ -441,7 +443,7 @@ export const intakeScanSearch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const code = data.code.trim();
+    const code = await resolveScanInput(supabaseAdmin, data.code);
     if (!code) throw new Error("空扫描");
 
     const ordCols =
@@ -1130,7 +1132,7 @@ export const markDetained = createServerFn({ method: "POST" })
     const { data: ins, error } = await supabaseAdmin
       .from("detained_packages")
       .insert({
-        domestic_tracking_no: data.code.trim(),
+        domestic_tracking_no: normalizeScanCode(data.code),
         customer_code: data.customer_code ?? null,
         note: data.note ?? null,
         created_by: context.userId,
@@ -1511,7 +1513,7 @@ export const measureLookup = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const code = data.code.trim();
+    const code = await resolveScanInput(supabaseAdmin, data.code);
     if (!code) throw new Error("空扫描");
 
     let parentKind: "order" | "forwarding" | null = null;

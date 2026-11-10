@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -115,7 +116,7 @@ export const ExpressDispatchList = forwardRef<ExpressDispatchListHandle, { print
               className="my-3 flex flex-wrap gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (scan.trim()) void scanExisting(scan.trim());
+                if (normalizeScanCode(scan)) void scanExisting(normalizeScanCode(scan));
               }}
             >
               <input

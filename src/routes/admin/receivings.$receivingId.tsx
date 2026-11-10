@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { ReceivingHierarchy } from "@/components/admin/ReceivingHierarchy";
 import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
@@ -106,7 +107,7 @@ function ReceivingDetail() {
 
   const onScan = async (e?: React.FormEvent, manualCode?: string) => {
     e?.preventDefault();
-    const c = (manualCode ?? code).trim(); if (!c || busy) return;
+    const c = normalizeScanCode(manualCode ?? code); if (!c || busy) return;
     setBusy(true);
     const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
     try {

@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
@@ -28,7 +29,7 @@ export function ScanAddDialog({
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const c = code.trim();
+    const c = normalizeScanCode(code);
     if (!c || busy) return;
     setBusy(true);
     const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
