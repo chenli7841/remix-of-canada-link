@@ -341,7 +341,16 @@ function ForwardingPage() {
   const updateItem = (pi: number, ii: number, patch: Partial<ItemDraft>) =>
     setParcels((ps) =>
       ps.map((p, idx) =>
-        idx === pi ? { ...p, items: p.items.map((it, j) => (j === ii ? { ...it, ...patch } : it)) } : p,
+        idx === pi ? { ...p, items: p.items.map((it, j) => {
+                if (j !== ii) return it;
+                const next = { ...it, ...patch };
+                // 箱数 × 内件数 → 自动填充数量（用户仍可手动改数量）
+                if (("box_count" in patch || "inner_qty" in patch) && !("quantity" in patch)) {
+                  const b = Number(next.box_count), q = Number(next.inner_qty);
+                  if (b > 0 && q > 0) next.quantity = b * q;
+                }
+                return next;
+              }) } : p,
       ),
     );
   const addItem = (pi: number) => updateParcel(pi, { items: [...parcels[pi].items, newItem()] });
