@@ -3701,6 +3701,47 @@ export type Database = {
         }
         Relationships: []
       }
+      receiving_scan_issues: {
+        Row: {
+          code: string
+          id: string
+          matches: Json
+          operator_id: string | null
+          reason: string
+          receiving_id: string
+          scanned_at: string
+          status: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          matches?: Json
+          operator_id?: string | null
+          reason: string
+          receiving_id: string
+          scanned_at?: string
+          status?: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          matches?: Json
+          operator_id?: string | null
+          reason?: string
+          receiving_id?: string
+          scanned_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiving_scan_issues_receiving_id_fkey"
+            columns: ["receiving_id"]
+            isOneToOne: false
+            referencedRelation: "receivings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       receiving_scans: {
         Row: {
           code: string
@@ -3746,11 +3787,11 @@ export type Database = {
         Row: {
           batch_id: string | null
           batch_ids: string[]
-          included_units: Json
           confirmed_at: string | null
           created_at: string
           created_by: string | null
           id: string
+          included_units: Json
           notes: string | null
           receiving_no: string
           status: string
@@ -3760,11 +3801,11 @@ export type Database = {
         Insert: {
           batch_id?: string | null
           batch_ids?: string[]
-          included_units?: Json
           confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          included_units?: Json
           notes?: string | null
           receiving_no: string
           status?: string
@@ -3774,11 +3815,11 @@ export type Database = {
         Update: {
           batch_id?: string | null
           batch_ids?: string[]
-          included_units?: Json
           confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          included_units?: Json
           notes?: string | null
           receiving_no?: string
           status?: string
@@ -5549,6 +5590,7 @@ export type Database = {
           edited_content: string | null
           failure_reason: string | null
           id: string
+          images: Json
           message_id: string | null
           rendered_content: string
           sections: Json
@@ -5564,6 +5606,7 @@ export type Database = {
           edited_content?: string | null
           failure_reason?: string | null
           id?: string
+          images?: Json
           message_id?: string | null
           rendered_content?: string
           sections?: Json
@@ -5579,6 +5622,7 @@ export type Database = {
           edited_content?: string | null
           failure_reason?: string | null
           id?: string
+          images?: Json
           message_id?: string | null
           rendered_content?: string
           sections?: Json
@@ -5814,6 +5858,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          images: Json
           send_result: Json | null
           sent_at: string | null
           status: string
@@ -5827,6 +5872,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          images?: Json
           send_result?: Json | null
           sent_at?: string | null
           status?: string
@@ -5840,6 +5886,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          images?: Json
           send_result?: Json | null
           sent_at?: string | null
           status?: string
@@ -5934,6 +5981,10 @@ export type Database = {
         Args: { _payload: Json }
         Returns: Json
       }
+      add_delivery_unit_tracking: {
+        Args: { _location?: string; _queue_id: string; _zh: string }
+        Returns: undefined
+      }
       admin_assign_delivery_trip: {
         Args: {
           _actor: string
@@ -5970,6 +6021,17 @@ export type Database = {
       ai_proxy_set_secret: {
         Args: { _key: string; _value: string }
         Returns: boolean
+      }
+      append_waybill_logistics_event: {
+        Args: {
+          _at: string
+          _en: string
+          _location?: string
+          _ref: string
+          _waybill_id: string
+          _zh: string
+        }
+        Returns: undefined
       }
       award_points_for_spend: {
         Args: { _amount_cad: number; _user_id: string }
@@ -6133,6 +6195,16 @@ export type Database = {
         }
         Returns: Json
       }
+      confirm_receiving_multi_atomic: {
+        Args: {
+          _batch_id: string
+          _expected_batch_ids: string[]
+          _location?: string
+          _operator_id: string
+          _receiving_id: string
+        }
+        Returns: Json
+      }
       create_driver_delivery_run: {
         Args: {
           _actor: string
@@ -6205,8 +6277,74 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      logistics_unit_waybills: {
+        Args: { _id: string; _kind: string }
+        Returns: {
+          aliases: string[]
+          assigned_batch_id: string | null
+          batch_no: string | null
+          box_no: string | null
+          carton_id: string | null
+          clearance_cad: number
+          client_package_id: string | null
+          created_at: string
+          dispatched_at: string | null
+          dispatched_by: string | null
+          dispatched_by_name: string | null
+          duty_cad: number
+          eta: string | null
+          forwarding_id: string | null
+          freight_cad: number
+          height_cm: number | null
+          id: string
+          insurance_cad: number
+          intl_tracking_no: string | null
+          items_summary: Json
+          length_cm: number | null
+          mark_no: string | null
+          note: string | null
+          order_id: string | null
+          pallet_id: string | null
+          pallet_no: string | null
+          payment_status: string
+          shipping_method: string | null
+          status: Database["public"]["Enums"]["waybill_status"]
+          surcharge_cad: number
+          updated_at: string
+          user_id: string
+          waybill_no: string
+          weight_kg: number | null
+          weight_snapshot: Json | null
+          width_cm: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "waybills"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       lookup_shipment: { Args: { _tracking_no: string }; Returns: Json }
       mark_invoices_overdue: { Args: never; Returns: number }
+      merge_receiving_batch: {
+        Args: {
+          _batch_id: string
+          _kind: string
+          _operator_id: string
+          _receiving_id: string
+          _ref_id: string
+        }
+        Returns: Json
+      }
+      merge_receiving_unit_checked: {
+        Args: {
+          _kind: string
+          _operator_id: string
+          _receiving_id: string
+          _ref_id: string
+        }
+        Returns: Json
+      }
       normalize_no: { Args: { _input: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
       openai_responses_proxy: {
@@ -6254,6 +6392,17 @@ export type Database = {
         Args: { _waybill_id: string }
         Returns: undefined
       }
+      record_receiving_scan_issue: {
+        Args: {
+          _code: string
+          _matches?: Json
+          _operator_id: string
+          _reason: string
+          _receiving_id: string
+          _status?: string
+        }
+        Returns: undefined
+      }
       refresh_order_tracking: {
         Args: { _id: string; _kind: string }
         Returns: undefined
@@ -6279,6 +6428,26 @@ export type Database = {
         Returns: Json
       }
       resolve_login_email: { Args: { p_identifier: string }; Returns: string }
+      scan_receiving_hierarchy: {
+        Args: {
+          _include?: boolean
+          _kind: string
+          _operator_id: string
+          _receiving_id: string
+          _ref_id: string
+          _remove?: boolean
+        }
+        Returns: Json
+      }
+      set_receiving_batches: {
+        Args: {
+          _append?: boolean
+          _batch_ids: string[]
+          _operator_id: string
+          _receiving_id: string
+        }
+        Returns: undefined
+      }
       settle_batch_customer_txn: { Args: { _payload: Json }; Returns: Json }
       settle_confirmed_batch_invoice_v2: {
         Args: { _payload: Json }
