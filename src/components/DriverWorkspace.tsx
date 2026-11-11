@@ -1,3 +1,4 @@
+import { normalizeScanCode, sameScanCode } from "@/lib/scan-normalize";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import {driverRouteMapKey, driverStopProgress, pendingCustomerNeighbors} from "@/lib/driver-route-addresses";
 import { LoadingUnitList } from "@/components/LoadingUnitList";
@@ -106,7 +107,7 @@ export function DriverWorkspace() {
     setBusy(true);
     setError("");
     try {
-      const r = await scan({ data: { tripId, code: value.trim() } });
+      const r = await scan({ data: { tripId, code: normalizeScanCode(value) } });
       setMessage(`${r.duplicate ? tr("已上车，原序号") : r.transferred ? tr("已从原趟转入，序号") : tr("上车成功，序号")} ${r.sequence}`);
       setCode("");
       await refresh();
@@ -571,7 +572,7 @@ export function DriverWorkspace() {
           <CameraScanButton
             continuous
             onScan={(value) => {
-              const row = customerUnits.find((x) => x.unit.code === value);
+              const row = customerUnits.find((x) => sameScanCode(x.unit.code, value));
               if (!row) throw new Error(tr("此条码不属于当前客户派送单位"));
               if (row.unit.status !== "pending") throw new Error(tr("此单位已经派送或取消"));
               setSelected((s) => new Set([...s, row.queue_id]));

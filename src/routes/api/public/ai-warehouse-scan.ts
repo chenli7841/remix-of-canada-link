@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { normalizeScanCode } from "@/lib/scan-normalize";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/api/public/ai-warehouse-scan")({
           if (!input) {
             return json({ found: false, error: "tracking_number_required" }, 400);
           }
-          const n = input.toUpperCase();
+          const n = normalizeScanCode(input);
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/api/public/ai-warehouse-scan")({
           let orderFound = false;
 
           const addCode = (v: unknown) => {
-            if (v) codes.add(String(v).toUpperCase());
+            if (v) { codes.add(String(v).trim().toUpperCase()); codes.add(normalizeScanCode(v)); }
           };
 
           const [fo, ord, wb] = await Promise.all([

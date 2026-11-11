@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -83,7 +84,7 @@ function IntakeScanPage() {
 
   const onSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const c = code.trim();
+    const c = normalizeScanCode(code);
     if (!c || busy || reminder) return;
     setBusy(true); setMsg(null); setPicked(null);
     try {
@@ -160,7 +161,7 @@ function IntakeScanPage() {
   };
 
   const doDetain = async () => {
-    const c = code.trim();
+    const c = normalizeScanCode(code);
     if (!c) return;
     setBusy(true); setMsg(null);
     try {
@@ -227,7 +228,7 @@ function IntakeScanPage() {
                 {candidates.map((c) => {
                   const noteText = c.buyer_note || c.note || null;
                   return (
-                    <button key={c.id} onClick={() => handleCandidate(c, code.trim())} disabled={busy}
+                    <button key={c.id} onClick={() => handleCandidate(c, normalizeScanCode(code))} disabled={busy}
                       className={`w-full text-left rounded-md border px-3 py-2 text-xs transition disabled:opacity-50 ${picked?.id === c.id ? "border-brand bg-brand/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
                       <div className="flex items-center justify-between">
                         <div className="font-mono font-semibold text-slate-200">

@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { CameraScanButton } from "@/components/admin/CameraScanButton";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
 import { useServerFn } from "@tanstack/react-start";
@@ -83,7 +84,7 @@ function OrderCard({ order, onDone, beforeReceive }: { order: any; onDone: () =>
 
   const submitScan = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const c = code.trim();
+    const c = normalizeScanCode(code);
     if (!c || busy) return;
     setBusy(true);
     setMsg(null);

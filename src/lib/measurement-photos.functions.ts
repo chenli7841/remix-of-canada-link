@@ -55,7 +55,7 @@ export const saveMeasurementPhotos=createServerFn({method:'POST'}).middleware([r
     if(prior.error)throw new Error('照片记录读取失败');
     if(prior.data&&prior.data.file_path!==path)throw new Error('照片标识冲突');
     if(!prior.data){
-     const ins=await admin.from('order_attachments').insert({id:data.photoId,owner_kind:target.ownerKind,owner_id:target.refId,user_id:context.userId,file_name:`内件核对_${data.photoId}.jpg`,file_path:path,file_size:bytes.length,content_type:'image/jpeg'});
+     const ins=await admin.from('order_attachments').insert({id:data.photoId,owner_kind:target.ownerKind ?? 'order',owner_id:target.refId,user_id:context.userId,file_name:`内件核对_${data.photoId}.jpg`,file_path:path,file_size:bytes.length,content_type:'image/jpeg'});
      if(ins.error)throw new Error('照片已上传，登记失败，请重试');
     }
    }

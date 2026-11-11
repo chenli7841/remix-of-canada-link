@@ -1,3 +1,4 @@
+import { normalizeScanCode } from "@/lib/scan-normalize";
 import { useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { useDriverLanguage } from "@/lib/driver-language";
@@ -87,7 +88,7 @@ export function CameraScanButton({
               if (cancelled) return;
               if (codes.length > 1) setMessage(tr("发现多个条码，请只对准需要录入的一个。"));
               if (codes.length === 1) {
-                const code = codes[0];
+                const code = normalizeScanCode(codes[0]);
                 if (last.current.code === code && Date.now() - last.current.time < 3000) {
                   setMessage(tr("刚刚已识别此单号，请移开条码。"));
                 } else {

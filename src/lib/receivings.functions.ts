@@ -97,8 +97,9 @@ export const scanReceive = createServerFn({ method: "POST" })
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { assertReturnReminder } = await import('./return-reminder.server');
-    await assertReturnReminder(supabaseAdmin, 'scanReceive', data, { code: data.code });
-    const code = data.code.trim();
+    const { resolveScanInput } = await import('./scan-resolve.server');
+    const code = await resolveScanInput(supabaseAdmin, data.code);
+    await assertReturnReminder(supabaseAdmin, 'scanReceive', data, { code });
     if (!code) throw new Error("空扫描");
     const { data: recv, error: recvError } = await (supabaseAdmin as any).from('receivings')
       .select('batch_id,batch_ids,included_units,status').eq('id', data.receivingId).single();

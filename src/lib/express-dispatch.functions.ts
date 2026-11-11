@@ -86,6 +86,8 @@ export const expressDispatch = createServerFn({ method: "POST" })
       customer?: string;
     }> = [];
     if (data.action === "scan" || data.action === "printScan") {
+      const { resolveScanInput } = await import("./scan-resolve.server");
+      const code = await resolveScanInput(db, data.code);
       for (const [kind, table, column] of [
         ["carton", "cartons", "carton_no"],
         ["pallet", "pallets", "pallet_no"],
@@ -93,7 +95,7 @@ export const expressDispatch = createServerFn({ method: "POST" })
         ["order", "orders", "order_no"],
         ["forwarding", "forwarding_orders", "request_no"],
       ] as const) {
-        const r = await db.from(table).select("id").eq(column, data.code).limit(2);
+        const r = await db.from(table).select("id").eq(column, code).limit(2);
         if (r.error) throw Error(r.error.message);
         for (const row of r.data ?? []) sources.push({ source: { kind, id: row.id } });
       }
