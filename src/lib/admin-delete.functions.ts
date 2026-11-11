@@ -88,6 +88,8 @@ export const deleteBatchRecord = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: before } = await supabaseAdmin.from("batches").select("*").eq("id", data.id).maybeSingle();
     if (!before) throw new Error("批次不存在");
+      const {SPECIAL_HANDLING_BATCH_ID}=await import('./special-handling');
+      if(data.id===SPECIAL_HANDLING_BATCH_ID)throw new Error('特殊处理订单是常驻批次，不能删除');
     // 解绑下属对象，不删除运单 / 箱号 / 托盘本身
     await supabaseAdmin.from("waybills").update({ assigned_batch_id: null } as any).eq("assigned_batch_id", data.id);
     await supabaseAdmin.from("cartons").update({ batch_id: null } as any).eq("batch_id", data.id);

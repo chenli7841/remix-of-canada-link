@@ -7,7 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import {
-  getReceivingDetail, scanReceive, removeReceivingScan,
+  getReceivingDetail, scanReceive, removeReceivingScan, transferReceivingSpecialUnits,
   confirmReceiving, matchReceivingBatch, updateReceiving, matchAllReceiving, mergeReceivingScanBatch, mergeReceivingScan, dismissReceivingIssue,
 } from "@/lib/receivings.functions";
 import { prepareDelivery } from "@/lib/delivery-queue.functions";
@@ -63,6 +63,7 @@ function ReceivingDetail() {
   const mergeBatch = useReturnReminder(mergeReceivingScanBatch);
   const mergeScan = useReturnReminder(mergeReceivingScan);
   const dismissIssue = useServerFn(dismissReceivingIssue);
+  const transferSpecial = useServerFn(transferReceivingSpecialUnits);
   const confirm = useReturnReminder(confirmReceiving);
   const match = useServerFn(matchReceivingBatch);
   const update = useServerFn(updateReceiving);
@@ -400,9 +401,13 @@ function ReceivingDetail() {
 </div>
 
       {(r.included_units as any[] ?? []).some(u=>u.handling_status) && <Card title="单件合并 · 付款核对">
+        {r.status==='confirmed' && (r.included_units as any[] ?? []).some(u=>u.handling_status==='pending_special') && <button disabled={busy} className="mb-3 rounded bg-blue-600 px-3 py-2 disabled:opacity-50" onClick={async()=>{
+          if(!window.confirm('将待特殊处理单元转入常驻「特殊处理订单」批次并加入待派送？箱内明细一起转入，原费用付款记录保留。'))return;
+          setBusy(true);try{const result=await transferSpecial({data:{receivingId}});await refresh();alert(`已转入 ${result.units} 个单元，新增待派送 ${result.queue_added} 个。`);}catch(e:any){alert(e.message);}finally{setBusy(false);}
+        }}>转入特殊处理订单并加入待派送</button>}
         <div className="space-y-2">{(r.included_units as any[] ?? []).filter(u=>u.handling_status).map(u=><div key={u.kind+u.ref_id} className="rounded border border-slate-700 p-3 text-sm">
           <span className="font-mono">{u.code}</span> · 已付款 {u.paid_count}/{u.waybill_count} · 原已完成 {u.completed_count}
-          <div className={u.handling_status==='pending_special'?'text-amber-300':'text-emerald-300'}>{u.handling_status==='pending_special'?'待特殊处理：已纳入收货，暂不生成普通派送；后续转特殊处理批次结算。':'已付款：保留原付款记录，重新收货与派送只更新物流状态。'}</div>
+          <div className={u.handling_status==='pending_special'?'text-amber-300':'text-emerald-300'}>{u.handling_status==='pending_special'?'待特殊处理：确认收货后可转入特殊处理订单并加入待派送。':u.handling_status==='special_ready'?'已转入特殊处理订单，已纳入派送；保留原费用及付款记录。':'已付款：保留原付款记录，重新收货与派送只更新物流状态。'}</div>
         </div>)}</div>
       </Card>}
       <Card title={`分级确认 / 扫描明细（已记录 ${scans.length} 项）`}>

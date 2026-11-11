@@ -386,6 +386,15 @@ export const dismissReceivingIssue=createServerFn({method:'POST'}).middleware([r
  return {ok:true};
 });
 
+export const transferReceivingSpecialUnits=createServerFn({method:'POST'}).middleware([requireSupabaseAuth])
+.inputValidator((d:{receivingId:string})=>d).handler(async({data,context})=>{
+ await assertStaff(context.supabase,context.userId);
+ const {supabaseAdmin}=await import('@/integrations/supabase/client.server');
+ const result=await (supabaseAdmin as any).rpc('transfer_receiving_special_units',{_receiving_id:data.receivingId,_operator_id:context.userId});
+ if(result.error)throw new Error(result.error.message);
+ return result.data as {units:number;queue_added:number;batch_id:string};
+});
+
 // Merge only the scanned unit's batch; other matched batches are never marked scanned here.
 export const mergeReceivingScanBatch = createServerFn({method:'POST'})
 .middleware([requireSupabaseAuth])

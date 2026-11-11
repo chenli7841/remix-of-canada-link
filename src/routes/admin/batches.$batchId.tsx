@@ -1,4 +1,5 @@
 import { RelatedActionLogs } from "@/components/admin/EntityActionLogs";
+import {SPECIAL_HANDLING_BATCH_ID} from '@/lib/special-handling';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { BatchCustomerNote } from '@/components/admin/BatchCustomerNote';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
@@ -125,6 +126,7 @@ function BatchDetail() {
   const feeQ = useQuery({
     queryKey: ["admin-batch", batchId, "fees"],
     queryFn: () => fetchFees({ data: { batchId } }),
+    enabled: batchId!==SPECIAL_HANDLING_BATCH_ID,
   });
   const cartonsQ = useQuery({
     queryKey: ["batch-cartons", batchId],
@@ -444,6 +446,7 @@ function BatchDetail() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
       <BackLink to="/admin/batches">返回批次列表</BackLink>
+      {batchId===SPECIAL_HANDLING_BATCH_ID && <Card title="特殊处理订单 · 常驻批次"><p className="text-sm text-amber-200">仅后台可见，可正常加入待派送。保留原费用和付款记录；逐次生成新账单功能暂未启用，本批次不使用普通批次确认价格及扣款。</p></Card>}
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="break-all font-display text-2xl font-bold font-mono">{batch.batch_no}</h1>
@@ -723,7 +726,7 @@ function BatchDetail() {
       )}
 
       {/* ===== 批次费用汇总 ===== */}
-      {!fee_summary && (
+      {!fee_summary && batchId!==SPECIAL_HANDLING_BATCH_ID && (
         <Card title="批次费用汇总">
           <div className="flex items-center gap-2 py-6 text-xs text-slate-500">
             {feeQ.isError ? (

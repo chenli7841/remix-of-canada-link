@@ -1572,6 +1572,8 @@ export async function selectByIds(
 // Returns: { totals: {freight,customs,insurance,clearance,storage,delivery,inspection,surcharge,grand_total},
 //            per_customer: [{...}], unassigned: {...}, independent_clearance: {...} }
 export async function computeBatchFeeSummary(admin: any, batchId: string) {
+  const {assertRegularBillingBatch}=await import('./special-handling');
+  assertRegularBillingBatch(batchId);
   // === 1. Load raw entities under the batch ===
   const [batchR, directWbsR, cartonsR, palletsR] = await Promise.all([
     admin.from("batches").select("id, batch_no, fees_dirty_at").eq("id", batchId).maybeSingle(),
@@ -2955,6 +2957,8 @@ export async function settleBatchForCustomer(
   points_earned?: number;
 }> {
   const { batchId, customerUserId, customerCode, method } = params;
+  const {assertRegularBillingBatch}=await import('./special-handling');
+  assertRegularBillingBatch(batchId);
   const discountCad = Math.max(0, Number(params.discountCad ?? 0));
 
   const { data: batchRow } = await admin.from("batches").select("batch_no").eq("id", batchId).maybeSingle();
@@ -3680,7 +3684,8 @@ export async function computeMyBatchesForUser(admin: any, userId: string) {
       .select("id, batch_no, status, shipping_method, eta_date, fees_dirty_at")
       .in("id", batchIds)
       .in("status", ["shipped", "arrived", "closed"]);
-    const visibleBatches = (batchRows ?? []) as any[];
+    const {SPECIAL_HANDLING_BATCH_ID}=await import('./special-handling');
+    const visibleBatches = ((batchRows ?? []) as any[]).filter(b=>b.id!==SPECIAL_HANDLING_BATCH_ID);
     if (!visibleBatches.length) return { batches: [] };
 
     // 先批量拉取本客户在这些批次的费用快照（batch_settlements）。
