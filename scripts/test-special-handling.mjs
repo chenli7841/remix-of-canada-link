@@ -17,6 +17,9 @@ insert into cartons values('${id(2)}','${id(4)}',null,'${id(8)}','00008');
 insert into waybills values('${id(3)}','${id(2)}',null,'${id(4)}','${id(8)}','paid',25,'delivered');
 insert into receivings values('${id(1)}','confirmed','[{"kind":"carton","ref_id":"${id(2)}","code":"C2","batch_id":"${id(4)}","handling_status":"pending_special"}]');`);
 await db.exec(fs.readFileSync('supabase/migrations/20261111170000_special_handling_operations.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20261111171000_special_handling_guard_scope.sql','utf8'));
+await db.exec(`insert into batches(id)values('00000000-0000-0000-0000-000000000004');delete from batches where id='00000000-0000-0000-0000-000000000004';`);
+assert.equal((await db.query('select count(*)::int n from batches')).rows[0].n,1);
 const run=()=>db.query(`select transfer_receiving_special_units('${id(1)}','${id(9)}') r`);
 assert.deepEqual((await run()).rows[0].r,{batch_id:'c5ec1a10-1111-4111-8111-000000000001',units:1,queue_added:1});
 assert.equal((await run()).rows[0].r.units,0);
@@ -26,3 +29,4 @@ await assert.rejects(db.query(`select transfer_receiving_special_units('${id(1)}
 await assert.rejects(db.query("update batches set status='closed'"),/不可关闭/);
 console.log('PASS: whole carton, preserved payment/fees/status, retry, permissions, permanent batch');
 }finally{await db.close();}
+
