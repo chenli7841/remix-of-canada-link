@@ -1,4 +1,5 @@
 import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -386,7 +387,7 @@ function MyOrdersTab({ userId }: { userId: string }) {
                 <th className="px-3 py-2">单号</th>
                 <th className="px-3 py-2">状态</th>
                 <th className="px-3 py-2">付款</th>
-                <th className="px-3 py-2 text-right">金额 ¥</th>
+                <th className="px-3 py-2 text-right">金额（集运 CAD / 商城 CNY）</th>
                 <th className="px-3 py-2">运输方式</th>
                 <th className="px-3 py-2">国际单号</th>
                 <th className="px-3 py-2">创建时间</th>
@@ -412,7 +413,10 @@ function MyOrdersTab({ userId }: { userId: string }) {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${pay[1]}`}>{pay[0]}</span>
                     </td>
                     <td className="px-3 py-2 text-right text-slate-300">
-                      {r.amount_cny != null ? `¥${Number(r.amount_cny).toFixed(2)}` : "—"}
+                      {r.kind === "forwarding"
+                        ? r.amount_cad != null ? `CA$${Number(r.amount_cad).toFixed(2)}` : "—"
+                        : r.amount_cny != null ? `¥${Number(r.amount_cny).toFixed(2)}` : "—"}
+                      <ConsolidatedFreightNotice id={r.id} kind={r.kind} />
                     </td>
                     <td className="px-3 py-2 text-slate-400">{r.shipping_method ?? "—"}</td>
                     <td className="px-3 py-2 font-mono text-slate-400">{r.tracking_no ?? "—"}</td>

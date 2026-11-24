@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { computeMyBatchesForUser } from "@/lib/orders.functions";
 import { invoiceAmountsCad } from "@/lib/invoice-amounts";
+import { forwardingTotalCad } from "@/lib/mcp/currency";
 import { normalizeHsCodeForStorage } from "@/lib/hs-code-format";
 
 // Backs the admin "客户视图" page: owner/warehouse/support/sales (see
@@ -555,7 +556,7 @@ export const getCustomerOrders = createServerFn({ method: "POST" })
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("forwarding_orders")
-        .select("id, request_no, status, payment_status, fee_cny, items_desc, tracking_no, shipping_method, created_at")
+        .select("id, request_no, status, payment_status, fee_cny, freight_snapshot, items_desc, tracking_no, shipping_method, created_at")
         .eq("user_id", data.userId)
         .order("created_at", { ascending: false }),
     ]);
@@ -579,7 +580,7 @@ export const getCustomerOrders = createServerFn({ method: "POST" })
         no: f.request_no,
         status: f.status,
         payment_status: f.payment_status,
-        amount_cny: f.fee_cny,
+        amount_cad: forwardingTotalCad(f.fee_cny, f.freight_snapshot),
         label: f.items_desc,
         tracking_no: f.tracking_no,
         shipping_method: f.shipping_method,
