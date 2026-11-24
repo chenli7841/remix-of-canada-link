@@ -11,3 +11,9 @@ export async function readAllFeeRows(query: () => any) {
 export function billingContainerRouteIds(cartons: any[], pallets: any[]) {
   return [...new Set([...cartons, ...pallets].filter(c => c.billing_mode === "merged" && c.route_id).map(c => c.route_id))];
 }
+
+/** Display-only effective rate; invoice totals always retain the saved amount. */
+export function savedFreightRate(freight: number, chargeableWeight: number | null): number | null {
+  if (chargeableWeight == null || !Number.isFinite(freight) || !Number.isFinite(chargeableWeight) || freight < 0 || chargeableWeight < 0) return null;
+  return chargeableWeight > 0 ? freight / chargeableWeight : freight === 0 ? 0 : null;
+}

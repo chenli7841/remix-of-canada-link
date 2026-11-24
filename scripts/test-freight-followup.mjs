@@ -1,6 +1,15 @@
 import fs from 'node:fs';import test from 'node:test';import assert from 'node:assert/strict';import {transform} from 'esbuild';
 async function mod(path){const t=await transform(fs.readFileSync(path,'utf8'),{loader:'ts',format:'esm'});return import('data:text/javascript;base64,'+Buffer.from(t.code).toString('base64'));}
 const {currentMeasurementSections}=await mod('src/lib/wecom-freight-refresh.server.ts');
+const {savedFreightRate}=await mod('src/lib/fee-query.ts');
+test('split and merged invoice reference rates use saved totals without current route rules',()=>{
+  assert.equal(savedFreightRate(.21,.1),2.0999999999999996);
+  assert.equal(savedFreightRate(.42,.2),2.0999999999999996);
+  assert.equal(savedFreightRate(8.7,2.9),3);
+  assert.equal(savedFreightRate(0,0),0);
+  assert.equal(savedFreightRate(1,0),null);
+  assert.equal(savedFreightRate(NaN,1),null);
+});
 const {deliverySettlementSummary}=await mod('src/lib/delivery-summary.ts');const {forwardingTotalCad}=await mod('src/lib/mcp/currency.ts');
 function mock(tables){return {from(table){let rows=tables[table]??[];const q={select(){return q},eq(k,v){rows=rows.filter(r=>r[k]===v);return q},in(k,v){rows=rows.filter(r=>v.includes(r[k]));return q},then(resolve){return Promise.resolve({data:rows,error:null}).then(resolve)}};return q}}}
 function fixture(){const ids=['a','b','c','d'];return {wecom_daily_notification_events:ids.map(id=>({category:'measurement',service_date:'2026-11-24',customer_code:'06641',payload:{waybillId:id,trackingNo:'773452500698520',freightCad:99}})),waybills:ids.map((id,i)=>({id,forwarding_id:'order',freight_cad:[1.5,1.8,1.5,3.9][i],weight_kg:[.5,.6,.5,1.3][i],weight_snapshot:{chargeable_weight:[.5,.6,.5,1.3][i],volumetric_weight:0.2},carton_id:'carton'})),forwarding_orders:[{id:'order',customer_code:'06641'}],cartons:[{id:'carton',billing_mode:'split',pallet_id:'pallet'}],pallets:[{id:'pallet',billing_mode:'split'}]}}

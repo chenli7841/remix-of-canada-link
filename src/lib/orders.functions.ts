@@ -1,4 +1,4 @@
-import { readAllFeeRows, billingContainerRouteIds } from "./fee-query";
+import { readAllFeeRows, billingContainerRouteIds, savedFreightRate } from "./fee-query";
 import { measuredFreight } from "./measured-freight";
 import { allocateContainerFreight } from "./freight-allocation";
 import { buildConfirmedBatchInvoice, assertConfirmedInvoice } from "./confirmed-batch-invoice";
@@ -2324,6 +2324,10 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
       const items = itemsMapMerged.get(k) ?? [];
       const weightOrders = buildWeightOrders(effectiveWbs.filter(w => b.freight_waybill_ids.has(w.id)), oMap, fMap);
       const noFreight = !b.freight_weight_inputs.length && b.freight === 0;
+      const chargeableWeight = noFreight ? 0 : billingWeight(scheme, weightOrders, b.freight_weight_snapshot);
+      // Invoice rate is the effective saved fee/weight ratio, never today's route rule.
+      // A route can contain different saved prices or merged container allocations.
+      const savedRate = savedFreightRate(b.freight, chargeableWeight);
       return {
         customer_code: b.customer_code,
         customer_name: b.customer_name,
@@ -2331,8 +2335,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         route_id: b.route_id,
         group_key: k,
         fee_scheme: scheme,
-        freight_rate_cad: mergedRuleMap.has(b.route_id ?? "") ? (Number(mergedRuleMap.get(b.route_id!)?.unit_price_cad) || Number(mergedRuleMap.get(b.route_id!)?.unit_price_cny) * fx) : null,
-        chargeable_weight_kg: noFreight ? 0 : billingWeight(scheme, weightOrders, b.freight_weight_snapshot),
+        freight_rate_cad: savedRate,
+        chargeable_weight_kg: chargeableWeight,
         billing_weight_basis: noFreight ? "no_freight" : scheme === "merged" ? "merged_freight_snapshot" : "waybill_snapshots",
         weight_orders: weightOrders,
         paid_waybill_count: allWbs.filter(w => wbCustomer(w) === b.customer_code && (wbRoute(w).code ?? null) === (b.route_code ?? null) && w.payment_status === "paid").length,
