@@ -626,8 +626,14 @@ function BatchDetail() {
             )}
             <div className="mt-2 text-slate-500">
               运单总数：<span className="font-semibold text-slate-200">{waybill_total ?? waybills.length}</span>（直挂{" "}
-              {waybills.length} · 含箱号/托盘内）· 总重量 {batch.total_weight_kg ?? 0} kg · 总金额 CA$
-              {batch.total_cny ?? 0}
+              {waybills.length} · 含箱号/托盘内）
+              {fee_summary ? (
+                <> · 总重量 {(fee_summary.per_customer.reduce((sum, customer) => sum + Number(customer.weight_kg ?? 0), 0)
+                  + Number(fee_summary.unassigned?.weight_kg ?? 0)).toFixed(3)} kg
+                  {" · 总金额 CA$"}{liveTotal.toFixed(2)}</>
+              ) : (
+                <span> · {batchId === SPECIAL_HANDLING_BATCH_ID ? "费用按订单账单结算" : feeQ.isError ? "费用汇总读取失败" : "正在汇总重量与费用…"}</span>
+              )}
             </div>
             <div className="text-slate-500">备注：{batch.notes ?? "—"}</div>
           </div>

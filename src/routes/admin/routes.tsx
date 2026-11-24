@@ -832,7 +832,7 @@ function RouteEditor({ initial, warehouses, onClose }: { initial: any; warehouse
               <FreightFields sensitive={route.cargo_type === "sensitive"} value={freight} onChange={setFreight} />
               <p className="mt-2 text-[11px] text-slate-500">
                 运单运费 = 计费重量/板数 × 单价 + 清关费 + 关税 +
-                保费；不足最低收费时按最低收费。若启用消费税，会按以上合计 × 税率额外加收。
+                保费；不设最低收费。若启用消费税，会按以上合计 × 税率额外加收。
               </p>
             </Section>
 
@@ -1228,7 +1228,7 @@ function FreightFields({ value: f, onChange, sensitive }: { value: FreightRule; 
         />
       </Field>
       <p className="col-span-2 text-[11px] text-slate-500">
-        最低收费与清关费分别在运单级 / 批次级生效：运单级按每张运单各判断一次，批次级按同线路同客户号在批次内合并判断一次。
+        清关费可分别在运单级 / 批次级设置：运单级按每张运单收取，批次级按同线路同客户号在批次内收取一次。最低收费已取消。
       </p>
 
       <Field label="末端派送费：重量低于 (kg)">

@@ -415,7 +415,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 sub={
                   scheme === "merged"
                     ? `按线路 ${c.route_code ?? "—"} 汇总重量 ${Number(c.weight_kg ?? 0).toFixed(2)}kg · 体积 ${Number(c.volume_m3 ?? 0).toFixed(4)}m³ × 线路费率`
-                    : `各运单运费 + 客户号箱运费 + 客户号托盘运费；保留单票最低收费。收费重量合计 ${kg(c.chargeable_weight_kg)}`
+                    : `汇总已保存的运单运费；合箱收费替代所含运单运费，不重复收取。收费重量合计 ${kg(c.chargeable_weight_kg)}`
                 }
               />
               <FeeRow
