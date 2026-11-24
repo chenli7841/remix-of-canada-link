@@ -1,3 +1,4 @@
+import { readAllFeeRows } from "./fee-query";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -15,8 +16,8 @@ export const getConsolidatedFreightNotice = createServerFn({ method: "POST" })
       .select("id").eq("id", data.id).maybeSingle();
     if (parent.error || !parent.data) throw new Error("无法读取订单");
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
-    const wb = await admin.from("waybills").select("id,carton_id,pallet_id")
-      .eq(data.kind === "forwarding" ? "forwarding_id" : "order_id", data.id);
+    const wb = await readAllFeeRows(() => admin.from("waybills").select("id,carton_id,pallet_id")
+      .eq(data.kind === "forwarding" ? "forwarding_id" : "order_id", data.id));
     if (wb.error) throw new Error("无法读取运单收费方式");
     const unique = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => !!v))];
     const cartonIds = unique((wb.data ?? []).map(w => w.carton_id));

@@ -1,3 +1,4 @@
+import { readAllFeeRows, billingContainerRouteIds } from "./fee-query";
 import { measuredFreight } from "./measured-freight";
 import { allocateContainerFreight } from "./freight-allocation";
 import { buildConfirmedBatchInvoice, assertConfirmedInvoice } from "./confirmed-batch-invoice";
@@ -1458,10 +1459,10 @@ export async function selectByIds(
   if (!ids.length) return [];
   const out: any[] = [];
   for (let i = 0; i < ids.length; i += 200) {
-    let q = admin.from(table).select(select).in(col, ids.slice(i, i + 200));
-    if (extra) q = extra(q);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const { data } = await readAllFeeRows(() => {
+      const q = admin.from(table).select(select).in(col, ids.slice(i, i + 200));
+      return extra ? extra(q) : q;
+    });
     out.push(...(data ?? []));
   }
   return out;
@@ -1476,9 +1477,9 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
   // === 1. Load raw entities under the batch ===
   const [batchR, directWbsR, cartonsR, palletsR] = await Promise.all([
     admin.from("batches").select("id, batch_no, fees_dirty_at").eq("id", batchId).maybeSingle(),
-    admin.from("waybills").select("*").eq("assigned_batch_id", batchId).is("carton_id", null).is("pallet_id", null),
-    admin.from("cartons").select("*").eq("batch_id", batchId),
-    admin.from("pallets").select("*").eq("batch_id", batchId),
+    readAllFeeRows(() => admin.from("waybills").select("*").eq("assigned_batch_id", batchId).is("carton_id", null).is("pallet_id", null)),
+    readAllFeeRows(() => admin.from("cartons").select("*").eq("batch_id", batchId)),
+    readAllFeeRows(() => admin.from("pallets").select("*").eq("batch_id", batchId)),
   ]);
   for (const result of [batchR, directWbsR, cartonsR, palletsR]) if (result.error) throw new Error(`批次数据读取失败：${result.error.message}`);
   if (!batchR.data) throw new Error("Batch not found");
@@ -2017,8 +2018,7 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
 
   // === 9. Recompute batch freight from pooled customer weights ===
   const fx = await getFxCadPerCny(admin);
-  const mergedRouteIds = [...new Set([...buckets.values()]
-    .filter((b) => b.customer_code && b.route_id).map((b) => b.route_id))];
+  const mergedRouteIds = billingContainerRouteIds(allCartons, pallets);
   const mergedRules = mergedRouteIds.length
     ? await admin.from("freight_rules").select("*").in("route_id", mergedRouteIds)
       .eq("is_active", true).order("created_at", { ascending: false })

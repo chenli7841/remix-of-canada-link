@@ -1,3 +1,4 @@
+import { readAllFeeRows } from "./fee-query";
 import { containerChildChargeable } from "./container-chargeable";
 import { measuredFreight } from "./measured-freight";
 import { uniqueWaybills } from "./insurance";
@@ -353,12 +354,12 @@ function composeCad(
 
 async function feeTotalsForCarton(admin: any, row: any) {
   // 直挂运单 = 扫描加入本箱下的运单
-  const { data: wbs } = await admin
+  const { data: wbs } = await readAllFeeRows(() => admin
     .from("waybills")
     .select(
       "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
-    .eq("carton_id", row.id);
+    .eq("carton_id", row.id));
   const list: any[] = await effectiveWaybillInsurance(admin, (wbs ?? []) as any[]);
   const wbIds = list.map((w: any) => w.id);
   let cf = 0,
@@ -415,26 +416,26 @@ async function feeTotalsForCarton(admin: any, row: any) {
 }
 
 async function feeTotalsForPallet(admin: any, row: any) {
-  const { data: directWbs } = await admin
+  const { data: directWbs } = await readAllFeeRows(() => admin
     .from("waybills")
     .select(
       "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
-    .eq("pallet_id", row.id).is("carton_id", null);
-  const { data: cns } = await admin
+    .eq("pallet_id", row.id).is("carton_id", null));
+  const { data: cns } = await readAllFeeRows(() => admin
     .from("cartons")
     .select("id, customer_code, billing_mode, self_freight_cad, route_id, self_weight_kg, self_volume_m3")
-    .eq("pallet_id", row.id);
+    .eq("pallet_id", row.id));
   const cartonList = cns ?? [];
   const cartonIds = cartonList.map((c: any) => c.id);
   let cnWbs: any[] = [];
   if (cartonIds.length) {
-    const { data } = await admin
+    const { data } = await readAllFeeRows(() => admin
       .from("waybills")
       .select(
         "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, carton_id",
       )
-      .in("carton_id", cartonIds);
+      .in("carton_id", cartonIds));
     cnWbs = data ?? [];
   }
   const allWbs = await effectiveWaybillInsurance(admin, uniqueWaybills<any>([...(directWbs ?? []), ...cnWbs]));
@@ -472,11 +473,11 @@ async function feeTotalsForPallet(admin: any, row: any) {
   const selfSurcharge = await sumSurcharges(admin, "pallet", row.id);
   let cartonSurcharge = 0;
   if (cartonIds.length) {
-    const { data: ss } = await admin
+    const { data: ss } = await readAllFeeRows(() => admin
       .from("surcharges")
       .select("amount_cny")
       .eq("scope", "carton")
-      .in("carton_id", cartonIds);
+      .in("carton_id", cartonIds));
     cartonSurcharge = sumSurchargesCad(ss ?? []);
   }
   const childSurcharge = Math.max(childSurWb, wbSurchargeExtra) + cartonSurcharge;
