@@ -280,10 +280,7 @@ export const getForwardingRateCards = createServerFn({ method: "GET" }).handler(
       Number(rule.unit_price_cad) > 0
         ? Number(rule.unit_price_cad)
         : +(Number(rule.unit_price_cny || 0) * cadPerCny).toFixed(4);
-    const minCad =
-      Number(rule.min_charge_cad) > 0
-        ? Number(rule.min_charge_cad)
-        : +(Number(rule.min_charge_cny || 0) * cadPerCny).toFixed(2);
+    const minCad = 0;
     byMethod[rt.shipping_method] = {
       _general: isGeneral,
       _sort: rt.sort_order,

@@ -1,3 +1,4 @@
+import { ContainerBillingChoice } from "@/components/admin/ContainerBillingChoice";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
 import { useReturnReminder } from '@/components/admin/useReturnReminder';
@@ -83,6 +84,7 @@ function CartonDetail() {
 
       <CargoPhotos kind="carton" refId={cartonId} canUpload />
       <ContainerInfoCard kind="carton" row={carton} currency="CAD"/>
+      <ContainerBillingChoice kind="carton" row={carton} />
       <FeeComparisonCard fees={carton} currency="CAD"/>
 
       <ContainerEditPanel kind="carton" row={carton} locked={locked} onSave={async (patch) => { await update({ data: { id: cartonId, patch } }); invalidate(); }}/>

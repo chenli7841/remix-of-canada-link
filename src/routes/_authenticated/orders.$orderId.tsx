@@ -135,7 +135,12 @@ function OrderDetailPage() {
       h = Number(w.height_cm ?? 0);
     return a + (l && wd && h ? (l * wd * h) / 1_000_000 : 0);
   }, 0);
+  const savedFees = (order as any).freight_snapshot;
   const shipFee = Number(order.shipping_cny ?? 0);
+  const shipCad = Number(savedFees?.freight_cad ?? cnyToCad(shipFee));
+  const insuranceCad = Number(savedFees?.insurance_cad ?? cnyToCad(Number(order.insurance_cny ?? 0)));
+  const dutyCad = Number(savedFees?.duty_cad ?? cnyToCad(Number(order.customs_cny ?? 0)));
+  const clearanceCad = Number(savedFees?.clearance_cad ?? 0);
   const insFee = Number(order.insurance_cny ?? 0);
   const cusFee = Number(order.customs_cny ?? 0);
   const freightTotal = shipFee + insFee + cusFee;
@@ -254,7 +259,7 @@ function OrderDetailPage() {
                   }
                   value={
                     <span className="font-display font-bold text-brand-gradient">
-                      CA${cnyToCad(freightTotal).toFixed(2)}
+                      CA${(shipCad + insuranceCad + dutyCad + clearanceCad).toFixed(2)}
                     </span>
                   }
                 />
@@ -265,21 +270,21 @@ function OrderDetailPage() {
                     <Plane className="h-3 w-3" />
                     {tr("运费", "Shipping")}
                   </span>
-                  <div className="mt-0.5 font-mono text-foreground">CA${cnyToCad(shipFee).toFixed(2)}</div>
+                  <div className="mt-0.5 font-mono text-foreground">CA${shipCad.toFixed(2)}</div>
                 </div>
                 <div className="rounded-lg bg-accent/40 px-2 py-1.5">
                   <span className="inline-flex items-center gap-1">
                     <FileText className="h-3 w-3" />
                     {tr("关税", "Customs")}
                   </span>
-                  <div className="mt-0.5 font-mono text-foreground">CA${cnyToCad(cusFee).toFixed(2)}</div>
+                  <div className="mt-0.5 font-mono text-foreground">CA${dutyCad.toFixed(2)}</div>
                 </div>
                 <div className="rounded-lg bg-accent/40 px-2 py-1.5">
                   <span className="inline-flex items-center gap-1">
                     <ShieldCheck className="h-3 w-3" />
                     {tr("保险", "Insurance")}
                   </span>
-                  <div className="mt-0.5 font-mono text-foreground">CA${cnyToCad(insFee).toFixed(2)}</div>
+                  <div className="mt-0.5 font-mono text-foreground">CA${insuranceCad.toFixed(2)}</div>
                 </div>
               </div>
             </div>
@@ -408,6 +413,7 @@ function OrderDetailPage() {
         {/* Side: cost breakdown + address */}
         <aside className="space-y-6">
           <Card title={tr("费用明细", "Cost breakdown")} icon={<Receipt className="h-4 w-4" />}>
+            <ConsolidatedFreightNotice id={orderId} kind="order" />
             <dl className="space-y-2 text-sm">
               <Row label={tr("商品小计", "Subtotal")} value={`CA$${cnyToCad(Number(order.subtotal_cny)).toFixed(2)}`} />
               <Row
@@ -417,7 +423,7 @@ function OrderDetailPage() {
                     {tr("国际运费", "Shipping")}
                   </span>
                 }
-                value={`CA$${cnyToCad(Number(order.shipping_cny)).toFixed(2)}`}
+                value={`CA$${shipCad.toFixed(2)}`}
               />
               <Row
                 label={
@@ -426,7 +432,7 @@ function OrderDetailPage() {
                     {tr("保险", "Insurance")}
                   </span>
                 }
-                value={`CA$${cnyToCad(Number(order.insurance_cny)).toFixed(2)}`}
+                value={`CA$${insuranceCad.toFixed(2)}`}
               />
               <Row
                 label={
@@ -435,7 +441,7 @@ function OrderDetailPage() {
                     {tr("关税", "Customs/Duty")}
                   </span>
                 }
-                value={`CA$${cnyToCad(Number(order.customs_cny)).toFixed(2)}`}
+                value={`CA$${dutyCad.toFixed(2)}`}
               />
               <div className="my-2 border-t border-border" />
               <Row
@@ -524,3 +530,4 @@ function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode 
     </div>
   );
 }
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";

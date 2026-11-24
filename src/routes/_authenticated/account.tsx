@@ -1,3 +1,4 @@
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";
 import {OrderTracking,OrderTrackingDisclosure} from "@/components/order-tracking";
 import { AddressLocationPicker } from '@/components/AddressLocationPicker';
 import { canadaLocations, provinceOptions, normalizeCanadaAddress } from '@/lib/canada-address';
@@ -2780,7 +2781,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
             status: r.status,
             created_at: r.created_at,
             fee_cny: Number(r.fee_cny ?? 0),
-            total_cad: totalCad > 0 ? totalCad : null,
+            total_cad: snap?.total_cad != null ? totalCad : snap?.freight_cad != null ? Number(snap.freight_cad) + Number(snap.duty_cad ?? 0) + Number(snap.insurance_cad ?? 0) + Number(snap.clearance_cad ?? 0) + Number(snap.surcharges_cad ?? 0) : snap?.fx_rate ? Number(r.fee_cny ?? 0) * Number(snap.fx_rate) : null,
             payment_status: r.payment_status ?? "unpaid",
             tracking_no: r.tracking_no,
             shipping_method: r.shipping_method,
@@ -3025,7 +3026,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
               </span>
               {(() => {
                 const amountCad =
-                  o.kind === "forwarding" && (o.total_cad ?? 0) > 0 ? Number(o.total_cad) : cnyToCad(o.fee_cny);
+                  o.kind === "forwarding" && o.total_cad != null ? Number(o.total_cad) : cnyToCad(o.fee_cny);
                 return amountCad > 0 ? (
                   <div className="ml-auto text-right">
                     <div className="font-display text-base font-bold text-brand-gradient">
@@ -3045,6 +3046,7 @@ function MyOrdersTab({ initialFilter = "all" }: { initialFilter?: OrderFilter } 
               })()}
             </div>
 
+            <ConsolidatedFreightNotice id={o.id} kind={o.kind} />
             {o.domestic_tracking_no && (
               <div className="mt-2 text-xs text-ink-soft">
                 {tr("国内单号", "Domestic")}: <span className="font-mono">{o.domestic_tracking_no}</span>

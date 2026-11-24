@@ -1,3 +1,4 @@
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";
 import { EntityActionLogs } from "@/components/admin/EntityActionLogs";
 import { WaybillActionLogs } from "@/components/admin/WaybillActionLogs";
 import {OrderTracking} from "@/components/order-tracking";
@@ -328,6 +329,7 @@ function FwDetail() {
 
             {previewData?.snapshot && (
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <ConsolidatedFreightNotice id={id} />
                 <div className="mb-2 text-xs font-semibold text-emerald-300 inline-flex items-center gap-1"><Calculator className="h-3 w-3"/>运费明细预览</div>
                 <div className="grid gap-2 text-xs sm:grid-cols-3 md:grid-cols-6">
                   <div><div className="text-slate-500">实重</div><div>{previewData.snapshot.actual_weight} kg</div></div>
@@ -354,6 +356,7 @@ function FwDetail() {
 
       {snap && (
         <Card title="当前运费快照">
+          <ConsolidatedFreightNotice id={id} />
           <div className="grid gap-2 text-xs sm:grid-cols-3 md:grid-cols-6">
             <div><div className="text-slate-500">实重</div><div>{snap.actual_weight} kg</div></div>
             <div><div className="text-slate-500">体积重</div><div>{snap.volumetric_weight} kg</div></div>

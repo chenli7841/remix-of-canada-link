@@ -12,7 +12,7 @@ type Fees = {
   with_customer_total_cny: number;
   without_customer_total_cny: number;
   has_customer: boolean;
-  customer_fee_scheme?: "merged" | "split" | null;
+  billing_mode?: string | null;
   fx_rate?: number;
   self_freight_cad?: number;
   child_freight_cad?: number;
@@ -49,9 +49,9 @@ export function FeeComparisonCard({ fees, currency = "CAD" }: { fees: Fees; curr
   // 系统统一使用 CAD (加元)
   // 有客户号: 客户偏好 split→采用 B; merged→采用 A
   // 无客户号: 只能用 B
-  const scheme = fees.customer_fee_scheme ?? "split";
-  const active: "with" | "without" = fees.has_customer ? (scheme === "split" ? "without" : "with") : "without";
-  const disableWith = !fees.has_customer;
+  const scheme = fees.billing_mode ?? "split";
+  const active: "with" | "without" = scheme === "split" ? "without" : "with";
+  const disableWith = false;
   const fmt = makeFmt("CAD");
   const num = (v: any) => Number(v ?? 0);
   const withTotal = num(fees.with_customer_total_cad);
@@ -62,22 +62,19 @@ export function FeeComparisonCard({ fees, currency = "CAD" }: { fees: Fees; curr
         当前模式：<span className="font-semibold text-brand">
           {disableWith
             ? "无客户号 — 仅启用「不合并」方案 (B)"
-            : `有客户号 — 客户偏好「${scheme === "split" ? "不合并 (B)" : "合并 (A)"}」`}
+            : `员工选择「${scheme === "split" ? "按单收费" : "合箱收费"}」`}
         </span>
-        <div className="mt-1 text-[10px] text-slate-500">两种方案同时展示便于对比；实际计费按"采用"标记方案。客户偏好在用户详情页设置。</div>
+        <div className="mt-1 text-[10px] text-slate-500">两种方案同时展示便于对比；实际计费按"采用"标记方案。收费方式在当前箱号／托盘设置。</div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className={`rounded-lg border p-3 ${disableWith ? "border-white/5 bg-white/[0.02] opacity-40" : active === "with" ? "border-brand/40 bg-brand/5" : "border-white/5 bg-white/[0.02] opacity-70"}`}>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-200">A. 有客户号 · 合并</h3>
+            <h3 className="text-xs font-semibold text-slate-200">A. 合箱收费</h3>
             {disableWith ? <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">无客户号不可用</span>
               : active === "with" ? <span className="rounded-full bg-brand/20 px-2 py-0.5 text-[10px] text-brand">采用</span>
               : <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">备选</span>}
           </div>
           <FeeRow label="自身运费" value={fees.self_freight_cad} dim={active !== "with"} fmt={fmt}/>
-          {fees.child_freight_cad_a != null && (
-            <FeeRow label="下属运费之和 (采用方案)" value={fees.child_freight_cad_a} dim={active !== "with"} fmt={fmt}/>
-          )}
           <FeeRow label="下属关税之和" value={fees.child_customs_cad} dim={active !== "with"} fmt={fmt}/>
           <FeeRow label="下属保险之和" value={fees.child_insurance_cad} dim={active !== "with"} fmt={fmt}/>
           <FeeRow label="附加费之和 (自身+下属)" value={num(fees.self_surcharge_cad) + num(fees.child_surcharge_cad)} dim={active !== "with"} fmt={fmt}/>
@@ -90,7 +87,7 @@ export function FeeComparisonCard({ fees, currency = "CAD" }: { fees: Fees; curr
 
         <div className={`rounded-lg border p-3 ${active === "without" ? "border-brand/40 bg-brand/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-200">B. 无客户号 · 不合并</h3>
+            <h3 className="text-xs font-semibold text-slate-200">B. 按单收费</h3>
             {active === "without" ? <span className="rounded-full bg-brand/20 px-2 py-0.5 text-[10px] text-brand">采用</span>
               : <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">备选</span>}
           </div>
@@ -100,7 +97,7 @@ export function FeeComparisonCard({ fees, currency = "CAD" }: { fees: Fees; curr
           <FeeRow label="下属清关费" value={fees.clearance_fee_cad} dim={active !== "without"} fmt={fmt}/>
           <FeeRow label="下属附加费之和" value={fees.child_surcharge_cad ?? 0} dim={active !== "without"} fmt={fmt}/>
           <FeeRow label="末端派送费" value={fees.last_mile_cad ?? 0} dim={active !== "without"} fmt={fmt}/>
-          <div className="mt-1 text-[10px] text-slate-500">自身运费 / 自身附加费 ({fmt(fees.self_surcharge_cad ?? 0)}) 不计入本方案</div>
+          <div className="mt-1 text-[10px] text-slate-500">自身运费不计入本方案；内部合箱箱号按其合箱运费汇总</div>
           <div className={`mt-2 flex justify-between border-t border-white/5 pt-2 ${active === "without" ? "text-emerald-300" : "text-slate-500 line-through"}`}>
             <span className="text-xs font-semibold">合计 (方案 B)</span>
             <span className="text-sm font-mono font-bold">{fmt(withoutTotal)}</span>

@@ -1,0 +1,31 @@
+import {PGlite} from '../outputs/db-test-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite(),id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+try {
+ await db.exec(`create role anon;create role authenticated;
+ create table freight_rules(id uuid primary key,min_charge_cad numeric,min_charge_cny numeric,min_charge_waybill_cad numeric,min_charge_batch_cad numeric);
+ create table profiles(customer_code text,fee_scheme_preference text);
+ create table cartons(id uuid primary key,customer_code text);create table pallets(id uuid primary key,customer_code text);
+ create table batches(id uuid,fees_dirty_at timestamptz);
+ create table forwarding_orders(id uuid primary key,freight_snapshot jsonb,fee_cny numeric);
+ create table orders(id uuid primary key,freight_snapshot jsonb,shipping_cny numeric,customs_cny numeric,insurance_cny numeric);
+ create table waybills(id uuid primary key,forwarding_id uuid,order_id uuid,freight_cad numeric,duty_cad numeric,insurance_cad numeric,clearance_cad numeric,weight_kg numeric,weight_snapshot jsonb);
+ insert into freight_rules values('${id(1)}',2,10,2,5);
+ insert into profiles values('001','merged');insert into cartons values('${id(2)}','001');
+ insert into forwarding_orders values('${id(3)}','{"fx_rate":0.2}',0);`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261124090000_container_billing_source.sql','utf8'));
+ assert.equal((await db.query('select billing_mode from cartons')).rows[0].billing_mode,'merged');
+ await db.exec(`insert into cartons(id) values('${id(4)}');update freight_rules set min_charge_waybill_cad=99;`);
+ assert.equal((await db.query('select billing_mode from cartons where id=$1',[id(4)])).rows[0].billing_mode,'split');
+ assert.equal(Number((await db.query('select min_charge_waybill_cad from freight_rules')).rows[0].min_charge_waybill_cad),0);
+ await db.exec(`insert into waybills values('${id(5)}','${id(3)}',null,1.5,0,0,0,0.5,'{"chargeable_weight":0.5,"volumetric_weight":0.2,"fx_rate":0.2}'),('${id(6)}','${id(3)}',null,3.9,0,0,0,1.3,'{"chargeable_weight":1.3,"volumetric_weight":0.8,"fx_rate":0.2}');`);
+ let snapshot=(await db.query('select freight_snapshot from forwarding_orders')).rows[0].freight_snapshot;
+ assert.equal(snapshot.freight_cad,5.4);assert.equal(snapshot.chargeable_weight,1.8);
+ await db.exec(`update waybills set freight_cad=2 where id='${id(5)}';`);
+ assert.equal((await db.query('select freight_snapshot from forwarding_orders')).rows[0].freight_snapshot.freight_cad,5.9);
+ await db.exec('delete from waybills');
+ assert.equal((await db.query('select freight_snapshot from forwarding_orders')).rows[0].freight_snapshot.freight_cad,0);
+ assert.equal((await db.query("select has_function_privilege('authenticated','sync_measured_order_fees_v3(uuid,boolean)','execute') allowed")).rows[0].allowed,false);
+ console.log('Freight migration passed: legacy preservation, default mode, minimum guard, leaf aggregation, deletion and RPC permissions.');
+} finally {await db.close();}

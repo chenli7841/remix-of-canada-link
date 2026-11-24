@@ -69,11 +69,13 @@ type DailySections = {
     totalVolumetricWeightKg: number;
     totalChargeableWeightKg: number;
     totalFeeCad: number;
+    billingReferenceOnly?: boolean;
   }>;
   batchPrices?: Array<{
     batchId: string;
     batchName: string;
     totalFeeCad: number;
+    billingReferenceOnly?: boolean;
   }>;
   customerPayment?: {
     dueCad: number;
@@ -107,6 +109,7 @@ type StoredDailyEvent = {
     volumetricWeightKg?: number;
     chargeableWeightKg?: number;
     freightCad?: number;
+    billingReferenceOnly?: boolean;
     batchId?: string;
     batchName?: string;
     totalFeeCad?: number;
@@ -162,7 +165,8 @@ function renderDailyContent(
         `总体积重：${displayWeight(item.totalVolumetricWeightKg)}kg`,
         `总实重：${displayWeight(item.totalActualWeightKg)}kg`,
         `总收费重量：${displayWeight(item.totalChargeableWeightKg)}kg`,
-        `总费用：CAD ${item.totalFeeCad.toFixed(2)}`,
+        `运费：CAD ${item.totalFeeCad.toFixed(2)}`,
+        ...(item.billingReferenceOnly ? ["已合箱收费，订单费用只做参考"] : []),
       );
     });
   }
@@ -279,6 +283,7 @@ async function refreshDailyDraft(
       current.totalVolumetricWeightKg += Number(event.payload.volumetricWeightKg ?? 0);
       current.totalChargeableWeightKg += Number(event.payload.chargeableWeightKg ?? 0);
       current.totalFeeCad += Number(event.payload.freightCad ?? 0);
+      current.billingReferenceOnly ||= event.payload.billingReferenceOnly === true;
       totalsByTracking.set(trackingNo, current);
     }
     sections.measurements = [...totalsByTracking.values()];
@@ -413,7 +418,7 @@ export async function recordWecomDailyMeasurements(
   const { data: waybills, error } = await admin
     .from("waybills")
     .select(
-      "id,waybill_no,order_id,forwarding_id,length_cm,width_cm,height_cm,weight_kg,freight_cad,weight_snapshot",
+      "id,waybill_no,order_id,forwarding_id,carton_id,pallet_id,length_cm,width_cm,height_cm,weight_kg,freight_cad,weight_snapshot",
     )
     .in("id", [...new Set(waybillIds)]);
   if (error) throw new Error(`读取量尺称重数据失败: ${error.message}`);
@@ -444,6 +449,11 @@ export async function recordWecomDailyMeasurements(
     if (!parent.customerCode) throw new Error(`运单 ${waybill.waybill_no} 所属订单缺少客户号`);
     affectedCustomerCodes.add(parent.customerCode);
     const snapshot = waybill.weight_snapshot ?? {};
+    const carton = waybill.carton_id ? await admin.from("cartons").select("billing_mode,pallet_id").eq("id",waybill.carton_id).single() : {data:null,error:null};
+    const palletId = carton.data?.pallet_id ?? waybill.pallet_id;
+    const pallet = palletId ? await admin.from("pallets").select("billing_mode").eq("id",palletId).single() : {data:null,error:null};
+    if (carton.error || pallet.error) throw new Error("无法读取合箱收费方式");
+    const billingReferenceOnly = carton.data?.billing_mode === "merged" || pallet.data?.billing_mode === "merged";
     const eventKey = `measurement:waybill:${waybill.id}:${serviceDate}`;
     const lengthCm = Number(waybill.length_cm ?? 0);
     const widthCm = Number(waybill.width_cm ?? 0);
@@ -469,6 +479,7 @@ export async function recordWecomDailyMeasurements(
         volumetricWeightKg: Number(snapshot.volumetric_weight ?? 0),
         chargeableWeightKg: Number(snapshot.chargeable_weight ?? 0),
         freightCad: Number(waybill.freight_cad ?? snapshot.freight_cad ?? 0),
+        billingReferenceOnly,
       },
       occurred_at: new Date().toISOString(),
     });

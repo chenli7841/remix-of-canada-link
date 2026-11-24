@@ -16,7 +16,7 @@ export default defineTool({
     const { data: authData, error: authError } = await sb.auth.getUser();
     if (authError || !authData.user) return unauthenticatedResult();
     const [{ data, error }, { data: roleRows, error: roleError }] = await Promise.all([
-      sb.from("profiles").select("customer_code, full_name, preferred_lang, preferred_currency, vip_level, fee_scheme_preference").eq("id", authData.user.id).maybeSingle(),
+      sb.from("profiles").select("customer_code, full_name, preferred_lang, preferred_currency, vip_level").eq("id", authData.user.id).maybeSingle(),
       sb.from("user_roles").select("role").eq("user_id", authData.user.id),
     ]);
 

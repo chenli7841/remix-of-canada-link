@@ -771,12 +771,7 @@ function ForwardingPage() {
                                 : tr("取实重/体积重较大者", "max(actual, volumetric)")}
                             （{tr("体积除数", "divisor")} {rule.volumetric_divisor}）
                           </li>
-                          {Number(rule.min_charge_cad || rule.min_charge_cny * 0.19) > 0 && (
-                            <li>
-                              {tr("最低收费", "Min charge")}: CA$
-                              {Number(rule.min_charge_cad || rule.min_charge_cny * 0.19).toFixed(2)}
-                            </li>
-                          )}
+
                           {Number(rule.clearance_fee_cad || rule.extra_fee_cny * 0.19) > 0 && (
                             <li>
                               {tr("清关费", "Clearance fee")}: CA$

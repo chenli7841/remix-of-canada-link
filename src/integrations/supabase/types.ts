@@ -587,6 +587,7 @@ export type Database = {
       }
       cartons: {
         Row: {
+          billing_mode: string
           address_snapshot: Json | null
           batch_id: string | null
           carton_no: string | null
@@ -620,6 +621,7 @@ export type Database = {
           width_cm: number | null
         }
         Insert: {
+          billing_mode?: string
           address_snapshot?: Json | null
           batch_id?: string | null
           carton_no?: string | null
@@ -653,6 +655,7 @@ export type Database = {
           width_cm?: number | null
         }
         Update: {
+          billing_mode?: string
           address_snapshot?: Json | null
           batch_id?: string | null
           carton_no?: string | null
@@ -2856,6 +2859,7 @@ export type Database = {
       }
       pallets: {
         Row: {
+          billing_mode: string
           address_snapshot: Json | null
           batch_id: string | null
           closed_at: string | null
@@ -2888,6 +2892,7 @@ export type Database = {
           width_cm: number | null
         }
         Insert: {
+          billing_mode?: string
           address_snapshot?: Json | null
           batch_id?: string | null
           closed_at?: string | null
@@ -2920,6 +2925,7 @@ export type Database = {
           width_cm?: number | null
         }
         Update: {
+          billing_mode?: string
           address_snapshot?: Json | null
           batch_id?: string | null
           closed_at?: string | null

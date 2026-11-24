@@ -1,3 +1,4 @@
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { OrderNoteEditor } from "@/components/admin/OrderNoteEditor";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -107,7 +108,7 @@ function ForwardingsPage() {
                     {STATUS_LABEL[f.status] ?? f.status ?? "—"}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-xs">{(() => { const snap = f.freight_snapshot ?? {}; const cad = Number(snap.total_cad ?? ((Number(snap.freight_cad ?? 0)) + Number(snap.duty_cad ?? 0) + Number(snap.insurance_cad ?? 0) + Number(snap.surcharges_cad ?? 0))); return cad > 0 ? fmtCAD(cad) : "—"; })()}</td>
+                <td className="px-4 py-2.5 text-xs">{(() => { const snap = f.freight_snapshot ?? {}; const cad = Number(snap.total_cad ?? ((Number(snap.freight_cad ?? 0)) + Number(snap.duty_cad ?? 0) + Number(snap.insurance_cad ?? 0) + Number(snap.surcharges_cad ?? 0) + Number(snap.clearance_cad ?? 0))); return cad > 0 ? fmtCAD(cad) : "—"; })()}<ConsolidatedFreightNotice id={f.id} /></td>
                 <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{f.batch_no ?? "—"}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-400">{fmtDate(f.created_at)}</td>
                 <td className="px-4 py-2.5 text-right">

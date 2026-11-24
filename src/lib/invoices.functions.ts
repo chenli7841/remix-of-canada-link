@@ -91,52 +91,16 @@ async function computeWaybillFees(admin: any, waybillId: string, fx: number) {
   if (!wb) throw new Error("waybill not found");
   if (!Number.isFinite(fx) || fx <= 0) throw new Error("Invalid invoice exchange rate");
   const insurance_cny = +(Number(wb.insurance_cad ?? 0) / fx).toFixed(2);
-  let route_id: string | null = null;
-  if (wb.order_id) {
-    const { data: ord } = await admin
-      .from("orders")
-      .select("route_id")
-      .eq("id", wb.order_id)
-      .maybeSingle();
-    route_id = ord?.route_id ?? null;
-  } else if (wb.forwarding_id) {
-    const { data: fo } = await admin
-      .from("forwarding_orders")
-      .select("route_id")
-      .eq("id", wb.forwarding_id)
-      .maybeSingle();
-    route_id = fo?.route_id ?? null;
-  }
-  if (!route_id) return { freight_cny: 0, customs_cny: 0, insurance_cny, meta: null, ref: { wb } };
+  const { effectiveFreightForWaybills } = await import("./effective-freight.server");
+  const { allocations } = await effectiveFreightForWaybills(admin, [wb]);
+  if (wb.duty_cad == null || wb.insurance_cad == null) throw new Error("运单费用快照不完整，请先量尺称重");
+  const { buildInvoiceLineMeta } = await import("./duty.server");
+  const meta = await buildInvoiceLineMeta(admin, wb);
+  return { freight_cny: +(allocations.get(wb.id)!.freight_cad / fx).toFixed(2),
+    customs_cny: +(Number(wb.duty_cad)/fx).toFixed(2), insurance_cny,
+    other_cny: +((Number(wb.clearance_cad ?? 0)+Number(wb.surcharge_cad ?? 0))/fx).toFixed(2),
+    meta: {...meta, clearance_cad:Number(wb.clearance_cad ?? 0), surcharge_cad:Number(wb.surcharge_cad ?? 0), freight_source:allocations.get(wb.id)!.kind}, ref: { wb } };
 
-  const { data: rule } = await admin
-    .from("freight_rules")
-    .select("*")
-    .eq("route_id", route_id)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (!rule) return { freight_cny: 0, customs_cny: 0, insurance_cny, meta: null, ref: { wb } };
-
-  const w = Number(wb.weight_kg ?? 0);
-  const v = Number(wb.length_cm ?? 0) * Number(wb.width_cm ?? 0) * Number(wb.height_cm ?? 0);
-  const volW = rule.volumetric_divisor > 0 ? v / Number(rule.volumetric_divisor) : 0;
-  const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
-  let freight_cny = chargeable * Number(rule.unit_price_cny) + Number(rule.extra_fee_cny);
-  if (freight_cny < Number(rule.min_charge_cny)) freight_cny = Number(rule.min_charge_cny);
-
-
-  const { computeAnyWaybillDutyBreakdown, buildInvoiceLineMeta } = await import("./duty.server");
-  const duty = await computeAnyWaybillDutyBreakdown(admin, wb);
-  const customs_cny = fx > 0 ? +(duty.duty_cad / fx).toFixed(2) : 0;
-  const meta = await buildInvoiceLineMeta(admin, wb).catch(() => null);
-
-  return {
-    freight_cny: +freight_cny.toFixed(2),
-    customs_cny,
-    insurance_cny,
-    meta,
-    ref: { wb, route_id },
-  };
 }
 
 // ---- Generate invoice for a single waybill ----
@@ -149,9 +113,10 @@ export const generateInvoiceForWaybill = createServerFn({ method: "POST" })
     const { data: wb } = await supabaseAdmin.from("waybills").select("*").eq("id", data.waybill_id).maybeSingle();
     if (!wb) throw new Error("waybill not found");
 
-    const fx = await getFxCadPerCny(supabaseAdmin);
+    // New invoices store CAD directly, avoiding a CAD → CNY → CAD rounding mismatch.
+    const fx = 1;
     const fees = await computeWaybillFees(supabaseAdmin, data.waybill_id, fx);
-    const total = fees.freight_cny + fees.customs_cny + fees.insurance_cny;
+    const total = +(fees.freight_cny + fees.customs_cny + fees.insurance_cny + fees.other_cny).toFixed(2);
     if (total <= 0) throw new Error("无法计算费用，请检查线路与重量");
 
     const { data: inv, error } = await supabaseAdmin
@@ -159,6 +124,8 @@ export const generateInvoiceForWaybill = createServerFn({ method: "POST" })
       .insert({
         user_id: wb.user_id,
         type: "waybill",
+        currency: "CAD",
+        other_cny: fees.other_cny,
         subtotal_cny: total,
         freight_cny: fees.freight_cny,
         customs_cny: fees.customs_cny,
@@ -183,7 +150,8 @@ export const generateInvoiceForWaybill = createServerFn({ method: "POST" })
       customs_cny: fees.customs_cny,
       insurance_cny: fees.insurance_cny,
       amount_cny: total,
-      meta: fees.meta,
+      other_cny: fees.other_cny,
+      meta: {...fees.meta,currency:"CAD"},
     });
     await recordAdminLog(supabaseAdmin, {
       entity_type: "invoice",
@@ -202,84 +170,16 @@ export const generateBatchInvoice = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("waybills").select("*").eq("assigned_batch_id", data.batch_id);
-    if (data.user_id) q = q.eq("user_id", data.user_id);
-    const { data: wbs } = await q;
-    if (!wbs?.length) throw new Error("批次内无运单");
-
-    // group by user_id
-    const byUser = new Map<string, any[]>();
-    for (const w of wbs) {
-      if (!byUser.has(w.user_id)) byUser.set(w.user_id, []);
-      byUser.get(w.user_id)!.push(w);
-    }
-
-    const { data: batch } = await supabaseAdmin
-      .from("batches")
-      .select("batch_no")
-      .eq("id", data.batch_id)
-      .maybeSingle();
-    const fx = await getFxCadPerCny(supabaseAdmin);
-    const created: any[] = [];
-    for (const [uid, items] of byUser.entries()) {
-      let f = 0,
-        c = 0,
-        ins = 0;
-      const lineItems: any[] = [];
-      for (const w of items) {
-        const fees = await computeWaybillFees(supabaseAdmin, w.id, fx);
-        f += fees.freight_cny;
-        c += fees.customs_cny;
-        ins += fees.insurance_cny;
-        lineItems.push({
-          waybill_id: w.id,
-          order_id: w.order_id,
-          forwarding_id: w.forwarding_id,
-          description: `运单 ${w.waybill_no}`,
-          freight_cny: fees.freight_cny,
-          customs_cny: fees.customs_cny,
-          insurance_cny: fees.insurance_cny,
-          amount_cny: fees.freight_cny + fees.customs_cny + fees.insurance_cny,
-          meta: fees.meta,
-        });
-      }
-      const total = +(f + c + ins).toFixed(2);
-      if (total <= 0) continue;
-      const { data: inv } = await supabaseAdmin
-        .from("invoices")
-        .insert({
-          user_id: uid,
-          type: "batch",
-          subtotal_cny: total,
-          freight_cny: +f.toFixed(2),
-          customs_cny: +c.toFixed(2),
-          insurance_cny: +ins.toFixed(2),
-          total_cny: total,
-          fx_rate: fx,
-          batch_no: batch?.batch_no ?? null,
-          due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
-          created_by: context.userId,
-          note: `批次 ${batch?.batch_no ?? data.batch_id}`,
-        } as any)
-        .select("*")
-        .single();
-      if (inv) {
-        await supabaseAdmin.from("invoice_items").insert(lineItems.map((li) => ({ ...li, invoice_id: inv.id })));
-        created.push(inv);
-      }
-    }
-    await Promise.all(
-      created.map((inv) =>
-        recordAdminLog(supabaseAdmin, {
-          entity_type: "invoice",
-          entity_id: inv.id,
-          action: "generate_for_batch",
-          after: { invoice_no: inv.invoice_no, total_cny: inv.total_cny, batch_id: data.batch_id },
-          operator_id: context.userId,
-        }),
-      ),
-    );
-    return { ok: true, count: created.length, invoices: created };
+    // Batch invoices must come from the same confirmed snapshot used by checkout.
+    const settlements = await supabaseAdmin.from("batch_settlements").select("fee_breakdown").eq("batch_id",data.batch_id).eq("confirmed",true);
+    if(settlements.error) throw new Error(settlements.error.message);
+    const ids = [...new Set((settlements.data ?? []).map((s:any)=>s.fee_breakdown?.invoice_id).filter(Boolean))];
+    if(!ids.length) throw new Error("请先在批次费用明细中确认价格，系统会生成统一账单");
+    let query = supabaseAdmin.from("invoices").select("*").in("id",ids);
+    if(data.user_id) query = query.eq("user_id",data.user_id);
+    const result = await query;
+    if(result.error) throw new Error(result.error.message);
+    return {ok:true,count:result.data?.length ?? 0,invoices:result.data ?? []};
   });
 
 // ---- Pay invoice ----

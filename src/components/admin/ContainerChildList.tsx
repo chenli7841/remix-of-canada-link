@@ -131,6 +131,7 @@ export type CartonRow = {
   status?: string | null;
   payment_status?: string | null;
   chargeable_weight_kg?: number | null;
+  billing_mode?: string | null;
   self_freight_cad?: number | null;
   child_freight_cad?: number | null;
   child_customs_cad?: number | null;
@@ -168,7 +169,7 @@ export function CartonCompactList({
       <tbody className="divide-y divide-white/5">
         {cartons.map((c) => {
           const isOpen = !!open[c.id];
-          const total = c.customer_code
+          const total = c.billing_mode === "merged"
             ? Number(c.with_customer_total_cad ?? 0)
             : Number(c.without_customer_total_cad ?? 0);
           const colSpan = onKick ? 6 : 5;
@@ -226,6 +227,7 @@ export type PalletRow = {
   status?: string | null;
   payment_status?: string | null;
   chargeable_weight_kg?: number | null;
+  billing_mode?: string | null;
   self_freight_cad?: number | null;
   child_freight_cad_a?: number | null;
   child_freight_cad_b?: number | null;
@@ -267,7 +269,7 @@ export function PalletCompactList({
       <tbody className="divide-y divide-white/5">
         {pallets.map((p) => {
           const isOpen = !!open[p.id];
-          const total = p.customer_code
+          const total = p.billing_mode === "merged"
             ? Number(p.with_customer_total_cad ?? 0)
             : Number(p.without_customer_total_cad ?? 0);
           const colSpan = hasActions ? 6 : 5;

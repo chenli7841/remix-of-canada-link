@@ -1212,20 +1212,7 @@ function FreightFields({ value: f, onChange, sensitive }: { value: FreightRule; 
           </p>
         </>
       )}
-      <Field label="最低收费 CA$（运单级）">
-        <Input
-          type="number"
-          value={String(f.min_charge_waybill_cad ?? 0)}
-          onChange={(v) => set({ min_charge_waybill_cad: Number(v) })}
-        />
-      </Field>
-      <Field label="最低收费 CA$（批次级）">
-        <Input
-          type="number"
-          value={String(f.min_charge_batch_cad ?? 0)}
-          onChange={(v) => set({ min_charge_batch_cad: Number(v) })}
-        />
-      </Field>
+      <p className="col-span-2 text-xs text-slate-400">不自动收取最低费用；人工补收请使用附加费并填写原因。</p>
       <Field label="清关费 CA$（运单级）">
         <Input
           type="number"

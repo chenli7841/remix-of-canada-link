@@ -1,3 +1,4 @@
+import { ContainerBillingChoice } from "@/components/admin/ContainerBillingChoice";
 import {CargoPhotos} from '@/components/CargoPhotos';
 import { ResponsiveTable } from "@/components/admin/ResponsiveTable";
 import { logActionLabel, logEntityLabel } from "@/lib/admin-log-labels";
@@ -88,6 +89,7 @@ function PalletDetail() {
 
       <CargoPhotos kind="pallet" refId={palletId} canUpload />
       <ContainerInfoCard kind="pallet" row={pallet} currency="CAD"/>
+      <ContainerBillingChoice kind="pallet" row={pallet} />
       <FeeComparisonCard fees={pallet} currency="CAD"/>
 
       <ContainerEditPanel kind="pallet" row={pallet} locked={locked} onSave={async (patch) => { await updP({ data: { id: palletId, patch } }); invalidateP(); }}/>

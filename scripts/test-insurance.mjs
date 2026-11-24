@@ -7,6 +7,8 @@ async function load(file) {
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 }
+const { assertSnapshotNumbers } = await load('snapshot-validation');
+const { measuredFreight } = await load('measured-freight');
 const { insuranceCad, uniqueWaybills, supportsInsurance } = await load('insurance');
 const { routeInsuranceRate } = await load('insurance-rate.server');
 const { effectiveWaybillInsurance } = await load('insurance.server');
@@ -102,8 +104,10 @@ function extract(file, name) {
     computeWaybillDutyBreakdown: async () => ({ duty_cad: 0, declared_cad: 10.52 }),
     computeAnyWaybillDutyBreakdown: async () => ({ duty_cad: 0, declared_cad: 10.52 }),
     buildInvoiceLineMeta: async () => null,
+    computeWaybillFeesCad: (...args) => extract('scan.functions','computeWaybillFeesCad')(...args),
+    effectiveFreightForWaybills: async (_admin,rows) => ({allocations:new Map(rows.map(w=>[w.id,{freight_cad:w.freight_cad}]))}),
   };
-  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate);
+  return new Function('insuranceCad', 'getFxCadPerCny', 'dependencies', 'routeInsuranceRate', 'assertSnapshotNumbers', 'measuredFreight', `${js};return ${name}`)(insuranceCad, dependencies.getFxCadPerCny, dependencies, routeInsuranceRate, assertSnapshotNumbers, measuredFreight);
 }
 function pricingDb(insured, cargoType = 'general') {
   return { from(table) {
@@ -112,7 +116,7 @@ function pricingDb(insured, cargoType = 'general') {
       shipping_routes: { cargo_type: cargoType },
       forwarding_orders: { route_id: 'r', declared_value_cad: 10.52, box_count: 1, insured },
       forwarding_items: [],
-      freight_rules: { insurance_rate_pct: 3, unit_price_cad: 3, min_charge_waybill_cad: 2, volumetric_divisor: 5000 },
+      freight_rules: { weight_mode: "actual", insurance_rate_pct: 3, unit_price_cad: 3, min_charge_waybill_cad: 2, volumetric_divisor: 5000 },
       customs_rules: { enabled: false },
     };
     const result = () => {
@@ -154,7 +158,7 @@ test('invoice records stored premium, including zero, without consulting eligibi
   function invoiceDb(premium, hasRule = true) {
     return { from(table) {
       assert.notEqual(table, 'shipping_routes');
-      const data = { waybills: { forwarding_id: 'f', insurance_cad: premium, weight_kg: 1 }, forwarding_orders: { route_id: 'r', insured: false, declared_value_cad: 9999 }, freight_rules: hasRule ? { insurance_rate_pct: 100, unit_price_cny: 1, extra_fee_cny: 0, min_charge_cny: 0 } : null }[table];
+      const data = { waybills: { id:'w', freight_cad:3, duty_cad:0, forwarding_id: 'f', insurance_cad: premium, weight_kg: 1 }, forwarding_orders: { route_id: 'r', insured: false, declared_value_cad: 9999 }, freight_rules: hasRule ? { insurance_rate_pct: 100, unit_price_cny: 1, extra_fee_cny: 0, min_charge_cny: 0 } : null }[table];
       const q = { select() { return q; }, eq() { return q; }, maybeSingle: async () => ({ data }) }; return q;
     } };
   }
@@ -178,7 +182,7 @@ test('recompute saves premium off the duty breakdown and surfaces write failure'
     const saved = [];
     const admin = { from(table) {
       if (table !== 'waybills') return base.from(table);
-      const q = { select() { return q; }, eq() { return q; }, maybeSingle: async () => ({ data: { id: 'w', forwarding_id: 'f', weight_kg: 1 } }), update(row) { saved.push(row); return { eq: async () => ({ error: fail ? { message: 'write failed' } : null }) }; } }; return q;
+      const q = { select() { return q; }, eq() { return q; }, single: async () => ({ data: { id: 'w', forwarding_id: 'f', weight_kg: 1 } }), update(row) { saved.push(row); return { eq: async () => ({ error: fail ? { message: 'write failed' } : null }) }; } }; return q;
     } };
     return { admin, saved };
   }

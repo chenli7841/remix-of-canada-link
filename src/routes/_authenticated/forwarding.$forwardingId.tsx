@@ -1,3 +1,4 @@
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -164,7 +165,7 @@ function ForwardingDetailPage() {
   const cusCad = Number(snap?.duty_cad ?? 0);
   const surCad = Number(snap?.surcharges_cad ?? 0);
   const customsApplies: boolean = snap ? snap.customs_applies !== false : true;
-  const totalCad = Number(snap?.total_cad ?? feeCad + insCad + cusCad + surCad);
+  const totalCad = Number(snap?.total_cad ?? feeCad + insCad + cusCad + surCad + Number(snap?.clearance_cad ?? 0));
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:py-12">
@@ -263,6 +264,7 @@ function ForwardingDetailPage() {
 
             {/* Order-level totals */}
             <div className="mt-5 rounded-xl border border-border bg-background/40 p-4">
+              <ConsolidatedFreightNotice id={forwardingId} />
               <div className="mb-3 text-[11px] uppercase tracking-wider text-ink-soft">
                 {tr("订单汇总", "Order summary")}
               </div>
@@ -504,6 +506,7 @@ function ForwardingDetailPage() {
 
         <aside className="space-y-6">
           <Card title={tr("费用明细", "Cost breakdown")} icon={<Receipt className="h-4 w-4" />}>
+            <ConsolidatedFreightNotice id={forwardingId} />
             <dl className="space-y-2 text-sm">
               <Row
                 label={

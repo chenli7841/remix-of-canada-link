@@ -1,28 +1,17 @@
-import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildWeightOrders,weightTotal} from '../src/lib/batch-weight-snapshot.ts';
-import {assertSnapshotNumbers} from '../src/lib/snapshot-validation.ts';
-const source=fs.readFileSync('src/lib/orders.functions.ts','utf8');
-const section=source.slice(source.indexOf('// === 9. Recompute'),source.indexOf('// === 10. Customs'));
-const loop=section.slice(section.indexOf('  for (const b of buckets.values())')).replaceAll(' as any','');
-const run=new (Object.getPrototypeOf(async function(){}).constructor)('buckets','mergedRuleMap','schemeOf','allWbs','oMap','fMap','buildWeightOrders','weightTotal','assertSnapshotNumbers','admin','computeFreight','fx',loop);
-const bucket=(extra={})=>({customer_code:'06199',route_code:'海普活动',route_id:'hp',freight:0,freight_weight_inputs:[],freight_waybill_ids:new Set(),...extra});
-const exec=(rows,wbs=[])=>run(new Map(rows.map((b,i)=>[i,b])),new Map([['hp',{unit_price_cad:3}]]),()=> 'split',wbs,new Map(),new Map(),buildWeightOrders,weightTotal,assertSnapshotNumbers,null,()=>{throw Error('unexpected merged pricing')},0.2);
-test('child accounting bucket does not demand duplicate freight weight',async()=>{
- const child=bucket({customs:4,insurance:2});const owner=bucket({freight:6,freight_weight_inputs:[{ref:'box'}],freight_waybill_ids:new Set(['w'])});
- await exec([child,owner],[{id:'w',weight_snapshot:{chargeable_weight:2}}]);
- assert.equal(child.freight,0);assert.equal(child.customs,4);assert.equal(child.insurance,2);assert.equal(owner.freight,6);
+import { allocateContainerFreight } from '../src/lib/freight-allocation.ts';
+import { weightTotal, buildWeightOrders } from '../src/lib/batch-weight-snapshot.ts';
+import { assertSnapshotNumbers } from '../src/lib/snapshot-validation.ts';
+test('missing measured freight blocks bill generation instead of falling back to the parent order',()=>{
+ assert.throws(()=>allocateContainerFreight([{id:'w',freight_cad:null}],[],[]),/量尺称重/);
 });
-test('real parcel with missing snapshot still blocks pricing',async()=>{
- await assert.rejects(exec([bucket({freight_weight_inputs:[{ref:'box'}],freight_waybill_ids:new Set(['w'])})],[{id:'w'}]),/合计计费重量/);
- await assert.rejects(exec([bucket({freight_weight_inputs:[{ref:'empty box'}]})]),/合计计费重量/);
+test('a real parcel with no weight snapshot cannot produce a confirmed weight',()=>{
+ const orders=buildWeightOrders([{id:'w',freight_cad:3}],new Map(),new Map());
+ assert.throws(()=>assertSnapshotNumbers('计费明细',{计费重量:weightTotal(orders)}),/计费重量/);
 });
-
-
-test('split freight preserves per-waybill minimum charges instead of repricing pooled weight',async()=>{
- const owner=bucket({freight:45.27,freight_weight_inputs:[{ref:'parcel'}],freight_waybill_ids:new Set(['w'])});
- await exec([owner],[{id:'w',weight_snapshot:{chargeable_weight:14.084}}]);
- assert.equal(owner.freight,45.27);
- assert.notEqual(owner.freight,42.25);
+test('no duplicate freight for a leaf referenced by both its carton and pallet',()=>{
+ const w={id:'w',carton_id:'c',pallet_id:'p',freight_cad:4};
+ const result=allocateContainerFreight([w,w],[{id:'c',pallet_id:'p',billing_mode:'merged',self_freight_cad:8}],[{id:'p',billing_mode:'merged',self_freight_cad:12}]);
+ assert.equal(result.size,1);assert.equal(result.get('w').freight_cad,12);
 });

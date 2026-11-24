@@ -1,3 +1,4 @@
+import { measuredFreight } from "./measured-freight";
 import { assertSnapshotNumbers } from "./snapshot-validation";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
@@ -1288,7 +1289,7 @@ export const getWaybillsLabelData = createServerFn({ method: "POST" })
 //   clearance_cad = 线路规则的清关费 (每单)
 //   fx (CAD/CNY) 从 app_settings.fx_rate 读取；CNY 单价 × fx = CAD。
 //   电商 declared_cad = subtotal_cny × fx (系统汇率, 不用硬编码 0.19)
-export async function computeWaybillFeesCad(admin: any, wb: any) {
+export async function computeWaybillFeesCad(admin: any, wb: any, routeOverride?: string) {
   const { getFxCadPerCny } = await import("./orders.functions");
   const fx = await getFxCadPerCny(admin);
   let route_id: string | null = null;
@@ -1314,6 +1315,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     route_id = fo.route_id ?? null;
 
   }
+  route_id = routeOverride ?? route_id;
   if (!route_id)
     return {
       freight_cad: 0,
@@ -1350,10 +1352,11 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
   const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
   const unit_cad = Number(rule.unit_price_cad ?? 0) || Number(rule.unit_price_cny ?? 0) * fx;
   // 运单级最低收费 / 清关费：每张运单各判断一次（批次级另行结算）
-  const min_cad = Number(rule.min_charge_waybill_cad ?? 0);
+  const min_cad = 0; // Minimum charges are disabled; staff may add explicit adjustments.
   const clearance_cad = Number(rule.clearance_fee_waybill_cad ?? 0);
 
-  let freight_cad = +(chargeable * unit_cad).toFixed(2);
+  const measured = measuredFreight(rule, {weight:w,length:L,width:W,height:H}, fx);
+  let freight_cad = measured.freight_cad;
   if (freight_cad < min_cad) freight_cad = +min_cad.toFixed(2);
   // 关税 —— 统一走 HS 明细口径 (mfn+gst+反倾销)；customs_rules.rate_pct 已弃用，只用 enabled/threshold
   let duty_cad = 0;
@@ -1374,7 +1377,7 @@ export async function computeWaybillFeesCad(admin: any, wb: any) {
     insurance_cad,
     clearance_cad: +clearance_cad.toFixed(2),
     chargeable_kg: +chargeable.toFixed(3),
-    weight_snapshot: { chargeable_weight: +chargeable.toFixed(3), actual_weight: w, volumetric_weight: +volW.toFixed(3), freight_cad, duty_cad, insurance_cad, computed_at: new Date().toISOString() },
+    weight_snapshot: { ...measured, source: "measured_waybill_v3", unit_price_cad: unit_cad, fx_rate: fx, weight_mode: rule.weight_mode, customs_applies: !!customs?.enabled, declared_cad, insurance_rate_pct: ins_rate, clearance_cad, chargeable_weight: +chargeable.toFixed(3), actual_weight: w, volumetric_weight: +volW.toFixed(3), freight_cad, duty_cad, insurance_cad, computed_at: new Date().toISOString() },
     route_id,
     fx,
   };
@@ -1780,7 +1783,8 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         tv += l * wd * h;
       }
       if (!complete || tw <= 0 || tv <= 0) { snapshotWarnings.push(`订单 ${fid}：运单重量或长宽高未齐，未生成费用快照`); continue; }
-      const snap = await computeFreight(supabaseAdmin, fo.route_id, tw, tv, fo.declared_value_cad ?? null, fo.insured === true);
+      const { recomputeForwardingTotal } = await import("./orders.functions");
+      const snap = await recomputeForwardingTotal(supabaseAdmin, fid);
       if (!snap) continue;
       await supabaseAdmin
         .from("forwarding_orders")
@@ -1854,7 +1858,9 @@ export const measureSaveDims = createServerFn({ method: "POST" })
         total_weight_kg: +tw.toFixed(3),
         total_volume_cm3: tv,
         computed_at: new Date().toISOString(),
-        source: "measure_auto",
+        source: "measured_waybill_v3",
+        fx_rate: fx,
+        total_cad: +(f + du + ins + clr).toFixed(2),
       };
       await supabaseAdmin
         .from("orders")

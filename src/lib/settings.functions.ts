@@ -1,3 +1,5 @@
+import { computePallets, measuredFreight } from "./measured-freight";
+export { computePallets } from "./measured-freight";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { VipLevel } from "@/lib/vip-levels";
@@ -128,40 +130,6 @@ export type FreightRule = {
  *  - pallets = max(footprint × height_factor, weight_factor)
  *  - missing dimensions / limits → fallback 1, reason='missing_dims'
  */
-export function computePallets(input: {
-  L?: number | null;
-  W?: number | null;
-  H?: number | null;
-  kg?: number | null;
-  rule: Pick<
-    FreightRule,
-    | "pallet_max_length_cm"
-    | "pallet_max_width_cm"
-    | "pallet_max_height_cm"
-    | "pallet_max_weight_kg"
-    | "pallet_overflow_factor"
-  >;
-}): { pallets: number; reason?: string } {
-  const L = Number(input.L) || 0,
-    W = Number(input.W) || 0,
-    H = Number(input.H) || 0,
-    kg = Number(input.kg) || 0;
-  const maxL = Number(input.rule.pallet_max_length_cm) || 0;
-  const maxW = Number(input.rule.pallet_max_width_cm) || 0;
-  const maxH = Number(input.rule.pallet_max_height_cm) || 0;
-  const maxKg = Number(input.rule.pallet_max_weight_kg) || 0;
-  const factor = Number(input.rule.pallet_overflow_factor) || 2;
-  if (!maxL || !maxW || (!L && !W && !H && !kg)) return { pallets: 1, reason: "missing_dims" };
-  if ((maxL && L > factor * maxL) || (maxW && W > factor * maxW)) {
-    throw new Error(`超规格：长/宽不能超过标准板尺寸的 ${factor} 倍`);
-  }
-  const lf = L > 0 ? Math.ceil(L / maxL) : 1;
-  const wf = W > 0 ? Math.ceil(W / maxW) : 1;
-  const hf = maxH > 0 && H > 0 ? Math.ceil(H / maxH) : 1;
-  const kgf = maxKg > 0 && kg > 0 ? Math.ceil(kg / maxKg) : 1;
-  const footprint = lf * wf;
-  return { pallets: Math.max(footprint * hf, kgf) };
-}
 
 export type CustomsRule = {
   id?: string;
@@ -326,7 +294,7 @@ export const upsertRoute = createServerFn({ method: "POST" })
       weight_mode: f.weight_mode,
       volumetric_divisor: f.volumetric_divisor,
       unit_price_cad: f.unit_price_cad,
-      min_charge_cad: f.min_charge_cad,
+      min_charge_cad: 0,
       clearance_fee_cad: f.clearance_fee_cad,
       unit_price_cny: 0,
       min_charge_cny: 0,
@@ -341,8 +309,8 @@ export const upsertRoute = createServerFn({ method: "POST" })
       pallet_max_height_cm: f.pallet_max_height_cm ?? null,
       pallet_max_weight_kg: f.pallet_max_weight_kg ?? null,
       pallet_overflow_factor: f.pallet_overflow_factor ?? 2,
-      min_charge_waybill_cad: f.min_charge_waybill_cad ?? 0,
-      min_charge_batch_cad: f.min_charge_batch_cad ?? 0,
+      min_charge_waybill_cad: 0,
+      min_charge_batch_cad: 0,
       clearance_fee_waybill_cad: f.clearance_fee_waybill_cad ?? 0,
       clearance_fee_batch_cad: f.clearance_fee_batch_cad ?? 0,
       delivery_light_max_kg: f.delivery_light_max_kg ?? 0,
@@ -452,35 +420,22 @@ export const quoteFreight = createServerFn({ method: "POST" })
     const volW = rule.volumetric_divisor > 0 ? v / Number(rule.volumetric_divisor) : 0;
     const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
     // Prefer CAD columns; fall back to legacy CNY * 0.19 for older rows.
-    const fx = 0.19;
+    const { getFxCadPerCny } = await import("./orders.functions");
+    const fx = await getFxCadPerCny(context.supabase);
     const unit_cad = Number(rule.unit_price_cad ?? 0) || Number(rule.unit_price_cny ?? 0) * fx;
     // 最低收费 / 清关费按运单级试算（批次级另行结算）
-    const min_cad = Number(rule.min_charge_waybill_cad ?? 0);
+    const min_cad = 0;
     const clearance_cad = Number(rule.clearance_fee_waybill_cad ?? 0);
 
     const pricing_mode = (rule.pricing_mode as PricingMode) ?? "weight";
     let freight_cad = 0;
     let pallets = 0;
     let pallet_reason: string | undefined;
-    if (pricing_mode === "pallet") {
-      try {
-        const r = computePallets({
-          L: data.length_cm,
-          W: data.width_cm,
-          H: data.height_cm,
-          kg: w,
-          rule: rule as any,
-        });
-        pallets = r.pallets;
-        pallet_reason = r.reason;
-        freight_cad = +(pallets * Number(rule.pallet_unit_price_cad ?? 0)).toFixed(2);
-      } catch (e: any) {
-        return { ok: false as const, reason: "oversize" as const, message: e.message };
-      }
-    } else {
-      freight_cad = +(chargeable * unit_cad).toFixed(2);
-    }
-    if (freight_cad < min_cad) freight_cad = +min_cad.toFixed(2);
+    try {
+      const measured=measuredFreight(rule,{weight:w,length:Number(data.length_cm ?? v),width:Number(data.width_cm ?? 1),height:Number(data.height_cm ?? 1)},fx);
+      freight_cad=measured.freight_cad;
+      pallets=measured.pallets;
+    } catch(e:any) { return {ok:false as const,reason:"oversize" as const,message:e.message}; }
 
     let duty_cad = 0;
     if (customs?.enabled && data.declared_cad && data.declared_cad >= Number(customs.threshold_cad)) {

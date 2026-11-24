@@ -267,29 +267,6 @@ export const setUserVipAndPoints = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const setUserFeeScheme = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string; scheme: "merged" | "split" }) => d)
-  .handler(async ({ data, context }) => {
-    const level = await getCallerLevel(context.supabase, context.userId);
-    if (level === "none") throw new Error("Forbidden: owner or manager only");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    if (data.scheme !== "merged" && data.scheme !== "split") throw new Error("Invalid scheme");
-    const { error } = await supabaseAdmin
-      .from("profiles")
-      .update({ fee_scheme_preference: data.scheme })
-      .eq("id", data.userId);
-    if (error) throw new Error(error.message);
-    await recordAdminLog(supabaseAdmin, {
-      entity_type: "user",
-      entity_id: data.userId,
-      action: "set_fee_scheme",
-      after: { scheme: data.scheme },
-      operator_id: context.userId,
-    });
-    return { ok: true };
-  });
-
 export const setUserBlacklist = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string; blacklisted: boolean; reason?: string | null }) => d)

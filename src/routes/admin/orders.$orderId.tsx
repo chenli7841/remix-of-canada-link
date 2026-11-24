@@ -179,6 +179,7 @@ function OrderDetail() {
       </div>
 
       <Card title="商品 / 物品">
+        <ConsolidatedFreightNotice id={orderId} kind="order" />
         <ResponsiveTable className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase text-slate-500">
             <tr><th className="py-2">名称</th><th>SKU</th><th>数量</th><th>单价</th><th className="text-right">小计</th></tr>
@@ -278,3 +279,4 @@ function Stat({ label, value }: { label: string; value: any }) {
   );
 }
 
+import { ConsolidatedFreightNotice } from "@/components/ConsolidatedFreightNotice";

@@ -127,10 +127,10 @@ function ShippingPage() {
     // 计费方式：只算实重 / 只算体积重 / 取大（与后端 _compute_line_quote 一致）
     const mode = cfg.weight_mode ?? "max";
     const billableRaw = mode === "actual" ? actual : mode === "volumetric" ? vol : Math.max(actual, vol);
-    const minCharge = cfg.min_charge_cad ?? 0;
+    const minCharge = 0;
     const extra = cfg.extra_fee_cad ?? 0;
     // 有最低收费就以它兜底，没有才套 0.5kg 下限（营销回退口径）
-    const billable = minCharge > 0 ? billableRaw : Math.max(billableRaw, MIN_KG);
+    const billable = billableRaw;
     const total = Math.max(billable * cfg.unit_price_cad, minCharge) + extra;
     setResult(total);
   };
@@ -281,8 +281,8 @@ function ShippingPage() {
                     : cfg.weight_mode === "volumetric"
                       ? "volumetric weight only"
                       : "max(actual, volumetric)";
-                const minZh = cfg.min_charge_cad ? ` · 最低收费 CA$${cfg.min_charge_cad.toFixed(2)}` : "";
-                const minEn = cfg.min_charge_cad ? ` · min charge CA$${cfg.min_charge_cad.toFixed(2)}` : "";
+                const minZh = "";
+                const minEn = "";
                 return lang === "zh"
                   ? `* 实际运费以入库实测为准。体积重 = 长×宽×高 / ${cfg.dim_divisor}，计费${modeZh}${minZh}${cfg.from_rule ? "（按当前线路运费规则）" : ""}`
                   : `* Final freight billed on actual measurement at intake. Volumetric weight = L×W×H / ${cfg.dim_divisor}, billed by ${modeEn}${minEn}${cfg.from_rule ? " (per current route's freight rule)" : ""}`;

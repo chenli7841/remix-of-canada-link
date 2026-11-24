@@ -9,7 +9,6 @@ import {
   setUserRoles,
   setUserVipAndPoints,
   setUserBlacklist,
-  setUserFeeScheme,
   getMyRoles,
   adjustUserWallet,
   walletTxReceipt,
@@ -259,13 +258,6 @@ function UserDetailPage() {
             userId={userId}
             currentVip={(d.profile.vip_level ?? "normal") as VipLevel}
             currentPoints={Number(d.profile.points ?? 0)}
-            canEdit={canEdit}
-          />
-
-          {/* Fee scheme preference */}
-          <FeeSchemeCard
-            userId={userId}
-            current={((d.profile as any).fee_scheme_preference ?? "split") as "merged" | "split"}
             canEdit={canEdit}
           />
 
@@ -553,82 +545,6 @@ function VipPointsCard({
   );
 }
 
-function FeeSchemeCard({
-  userId,
-  current,
-  canEdit,
-}: {
-  userId: string;
-  current: "merged" | "split";
-  canEdit: boolean;
-}) {
-  const qc = useQueryClient();
-  const save = useServerFn(setUserFeeScheme);
-  const [scheme, setScheme] = useState<"merged" | "split">(current);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  useEffect(() => {
-    setScheme(current);
-  }, [current]);
-  const dirty = scheme !== current;
-
-  const onSave = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await save({ data: { userId, scheme } });
-      await qc.invalidateQueries({ queryKey: ["admin-user-detail", userId] });
-      setMsg({ kind: "ok", text: "费用方案已更新" });
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e?.message ?? "保存失败" });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const opt = (v: "merged" | "split", label: string, desc: string) => (
-    <button
-      key={v}
-      type="button"
-      disabled={!canEdit}
-      onClick={() => setScheme(v)}
-      className={`flex-1 rounded-lg border p-3 text-left transition ${scheme === v ? "border-brand/50 bg-brand/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"} disabled:opacity-50 disabled:cursor-not-allowed`}
-    >
-      <div className="text-sm font-semibold text-slate-100">{label}</div>
-      <div className="mt-1 text-[11px] text-slate-400">{desc}</div>
-    </button>
-  );
-
-  return (
-    <section className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-      <h2 className="font-display text-base font-bold inline-flex items-center gap-2">
-        <Receipt className="h-4 w-4 text-emerald-400" />
-        费用方案偏好
-      </h2>
-      <p className="mt-1 text-xs text-slate-400">决定该客户的箱号 / 托盘在有客户号时采用哪种计费方案。</p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        {opt("merged", "A. 合并收费", "按整箱 / 整托计算自身运费 + 下属关税/保险/清关")}
-        {opt("split", "B. 不合并", "按下属运单逐条汇总，不计箱子/托盘自身运费与清关")}
-      </div>
-      {msg && (
-        <div
-          className={`mt-3 rounded-md border px-3 py-1.5 text-xs ${msg.kind === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}
-        >
-          {msg.text}
-        </div>
-      )}
-      {canEdit && (
-        <button
-          onClick={onSave}
-          disabled={busy || !dirty}
-          className="mt-3 inline-flex items-center gap-2 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}保存偏好
-        </button>
-      )}
-    </section>
-  );
-}
 
 function UnpaidPanel({
   invoices,

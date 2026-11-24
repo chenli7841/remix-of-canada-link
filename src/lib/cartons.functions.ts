@@ -1,3 +1,4 @@
+import { measuredFreight } from "./measured-freight";
 import { uniqueWaybills } from "./insurance";
 import { sumSurchargesCad } from "./surcharge-currency";
 import { effectiveWaybillInsurance } from "./insurance.server";
@@ -196,6 +197,7 @@ async function computeSelfFreightCad(
   routeId: string | null | undefined,
   weightKg: number,
   volumeM3: number,
+  dimensions?: number[],
 ): Promise<number> {
   if (!routeId) return 0;
   const { data: rule } = await admin
@@ -206,29 +208,23 @@ async function computeSelfFreightCad(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!rule) return 0;
-  const w = Math.max(0, weightKg || 0);
-  const volCm3 = Math.max(0, volumeM3 || 0) * 1_000_000;
-  const divisor = Number(rule.volumetric_divisor) || 6000;
-  const volW = volCm3 / divisor;
-  const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
+  if (!rule) throw new Error("该线路没有有效运费规则，请先设置后再计费");
   const fx = await getFxCadPerCny(admin);
-  const unit_cad = Number(rule.unit_price_cad ?? 0) || Number(rule.unit_price_cny ?? 0) * fx;
-  // 运单/箱自身层不再套用最低收费（只在订单级、批次级结算）
-  const min_cad = 0;
-  let freight = chargeable * unit_cad;
-  if (freight < min_cad) freight = min_cad;
-  return +freight.toFixed(2);
+  if (rule.pricing_mode === "pallet" && !dimensions) throw new Error("按板计费需要完整尺寸");
+  const [length,width,height] = dimensions ?? [volumeM3*1_000_000,1,1];
+  return measuredFreight(rule,{weight:weightKg,length,width,height},fx).freight_cad;
+
 }
 
 // When updating self dims/weight on a carton/pallet, derive volume & freight (CAD) automatically.
 async function applySelfDerivations(admin: any, table: "cartons" | "pallets", id: string, patch: any) {
   const dimKeys = ["self_length_cm", "self_width_cm", "self_height_cm", "self_weight_kg"];
-  const touched = dimKeys.some((k) => k in patch);
+  const touched = dimKeys.some((k) => k in patch) || "route_id" in patch || "billing_mode" in patch;
+  if ("billing_mode" in patch && !["split", "merged"].includes(patch.billing_mode)) throw new Error("收费方式无效");
   if (!touched) return patch;
   const { data: row } = await admin
     .from(table)
-    .select("self_length_cm, self_width_cm, self_height_cm, self_weight_kg, route_id")
+    .select("self_length_cm, self_width_cm, self_height_cm, self_weight_kg, route_id, billing_mode")
     .eq("id", id)
     .maybeSingle();
   if (!row) return patch;
@@ -238,7 +234,8 @@ async function applySelfDerivations(admin: any, table: "cartons" | "pallets", id
   const H = Number(merged.self_height_cm ?? 0);
   const weight = Number(merged.self_weight_kg ?? 0);
   const vol = L && W && H ? +((L * W * H) / 1_000_000).toFixed(4) : 0;
-  const freightCad = await computeSelfFreightCad(admin, merged.route_id, weight, vol);
+  if (merged.billing_mode === "merged" && (!merged.route_id || weight <= 0 || vol <= 0)) throw new Error("合箱收费需要先填写线路、实重和完整尺寸");
+  const freightCad = await computeSelfFreightCad(admin, merged.route_id, weight, vol, [L,W,H]);
   return { ...patch, self_volume_m3: vol, self_freight_cad: freightCad, self_freight_cny: 0 };
 }
 
@@ -320,8 +317,8 @@ function composeCad(
   hasCustomer: boolean,
   lastMileCad: number,
 ) {
-  const with_customer_total_cad = +(selfCad + ccCad + ciCad + surSelfCad + surChildCad + lastMileCad).toFixed(2);
-  const without_customer_total_cad = +(cfCad + ccCad + ciCad + clrCad + surChildCad + lastMileCad).toFixed(2);
+  const with_customer_total_cad = +(selfCad + ccCad + ciCad + clrCad + surSelfCad + surChildCad + lastMileCad).toFixed(2);
+  const without_customer_total_cad = +(cfCad + ccCad + ciCad + clrCad + surSelfCad + surChildCad + lastMileCad).toFixed(2);
   return {
     // legacy CNY 字段保留为 0 (系统已切换到 CAD)
     self_freight_cny: 0,
@@ -393,9 +390,9 @@ async function feeTotalsForCarton(admin: any, row: any) {
     const c = await computeChargeable(admin, row.route_id, Number(w.weight_kg ?? 0), vol);
     childChargeable += c.chargeable;
   }
-  const hasCustomer = !!row.customer_code;
+  const hasCustomer = row.billing_mode === "merged";
   const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : +childChargeable.toFixed(3);
-  const lastMileCad = await getLastMileFeeCad(admin, row.route_id, chargeableUsedKg);
+  const lastMileCad = 0; // Delivery is an explicit batch adjustment, not a second container charge.
   let selfFreightCad = Number(row.self_freight_cad ?? 0);
   if (
     selfFreightCad === 0 &&
@@ -407,6 +404,7 @@ async function feeTotalsForCarton(admin: any, row: any) {
       row.route_id,
       Number(row.self_weight_kg ?? 0),
       Number(row.self_volume_m3 ?? 0),
+      [Number(row.self_length_cm ?? 0),Number(row.self_width_cm ?? 0),Number(row.self_height_cm ?? 0)],
     );
     if (selfFreightCad > 0) await admin.from("cartons").update({ self_freight_cad: selfFreightCad }).eq("id", row.id);
   }
@@ -428,10 +426,10 @@ async function feeTotalsForPallet(admin: any, row: any) {
     .select(
       "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
-    .eq("pallet_id", row.id);
+    .eq("pallet_id", row.id).is("carton_id", null);
   const { data: cns } = await admin
     .from("cartons")
-    .select("id, customer_code, self_freight_cad")
+    .select("id, customer_code, billing_mode, self_freight_cad")
     .eq("pallet_id", row.id);
   const cartonList = cns ?? [];
   const cartonIds = cartonList.map((c: any) => c.id);
@@ -466,7 +464,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
   let cfA = 0;
   for (const w of directWbs ?? []) cfA += Number(w.freight_cad ?? 0);
   for (const c of cartonList) {
-    if (c.customer_code) {
+    if (c.billing_mode === "merged") {
       cfA += Number(c.self_freight_cad ?? 0);
     } else {
       for (const w of cnWbs) if (w.carton_id === c.id) cfA += Number(w.freight_cad ?? 0);
@@ -474,7 +472,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
   }
   // cf_B 方案B（不合并）"下属运费" = Σ 全部 leaf 运单 freight_cad
   let cfB = 0;
-  for (const w of allWbs) cfB += Number(w.freight_cad ?? 0);
+  cfB = cfA; // Per-waybill pallet respects the billing choice of each nested carton.
 
   const wbSurchargeExtra = await sumSurchargesForWaybills(admin, wbIds);
   const selfSurcharge = await sumSurcharges(admin, "pallet", row.id);
@@ -504,9 +502,9 @@ async function feeTotalsForPallet(admin: any, row: any) {
     const c = await computeChargeable(admin, row.route_id, Number(w.weight_kg ?? 0), vol);
     childChargeable += c.chargeable;
   }
-  const hasCustomer = !!row.customer_code;
+  const hasCustomer = row.billing_mode === "merged";
   const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : +childChargeable.toFixed(3);
-  const lastMileCad = await getLastMileFeeCad(admin, row.route_id, chargeableUsedKg);
+  const lastMileCad = 0; // Delivery is an explicit batch adjustment, not a second container charge.
   let selfFreightCad = Number(row.self_freight_cad ?? 0);
   if (
     selfFreightCad === 0 &&
@@ -518,6 +516,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
       row.route_id,
       Number(row.self_weight_kg ?? 0),
       Number(row.self_volume_m3 ?? 0),
+      [Number(row.self_length_cm ?? 0),Number(row.self_width_cm ?? 0),Number(row.self_height_cm ?? 0)],
     );
     if (selfFreightCad > 0) await admin.from("pallets").update({ self_freight_cad: selfFreightCad }).eq("id", row.id);
   }
@@ -526,14 +525,14 @@ async function feeTotalsForPallet(admin: any, row: any) {
   //   B = Σ全部leaf运费          + Σ关税 + Σ保险 + Σ清关费 + 下属附加费 + 末端派送费
   const with_customer_total_cad = +(
     selfFreightCad +
-    cfA +
     cc +
     ci +
+    clr +
     selfSurcharge +
     childSurcharge +
     lastMileCad
   ).toFixed(2);
-  const without_customer_total_cad = +(cfB + cc + ci + clr + childSurcharge + lastMileCad).toFixed(2);
+  const without_customer_total_cad = +(cfB + cc + ci + clr + selfSurcharge + childSurcharge + lastMileCad).toFixed(2);
   const composed = composeCad(
     selfFreightCad,
     cfB,
@@ -727,16 +726,7 @@ export const getCartonDetail = createServerFn({ method: "POST" })
       batch_status = (b as any)?.status ?? null;
     }
     const fees = await feeTotalsForCarton(supabaseAdmin, c.data);
-    let customer_fee_scheme: "merged" | "split" | null = null;
-    if (c.data.customer_user_id) {
-      const { data: pr } = await supabaseAdmin
-        .from("profiles")
-        .select("fee_scheme_preference")
-        .eq("id", c.data.customer_user_id)
-        .maybeSingle();
-      customer_fee_scheme = ((pr as any)?.fee_scheme_preference ?? "split") as "merged" | "split";
-    }
-    (fees as any).customer_fee_scheme = customer_fee_scheme;
+(fees as any).billing_mode = (c.data as any).billing_mode ?? "split";
     const childMetrics = await childMetricsForCarton(supabaseAdmin, data.id);
     // Enrich waybills with surcharge sum + volume
     const wbList = (w.data ?? []) as any[];
@@ -1284,16 +1274,7 @@ export const getPalletDetail = createServerFn({ method: "POST" })
       batch_status = (b as any)?.status ?? null;
     }
     const fees = await feeTotalsForPallet(supabaseAdmin, p.data);
-    let customer_fee_scheme: "merged" | "split" | null = null;
-    if (p.data.customer_user_id) {
-      const { data: pr } = await supabaseAdmin
-        .from("profiles")
-        .select("fee_scheme_preference")
-        .eq("id", p.data.customer_user_id)
-        .maybeSingle();
-      customer_fee_scheme = ((pr as any)?.fee_scheme_preference ?? "split") as "merged" | "split";
-    }
-    (fees as any).customer_fee_scheme = customer_fee_scheme;
+(fees as any).billing_mode = (p.data as any).billing_mode ?? "split";
     const childMetrics = await childMetricsForPallet(supabaseAdmin, data.id);
     const wbList = (w.data ?? []) as any[];
     const wbIds = wbList.map((x) => x.id);

@@ -242,7 +242,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
                 {c.is_paid ? "已付款" : "未付款"}
               </span>
               <span className="rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-brand">
-                费用方案：{scheme === "merged" ? "合并收费 (A)" : "不合并 (B)"}
+                费用来源：运单明细／已选合箱费用
               </span>
               <span className="text-slate-400">
                 总重量 <span className="font-mono text-slate-200">{Number(c.weight_kg ?? 0).toFixed(2)} kg</span>
@@ -410,7 +410,7 @@ export function CustomerDrawer({ batchId, customerCode, customerData, canEdit, o
           <div className="space-y-3">
             <Card title="费用明细 (CAD)">
               <FeeRow
-                label={`本次运费${scheme === "merged" ? " · 合并计算" : " · 逐单运费合计"}`}
+                label={`本次运费${scheme === "merged" ? " · 合并计算" : " · 运单及合箱运费合计"}`}
                 value={feeFreight}
                 sub={
                   scheme === "merged"
