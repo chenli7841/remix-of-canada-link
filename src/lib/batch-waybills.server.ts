@@ -34,3 +34,24 @@ export async function loadBatchWaybills(admin: any, batchId: string): Promise<an
   // For a waybill inside a carton, the carton determines membership.
   return [...new Map([...direct, ...cartonWbs, ...palletWbs.filter(w => !w.carton_id)].map(w => [w.id, w])).values()];
 }
+
+/** Resolve only this customer's leaves, including containers, without exposing other customers. */
+export async function loadCustomerBatchWaybills(admin: any, userId: string): Promise<any[]> {
+  const waybills = await readBatchRows(admin, "waybills",
+    "id,user_id,assigned_batch_id,carton_id,pallet_id,order_id,forwarding_id,waybill_no,status,payment_status,intl_tracking_no",
+    q => q.eq("user_id", userId));
+  const cartons = await readBatchRowsByIds(admin, "cartons", "id,batch_id,pallet_id", "id",
+    waybills.map(w => w.carton_id).filter(Boolean));
+  const pallets = await readBatchRowsByIds(admin, "pallets", "id,batch_id", "id",
+    [...cartons.map(c => c.pallet_id), ...waybills.filter(w => !w.carton_id).map(w => w.pallet_id)].filter(Boolean));
+  const cartonMap = new Map(cartons.map(c => [c.id,c]));
+  const palletMap = new Map(pallets.map(p => [p.id,p]));
+  return waybills.map(w => {
+    const carton = cartonMap.get(w.carton_id);
+    // Current outer container wins; do not resurrect an old direct assignment after a move.
+    const batchId = w.carton_id
+      ? (carton?.pallet_id ? palletMap.get(carton.pallet_id)?.batch_id : carton?.batch_id)
+      : w.pallet_id ? palletMap.get(w.pallet_id)?.batch_id : w.assigned_batch_id;
+    return { ...w, assigned_batch_id: batchId ?? null };
+  }).filter(w => w.assigned_batch_id);
+}

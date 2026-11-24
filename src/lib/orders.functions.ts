@@ -7,7 +7,7 @@ import { billingWeight, buildWeightOrders, mergeWeightOrders, weightTotal, saved
 import { savedVolumetricWeight, orderVolumetricWeight } from "./saved-volumetric-weight";
 import { deliveryWeightsByCustomer } from "./bulk-delivery-weight";
 import { sumSurchargesCad } from "./surcharge-currency";
-import { loadBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
+import { loadBatchWaybills, loadCustomerBatchWaybills, readBatchRows, readBatchRowsByIds } from "./batch-waybills.server";
 import { syncBatchWaybillStatus } from "./batch-status-sync.server";
 import { routeInsuranceRate } from "./insurance-rate.server";
 import { insuranceCad } from "./insurance";
@@ -3421,21 +3421,14 @@ export async function computeMyBatchesForUser(admin: any, userId: string) {
     .maybeSingle();
   const customerCode = (profile as any)?.customer_code ?? null;
 
-  const { data: myWbs } = await supabaseAdmin
-    .from("waybills")
-    .select("id, assigned_batch_id, order_id, forwarding_id, waybill_no, status, payment_status, intl_tracking_no")
-    .eq("user_id", userId)
-    .not("assigned_batch_id", "is", null);
-    const wbRows = (myWbs ?? []) as any[];
+    const wbRows = await loadCustomerBatchWaybills(supabaseAdmin, userId);
     const customerSnapshots = customerCode ? await readBatchRows(supabaseAdmin, "batch_settlements", "id,batch_id,confirmed,is_paid,subtotal_cad,snapshot_at,fee_breakdown", q => q.eq("customer_code", customerCode)) : [];
     const batchIds = Array.from(new Set([...wbRows.map((w) => w.assigned_batch_id), ...customerSnapshots.map(s => s.batch_id)].filter(Boolean)));
     if (!batchIds.length) return { batches: [] };
 
-    const { data: batchRows } = await supabaseAdmin
-      .from("batches")
-      .select("id, batch_no, status, shipping_method, eta_date, fees_dirty_at")
-      .in("id", batchIds)
-      .in("status", ["shipped", "arrived", "closed"]);
+    const batchRows = (await readBatchRowsByIds(supabaseAdmin, "batches",
+      "id,batch_no,status,shipping_method,eta_date,fees_dirty_at", "id", batchIds))
+      .filter(b => ["shipped", "arrived", "closed"].includes(b.status));
     const {SPECIAL_HANDLING_BATCH_ID}=await import('./special-handling');
     const visibleBatches = ((batchRows ?? []) as any[]).filter(b=>b.id!==SPECIAL_HANDLING_BATCH_ID);
     if (!visibleBatches.length) return { batches: [] };

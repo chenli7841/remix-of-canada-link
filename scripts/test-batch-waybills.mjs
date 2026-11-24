@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadBatchWaybills } from '../src/lib/batch-waybills.server.ts';
+import { loadBatchWaybills, loadCustomerBatchWaybills } from '../src/lib/batch-waybills.server.ts';
 
 function mock(tables, fail) {
   return { from(table) {
@@ -36,4 +36,21 @@ test('loads more than 1000 waybills inside one pallet', async () => {
 
 test('database failures are not reported as no matching waybills', async () => {
   await assert.rejects(loadBatchWaybills(mock({},'cartons'),'b'), /cartons: unavailable/);
+});
+
+test('customer batches resolve nested containers and exclude other customers and stale assignments', async () => {
+ const db=mock({cartons:[{id:'c',batch_id:'oct',pallet_id:'p'},{id:'loose',batch_id:'nov'},{id:'empty',batch_id:null}],pallets:[{id:'p',batch_id:'oct-new'}],waybills:[
+  {id:'nested',user_id:'mine',carton_id:'c',assigned_batch_id:'old'},
+  {id:'carton',user_id:'mine',carton_id:'loose'},
+  {id:'pallet',user_id:'mine',pallet_id:'p'},
+  {id:'direct',user_id:'mine',assigned_batch_id:'direct-batch'},
+  {id:'moved',user_id:'mine',carton_id:'empty',assigned_batch_id:'old'},
+  {id:'foreign',user_id:'other',carton_id:'c'},
+ ]});
+ assert.deepEqual((await loadCustomerBatchWaybills(db,'mine')).map(w=>[w.id,w.assigned_batch_id]),[['nested','oct-new'],['carton','nov'],['pallet','oct-new'],['direct','direct-batch']]);
+});
+test('customer batch lookup pages all leaves and fails closed on container errors',async()=>{
+ const tables={cartons:[{id:'c',batch_id:'oct'}],waybills:Array.from({length:1005},(_,i)=>({id:`w${i}`,user_id:'mine',carton_id:'c'}))};
+ assert.equal((await loadCustomerBatchWaybills(mock(tables),'mine')).length,1005);
+ await assert.rejects(loadCustomerBatchWaybills(mock(tables,'cartons'),'mine'),/cartons: unavailable/);
 });
