@@ -75,7 +75,7 @@ function CartonsPage() {
             {q.data?.items.length === 0 && <tr><td colSpan={12} className="py-10 text-center text-slate-500">暂无</td></tr>}
             {q.data?.items.map((c: any) => {
               const selfChg = Number(c.self_chargeable_kg ?? 0);
-              const childChg = Number(c.child_chargeable_kg ?? 0);
+              const childChg = c.child_chargeable_kg;
               return (
               <tr key={c.id} className="hover:bg-white/[0.03]">
                 <td className="px-4 py-2.5">
@@ -89,7 +89,7 @@ function CartonsPage() {
                 <td><PaymentBadge s={c.payment_status}/></td>
                 <td className="text-sm" title={`采用 ${c.billing_mode === "merged" ? "本身计费重(A)" : "运单合计计费重(B)"}`}>
                   <div className={`font-mono ${c.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
-                  <div className={`font-mono ${c.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
+                  <div className={`font-mono ${c.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg == null ? "待量尺核价" : `${childChg} kg`}</div>
                 </td>
                 <td className="text-sm font-mono" title={`A 本身计费 = 自身运费 CA$${Number(c.self_freight_cad ?? 0).toFixed(2)} + 关税 CA$${Number(c.child_customs_cad ?? 0).toFixed(2)} + 保险 CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)} + 附加费 CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}\nB 运单合计 = 下属运费 CA$${Number(c.child_freight_cad ?? 0).toFixed(2)} + 关税 + 保险 + 清关费 CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}\n当前采用：${c.billing_mode === "merged" ? "合箱收费" : "按单收费"}`}>
                   <div className={c.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(c.with_customer_total_cad ?? 0).toFixed(2)}</div>

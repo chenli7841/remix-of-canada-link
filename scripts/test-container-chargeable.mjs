@@ -1,0 +1,6 @@
+import fs from 'node:fs';import test from 'node:test';import assert from 'node:assert/strict';import {transform} from 'esbuild';
+const code=await transform(fs.readFileSync('src/lib/container-chargeable.ts','utf8'),{loader:'ts',format:'esm'});
+const {containerChildChargeable:sum}=await import('data:text/javascript;base64,'+Buffer.from(code.code).toString('base64'));
+test('different routes retain saved measurement weights and deduplicate leaves',()=>{const a={id:'a',weight_snapshot:{chargeable_weight:1.234}};assert.equal(sum([a,a,{id:'b',weight_snapshot:{chargeable_weight:4.567}}]),5.801)});
+test('split pallet replaces merged carton contents exactly once',()=>{assert.equal(sum([{id:'a',carton_id:'c',weight_snapshot:{chargeable_weight:10}},{id:'b',carton_id:'c',weight_snapshot:{chargeable_weight:20}},{id:'d',weight_snapshot:{chargeable_weight:3}}],[{id:'c',billing_mode:'merged',chargeable_weight_kg:8}]),11)});
+test('missing measurement remains unknown, valid zero and empty container remain zero',()=>{assert.equal(sum([{id:'a'}]),null);assert.equal(sum([{id:'a',weight_snapshot:{chargeable_weight:0}}]),0);assert.equal(sum([]),0);assert.equal(sum([],[{id:'c',billing_mode:'merged'}]),null)});

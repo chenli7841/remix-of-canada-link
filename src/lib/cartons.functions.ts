@@ -1,3 +1,4 @@
+import { containerChildChargeable } from "./container-chargeable";
 import { measuredFreight } from "./measured-freight";
 import { uniqueWaybills } from "./insurance";
 import { sumSurchargesCad } from "./surcharge-currency";
@@ -355,7 +356,7 @@ async function feeTotalsForCarton(admin: any, row: any) {
   const { data: wbs } = await admin
     .from("waybills")
     .select(
-      "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
+      "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
     .eq("carton_id", row.id);
   const list: any[] = await effectiveWaybillInsurance(admin, (wbs ?? []) as any[]);
@@ -382,17 +383,9 @@ async function feeTotalsForCarton(admin: any, row: any) {
     Number(row.self_weight_kg ?? 0),
     Number(row.self_volume_m3 ?? 0),
   );
-  let childChargeable = 0;
-  for (const w of list) {
-    const L = Number(w.length_cm ?? 0),
-      W = Number(w.width_cm ?? 0),
-      H = Number(w.height_cm ?? 0);
-    const vol = L && W && H ? (L * W * H) / 1_000_000 : 0;
-    const c = await computeChargeable(admin, row.route_id, Number(w.weight_kg ?? 0), vol);
-    childChargeable += c.chargeable;
-  }
+  const childChargeable = containerChildChargeable(list);
   const hasCustomer = row.billing_mode === "merged";
-  const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : +childChargeable.toFixed(3);
+  const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : childChargeable;
   const lastMileCad = 0; // Delivery is an explicit batch adjustment, not a second container charge.
   let selfFreightCad = Number(row.self_freight_cad ?? 0);
   if (
@@ -415,7 +408,7 @@ async function feeTotalsForCarton(admin: any, row: any) {
     ...composed,
     fx_rate: fx,
     self_chargeable_kg: +self.chargeable.toFixed(3),
-    child_chargeable_kg: +childChargeable.toFixed(3),
+    child_chargeable_kg: childChargeable,
     chargeable_weight_kg: chargeableUsedKg,
     waybill_count: list.length,
   };
@@ -425,12 +418,12 @@ async function feeTotalsForPallet(admin: any, row: any) {
   const { data: directWbs } = await admin
     .from("waybills")
     .select(
-      "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
+      "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad",
     )
     .eq("pallet_id", row.id).is("carton_id", null);
   const { data: cns } = await admin
     .from("cartons")
-    .select("id, customer_code, billing_mode, self_freight_cad")
+    .select("id, customer_code, billing_mode, self_freight_cad, route_id, self_weight_kg, self_volume_m3")
     .eq("pallet_id", row.id);
   const cartonList = cns ?? [];
   const cartonIds = cartonList.map((c: any) => c.id);
@@ -439,7 +432,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
     const { data } = await admin
       .from("waybills")
       .select(
-        "id, forwarding_id, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, carton_id",
+        "id, forwarding_id, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, surcharge_cad, carton_id",
       )
       .in("carton_id", cartonIds);
     cnWbs = data ?? [];
@@ -494,17 +487,13 @@ async function feeTotalsForPallet(admin: any, row: any) {
     Number(row.self_weight_kg ?? 0),
     Number(row.self_volume_m3 ?? 0),
   );
-  let childChargeable = 0;
-  for (const w of allWbs) {
-    const L = Number(w.length_cm ?? 0),
-      W = Number(w.width_cm ?? 0),
-      H = Number(w.height_cm ?? 0);
-    const vol = L && W && H ? (L * W * H) / 1_000_000 : 0;
-    const c = await computeChargeable(admin, row.route_id, Number(w.weight_kg ?? 0), vol);
-    childChargeable += c.chargeable;
-  }
+  const childContainers = await Promise.all(cartonList.map(async (c: any) => ({
+    ...c,
+    chargeable_weight_kg: c.billing_mode === "merged" ? (await computeChargeable(admin, c.route_id, Number(c.self_weight_kg ?? 0), Number(c.self_volume_m3 ?? 0))).chargeable : null,
+  })));
+  const childChargeable = containerChildChargeable(allWbs, childContainers);
   const hasCustomer = row.billing_mode === "merged";
-  const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : +childChargeable.toFixed(3);
+  const chargeableUsedKg = hasCustomer ? +self.chargeable.toFixed(3) : childChargeable;
   const lastMileCad = 0; // Delivery is an explicit batch adjustment, not a second container charge.
   let selfFreightCad = Number(row.self_freight_cad ?? 0);
   if (
@@ -557,7 +546,7 @@ async function feeTotalsForPallet(admin: any, row: any) {
     total_fee_cad: hasCustomer ? with_customer_total_cad : without_customer_total_cad,
     fx_rate: fx,
     self_chargeable_kg: +self.chargeable.toFixed(3),
-    child_chargeable_kg: +childChargeable.toFixed(3),
+    child_chargeable_kg: childChargeable,
     chargeable_weight_kg: chargeableUsedKg,
     volumetric_weight_kg: +self.volumetric.toFixed(3),
     waybill_count: allWbs.length,
@@ -695,7 +684,7 @@ export const getCartonDetail = createServerFn({ method: "POST" })
       supabaseAdmin
         .from("waybills")
         .select(
-          "id, waybill_no, status, payment_status, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, order_id, forwarding_id",
+          "id, waybill_no, status, payment_status, weight_snapshot, weight_kg, length_cm, width_cm, height_cm, freight_cad, duty_cad, insurance_cad, clearance_cad, order_id, forwarding_id",
         )
         .eq("carton_id", data.id),
       supabaseAdmin.from("orders").select("id, order_no, customer_code, total_cny").eq("carton_id", data.id),

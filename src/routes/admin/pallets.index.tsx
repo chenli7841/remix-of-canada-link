@@ -76,7 +76,7 @@ function PalletsPage() {
               const childW = Number(p.child_weight_kg ?? 0);
               const actualW = +(selfW + childW).toFixed(3);
               const selfChg = Number(p.self_chargeable_kg ?? 0);
-              const childChg = Number(p.child_chargeable_kg ?? 0);
+              const childChg = p.child_chargeable_kg;
               const chargeW = p.customer_code ? selfChg : childChg;
               const volW = Number(p.volumetric_weight_kg ?? 0);
               return (
@@ -90,9 +90,9 @@ function PalletsPage() {
                 <td className="text-sm text-slate-400">{p.destination_code ?? "—"}</td>
                 <td className="text-sm">{p.status}</td>
                 <td><PaymentBadge s={p.payment_status}/></td>
-                <td className="text-sm" title={`实际重量 ${actualW} kg（自身 ${selfW} + 下属 ${childW}）· 体积重 ${volW || 0} kg · 采用 ${p.customer_code ? "自身(A)" : "下属之和(B)"}`}>
+                <td className="text-sm" title={`实际重量 ${actualW} kg（自身 ${selfW} + 下属 ${childW}）· 体积重 ${volW || 0} kg · 采用 ${p.billing_mode === "merged" ? "自身(A)" : "下属之和(B)"}`}>
                   <div className={`font-mono ${p.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
-                  <div className={`font-mono ${p.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
+                  <div className={`font-mono ${p.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg == null ? "待量尺核价" : `${childChg} kg`}</div>
                 </td>
                 <td className="text-sm font-mono" title={`A 托盘自身计费 = 自身运费 + 关税 + 保险 + 附加费\nB 运单合计计费 = 下属运费之和 + 关税 + 保险 + 清关费 + 附加费\n当前采用：${p.billing_mode === "merged" ? "合箱收费" : "按单收费"}`}>
                   <div className={p.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(p.with_customer_total_cad ?? 0).toFixed(2)}</div>
