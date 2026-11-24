@@ -1997,7 +1997,8 @@ export async function computeBatchFeeSummary(admin: any, batchId: string) {
         volume_m3: members.reduce((sum: number,w: any) => sum + wbWV(w).v,0),
         chargeable_weight_kg: members.reduce((sum: number,w: any) => sum + Number(savedChargeableWeight(w) ?? 0),0),
         volumetric_weight_kg: orderVolumetricWeight(null, members.map((w: any) => w.weight_snapshot)),
-        fee_cad: +fee.toFixed(2), a_cad: Number(c.self_freight_cad ?? 0), b_cad: +fee.toFixed(2),
+        fee_cad: +fee.toFixed(2), a_cad: Number(c.self_freight_cad ?? 0),
+        b_cad: +members.reduce((sum: number, w: any) => sum + Number(w.freight_cad ?? 0), 0).toFixed(2),
         has_customer_code: !!c.customer_code, billing_mode: c.billing_mode ?? "split" };
       (kind === "carton" ? target.cartons : target.pallets).push(row);
     }

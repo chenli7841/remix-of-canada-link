@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // Resolve container coverage, not merely whether the order belongs to a carton.
-// Legacy billing gives a customer-coded pallet precedence over its cartons.
+// Explicit merged pallet billing takes precedence over its cartons.
 export const getConsolidatedFreightNotice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { id: string; kind: "forwarding" | "order" }) => {
@@ -14,8 +14,16 @@ export const getConsolidatedFreightNotice = createServerFn({ method: "POST" })
     // Authorize against the caller's RLS before reading container billing metadata.
     const parent = await context.supabase.from(data.kind === "forwarding" ? "forwarding_orders" : "orders")
       .select("id").eq("id", data.id).maybeSingle();
-    if (parent.error || !parent.data) throw new Error("无法读取订单");
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    if (parent.error) throw new Error("无法读取订单");
+    if (!parent.data) {
+      // Staff customer view uses its own access check; customer RLS is owner-only.
+      const target = await admin.from(data.kind === "forwarding" ? "forwarding_orders" : "orders")
+        .select("user_id").eq("id", data.id).maybeSingle();
+      if (target.error || !target.data?.user_id) throw new Error("无法读取订单");
+      const { assertCustomerViewAccess } = await import("./admin-customer-view.functions");
+      await assertCustomerViewAccess(context.supabase, context.userId, target.data.user_id);
+    }
     const wb = await readAllFeeRows(() => admin.from("waybills").select("id,carton_id,pallet_id")
       .eq(data.kind === "forwarding" ? "forwarding_id" : "order_id", data.id));
     if (wb.error) throw new Error("无法读取运单收费方式");

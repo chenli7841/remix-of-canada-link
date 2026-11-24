@@ -236,7 +236,7 @@ async function applySelfDerivations(admin: any, table: "cartons" | "pallets", id
   const H = Number(merged.self_height_cm ?? 0);
   const weight = Number(merged.self_weight_kg ?? 0);
   const vol = L && W && H ? +((L * W * H) / 1_000_000).toFixed(4) : 0;
-  if (merged.billing_mode === "merged" && (!merged.route_id || weight <= 0 || vol <= 0)) throw new Error("合箱收费需要先填写线路、实重和完整尺寸");
+  if (merged.billing_mode === "merged" && (!merged.route_id || [weight,L,W,H].some(v => !Number.isFinite(v) || v <= 0))) throw new Error("合箱收费需要先填写线路、实重和完整尺寸");
   const freightCad = await computeSelfFreightCad(admin, merged.route_id, weight, vol, [L,W,H]);
   return { ...patch, self_volume_m3: vol, self_freight_cad: freightCad, self_freight_cny: 0 };
 }

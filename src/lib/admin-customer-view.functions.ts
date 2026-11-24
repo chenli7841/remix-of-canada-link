@@ -18,7 +18,7 @@ const CUSTOMER_VIEW_ROLES = ["owner", "warehouse_cn", "warehouse_ca", "support",
 // targetUserId 传了才做"归属"这层额外限制——只对纯 sales_rep（不同时是
 // owner/manager）生效；sales/warehouse_*/support 这些原有角色保持不受限，
 // 这次只加新角色的限制，不收紧老角色。
-async function assertCustomerViewAccess(supabase: any, userId: string, targetUserId?: string) {
+export async function assertCustomerViewAccess(supabase: any, userId: string, targetUserId?: string) {
   const results = await Promise.all(
     CUSTOMER_VIEW_ROLES.map((role) => supabase.rpc("has_role", { _user_id: userId, _role: role })),
   );
