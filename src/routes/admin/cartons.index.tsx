@@ -87,13 +87,13 @@ function CartonsPage() {
                 <td className="text-sm text-slate-400">{c.destination_code ?? "—"}</td>
                 <td className="text-sm">{c.status}</td>
                 <td><PaymentBadge s={c.payment_status}/></td>
-                <td className="text-sm" title={`采用 ${c.has_customer ? "本身计费重(A)" : "运单合计计费重(B)"}`}>
-                  <div className={`font-mono ${c.has_customer ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
-                  <div className={`font-mono ${c.has_customer ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
+                <td className="text-sm" title={`采用 ${c.billing_mode === "merged" ? "本身计费重(A)" : "运单合计计费重(B)"}`}>
+                  <div className={`font-mono ${c.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
+                  <div className={`font-mono ${c.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
                 </td>
-                <td className="text-sm font-mono" title={`A 本身计费 = 自身运费 CA$${Number(c.self_freight_cad ?? 0).toFixed(2)} + 关税 CA$${Number(c.child_customs_cad ?? 0).toFixed(2)} + 保险 CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)} + 附加费 CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}\nB 运单合计 = 下属运费 CA$${Number(c.child_freight_cad ?? 0).toFixed(2)} + 关税 + 保险 + 清关费 CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}\n当前采用：${c.has_customer ? "A（有客户号）" : "B（无客户号）"}`}>
-                  <div className={c.has_customer ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(c.with_customer_total_cad ?? 0).toFixed(2)}</div>
-                  <div className={c.has_customer ? "text-amber-300/60" : "font-bold text-amber-300"}>B 运单 CA${Number(c.without_customer_total_cad ?? 0).toFixed(2)}</div>
+                <td className="text-sm font-mono" title={`A 本身计费 = 自身运费 CA$${Number(c.self_freight_cad ?? 0).toFixed(2)} + 关税 CA$${Number(c.child_customs_cad ?? 0).toFixed(2)} + 保险 CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)} + 附加费 CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}\nB 运单合计 = 下属运费 CA$${Number(c.child_freight_cad ?? 0).toFixed(2)} + 关税 + 保险 + 清关费 CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}\n当前采用：${c.billing_mode === "merged" ? "合箱收费" : "按单收费"}`}>
+                  <div className={c.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(c.with_customer_total_cad ?? 0).toFixed(2)}</div>
+                  <div className={c.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}>B 运单 CA${Number(c.without_customer_total_cad ?? 0).toFixed(2)}</div>
                 </td>
 
                 <td className="text-sm font-mono">{c.pallet_no ? <Link to="/admin/pallets/$palletId" params={{ palletId: c.pallet_id }} className="text-brand hover:underline">{c.pallet_no}</Link> : "—"}</td>

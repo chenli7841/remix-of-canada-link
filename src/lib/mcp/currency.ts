@@ -12,7 +12,9 @@ export function forwardingTotalCad(feeCny: unknown, freightSnapshot: unknown) {
     Number(snapshot.freight_cad ?? 0) +
     Number(snapshot.duty_cad ?? 0) +
     Number(snapshot.insurance_cad ?? 0) +
+    Number(snapshot.clearance_cad ?? 0) +
     Number(snapshot.surcharges_cad ?? 0);
   const authoritativeTotal = Number(snapshot.total_cad ?? componentTotal);
-  return authoritativeTotal > 0 ? +authoritativeTotal.toFixed(2) : cnyToCad(feeCny, snapshot.fx_rate);
+  const hasCad = snapshot.total_cad != null || snapshot.freight_cad != null;
+  return hasCad ? +authoritativeTotal.toFixed(2) : cnyToCad(feeCny, snapshot.fx_rate);
 }

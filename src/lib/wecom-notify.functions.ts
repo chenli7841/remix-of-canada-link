@@ -1063,7 +1063,7 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
     };
     const { data: drafts, error } = await supabaseAdmin
       .from("wecom_daily_notification_drafts")
-      .select("id,service_date,customer_code,rendered_content,edited_content,images,status,failure_reason,updated_at,submitted_at,sent_at")
+      .select("id,service_date,customer_code,rendered_content,edited_content,images,status,failure_reason,updated_at,submitted_at,sent_at,sections")
       .eq("service_date", data.serviceDate)
       .order("customer_code", { ascending: true });
     if (error) throw new Error(error.message);
@@ -1083,6 +1083,18 @@ export const listDailyWecomDrafts = createServerFn({ method: "POST" })
           .in("chat_id", chatIds)
       : { data: [], error: null };
     if (groupError) throw new Error(groupError.message);
+    const {currentMeasurementSections}=await import("./wecom-freight-refresh.server");
+    const {renderDailyContent}=await import("./wecom-daily-notify.server");
+    for(const row of drafts ?? []) {
+      if(!["draft","failed"].includes(row.status) || row.edited_content!=null) continue;
+      try {
+        row.sections=await currentMeasurementSections(supabaseAdmin,row);
+        row.rendered_content=renderDailyContent(row.customer_code,row.service_date,row.sections);
+      } catch(error:any) {
+        row.failure_reason=error.message;
+        row.rendered_content="费用数据需要核对，暂不能生成通知："+error.message;
+      }
+    }
     const bindingByCode = new Map(((bindings ?? []) as any[]).map((row) => [row.customer_code, row]));
     const groupByChat = new Map(((groups ?? []) as any[]).map((row) => [row.chat_id, row]));
     return {

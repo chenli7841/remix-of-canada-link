@@ -1017,7 +1017,7 @@ function BatchDetail() {
         const ctItems = cartonsQ.data?.items ?? [];
         const ctTotal = ctItems.reduce(
           (s: number, c: any) =>
-            s + Number(c.customer_code ? (c.with_customer_total_cad ?? 0) : (c.without_customer_total_cad ?? 0)),
+            s + Number(c.billing_mode === "merged" ? (c.with_customer_total_cad ?? 0) : (c.without_customer_total_cad ?? 0)),
           0,
         );
         const ctQ = ctSearch.trim().toLowerCase();
@@ -1031,7 +1031,7 @@ function BatchDetail() {
         const plItems = palletsQ.data?.items ?? [];
         const plTotal = plItems.reduce(
           (s: number, p: any) =>
-            s + Number(p.customer_code ? (p.with_customer_total_cad ?? 0) : (p.without_customer_total_cad ?? 0)),
+            s + Number(p.billing_mode === "merged" ? (p.with_customer_total_cad ?? 0) : (p.without_customer_total_cad ?? 0)),
           0,
         );
         const plQ = plSearch.trim().toLowerCase();
@@ -1052,7 +1052,7 @@ function BatchDetail() {
                   className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 hover:text-brand"
                 >
                   {wbSectionOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  运单 ({waybills.length}) · CA${wbTotal.toFixed(2)}
+                  运单 ({waybills.length}) · 基础费用参考 CA${wbTotal.toFixed(2)}
                 </button>
               }
               action={
@@ -1075,6 +1075,7 @@ function BatchDetail() {
                     placeholder="搜索运单号 / 客户号 / 状态"
                     className="mb-2 w-full max-w-xs rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-500"
                   />
+                  <p className="mb-2 text-xs text-amber-300">已合箱收费的运单金额仅作参考，实际运费以箱号／托盘及上方客户账单为准。</p>
                   <WaybillCompactList
                     waybills={filteredWaybills as any}
                     onKick={

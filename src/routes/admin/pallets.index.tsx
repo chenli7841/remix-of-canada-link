@@ -91,12 +91,12 @@ function PalletsPage() {
                 <td className="text-sm">{p.status}</td>
                 <td><PaymentBadge s={p.payment_status}/></td>
                 <td className="text-sm" title={`实际重量 ${actualW} kg（自身 ${selfW} + 下属 ${childW}）· 体积重 ${volW || 0} kg · 采用 ${p.customer_code ? "自身(A)" : "下属之和(B)"}`}>
-                  <div className={`font-mono ${p.has_customer ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
-                  <div className={`font-mono ${p.has_customer ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
+                  <div className={`font-mono ${p.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}`}>本身 {selfChg ? `${selfChg} kg` : "—"}</div>
+                  <div className={`font-mono ${p.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}`}>运单 {childChg ? `${childChg} kg` : "—"}</div>
                 </td>
-                <td className="text-sm font-mono" title={`A 托盘自身计费 = 自身运费 + 关税 + 保险 + 附加费 + 末端派送费\nB 运单合计计费 = 下属运费之和 + 关税 + 保险 + 清关费 + 附加费 + 末端派送费\n当前采用：${p.has_customer ? "A（有客户号）" : "B（无客户号）"}`}>
-                  <div className={p.has_customer ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(p.with_customer_total_cad ?? 0).toFixed(2)}</div>
-                  <div className={p.has_customer ? "text-amber-300/60" : "font-bold text-amber-300"}>B 运单 CA${Number(p.without_customer_total_cad ?? 0).toFixed(2)}</div>
+                <td className="text-sm font-mono" title={`A 托盘自身计费 = 自身运费 + 关税 + 保险 + 附加费\nB 运单合计计费 = 下属运费之和 + 关税 + 保险 + 清关费 + 附加费\n当前采用：${p.billing_mode === "merged" ? "合箱收费" : "按单收费"}`}>
+                  <div className={p.billing_mode === "merged" ? "font-bold text-sky-300" : "text-sky-300/60"}>A 本身 CA${Number(p.with_customer_total_cad ?? 0).toFixed(2)}</div>
+                  <div className={p.billing_mode === "merged" ? "text-amber-300/60" : "font-bold text-amber-300"}>B 运单 CA${Number(p.without_customer_total_cad ?? 0).toFixed(2)}</div>
                 </td>
 
                 <td className="text-sm font-mono">{p.batch_no ? <Link to="/admin/batches/$batchId" params={{ batchId: p.batch_id }} className="text-brand hover:underline">{p.batch_no}</Link> : "—"}</td>

@@ -59,7 +59,7 @@ export async function sendDueDailyWecomDrafts(options?: {
       .eq("status", previousStatus)
       // Return the claimed row itself. This guarantees that an edit committed
       // immediately before the claim is the exact content/images submitted.
-      .select("id,customer_code,rendered_content,edited_content,images")
+      .select("id,customer_code,rendered_content,edited_content,images,sections")
       .maybeSingle();
     if (claimError) throw new Error(claimError.message);
     if (!claimed) continue;
@@ -80,7 +80,16 @@ export async function sendDueDailyWecomDrafts(options?: {
       if (!group) throw new Error("绑定的企业微信群不存在");
       if (group.is_blocked) throw new Error("客户群已屏蔽");
       if (!group.owner_userid) throw new Error("已绑定群，但群主 ID 尚未获取");
-      const content = String(claimed.edited_content ?? claimed.rendered_content ?? "").trim();
+      let rendered = claimed.rendered_content;
+      if (claimed.edited_content == null) {
+        const {currentMeasurementSections}=await import("./wecom-freight-refresh.server");
+        const {renderDailyContent}=await import("./wecom-daily-notify.server");
+        const sections=await currentMeasurementSections(supabaseAdmin,{...claimed,service_date:draft.service_date});
+        rendered=renderDailyContent(claimed.customer_code,draft.service_date,sections);
+        const saved=await (supabaseAdmin as any).from("wecom_daily_notification_drafts").update({sections,rendered_content:rendered}).eq("id",claimed.id).eq("status","submitted");
+        if(saved.error) throw new Error(saved.error.message);
+      }
+      const content = String(claimed.edited_content ?? rendered ?? "").trim();
       if (!content) throw new Error("预发送内容为空");
       const result = await sendGroupMsgTemplate({
         senderUserId: group.owner_userid,

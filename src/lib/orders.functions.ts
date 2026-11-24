@@ -701,8 +701,12 @@ export const recalcOrderFreight = createServerFn({ method: "POST" })
       update.total_cny =
         (Number(order.subtotal_cny) || 0) +
         snapshot.freight_cny +
-        (Number(order.customs_cny) || 0) +
-        (Number(order.insurance_cny) || 0);
+        +(snapshot.duty_cad / fx).toFixed(2) +
+        +(snapshot.insurance_cad / fx).toFixed(2) +
+        +(snapshot.clearance_cad / fx).toFixed(2);
+      update.total_cny = +update.total_cny.toFixed(2);
+      update.customs_cny = +(snapshot.duty_cad / fx).toFixed(2);
+      update.insurance_cny = +(snapshot.insurance_cad / fx).toFixed(2);
     }
     const { error } = await supabaseAdmin.from("orders").update(update).eq("id", data.orderId);
     if (error) throw new Error(error.message);

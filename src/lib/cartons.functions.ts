@@ -185,13 +185,13 @@ async function aggregatePayment(admin: any, kind: "carton" | "pallet" | "batch",
 // 费用计算规则（统一 CAD，不再使用 CNY）
 //   有客户号 · 方案 A · 合并  = 自身运费 + Σ下属(关税 + 保险) + 附加费(自身+下属) + 末端派送费
 //   无客户号 · 方案 B · 不合并 = Σ下属(运费 + 关税 + 保险 + 清关费) + 下属附加费 + 末端派送费
-//   实际"采用"方案由 profiles.fee_scheme_preference 决定，默认 split (方案 B)
+//   实际采用方案由当前箱号／托盘 billing_mode 决定，默认 split
 // 下属 = waybills.{freight_cad,duty_cad,insurance_cad,clearance_cad,surcharge_cad}
 //   + 对于托盘: 子箱号的"采用运费"(有客户号取 self_freight_cad，无客户号取子箱下运单运费之和)
 // ============================================================
 
 // Compute self_freight_cad from route freight rule using self dims + self weight.
-// min_charge_level=batch → 自身运费不套用最低收费（最低收费在批次层单独计算）。
+// 最低收费已取消，箱号／托盘使用统一量尺计费。
 async function computeSelfFreightCad(
   admin: any,
   routeId: string | null | undefined,
@@ -344,6 +344,7 @@ function composeCad(
     last_mile_cad: +lastMileCad.toFixed(2),
     with_customer_total_cad,
     without_customer_total_cad,
+    billing_mode: hasCustomer ? "merged" : "split",
     has_customer: hasCustomer,
     total_fee_cad: hasCustomer ? with_customer_total_cad : without_customer_total_cad,
   };

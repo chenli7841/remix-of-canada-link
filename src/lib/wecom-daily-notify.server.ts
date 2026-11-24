@@ -143,7 +143,7 @@ function torontoDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-function renderDailyContent(
+export function renderDailyContent(
   customerCode: string,
   serviceDate: string,
   sections: DailySections,
@@ -330,6 +330,8 @@ async function refreshDailyDraft(
   } else {
     delete sections.dispatched;
   }
+  const { currentMeasurementSections } = await import("./wecom-freight-refresh.server");
+  Object.assign(sections, await currentMeasurementSections(admin,{customer_code:customerCode,service_date:serviceDate,sections}));
   const renderedContent = renderDailyContent(customerCode, serviceDate, sections);
   const { error: upsertError } = await admin.from("wecom_daily_notification_drafts").upsert(
     {

@@ -336,7 +336,7 @@ export const removeDeliveryQueueItem = createServerFn({ method: "POST" })
 // ============================================================
 // Helpers to hydrate per-item weight/dims/fee
 // ============================================================
-async function hydrateItems(admin: any, items: any[], fx: number) {
+async function hydrateItems(admin: any, items: any[], fx: number, includeFreight = false) {
   const waybillIds = items.filter((i) => i.kind === "waybill").map((i) => i.ref_id);
   const cartonIds = items.filter((i) => i.kind === "carton").map((i) => i.ref_id);
   const palletIds = items.filter((i) => i.kind === "pallet").map((i) => i.ref_id);
@@ -349,6 +349,24 @@ async function hydrateItems(admin: any, items: any[], fx: number) {
   ]);
   const wMap = new Map(wRows.map(r=>[r.id,r])), cMap = new Map(cRows.map(r=>[r.id,r])), pMap = new Map(pRows.map(r=>[r.id,r]));
 
+  const freightByUnit = new Map<string, number>();
+  if (includeFreight && items.length) {
+    const nestedCartons = await readDeliveryRows(admin, 'cartons', 'id,pallet_id', 'pallet_id', [...new Set(palletIds)]);
+    const cartonLeaves = await readDeliveryRows(admin, 'waybills', '*', 'carton_id', [...new Set([...cartonIds,...nestedCartons.map(c=>c.id)])]);
+    const palletLeaves = await readDeliveryRows(admin, 'waybills', '*', 'pallet_id', [...new Set(palletIds)]);
+    const leaves = [...new Map([...wRows,...cartonLeaves,...palletLeaves].map(w=>[w.id,w])).values()];
+    try {
+      const { effectiveFreightForWaybills } = await import('./effective-freight.server');
+      const { allocations, cartons } = await effectiveFreightForWaybills(admin, leaves);
+      for (const item of items) {
+        const matches = leaves.filter(w=>item.kind==='waybill'?w.id===item.ref_id:item.kind==='carton'?w.carton_id===item.ref_id:(w.pallet_id??cartons.find(c=>c.id===w.carton_id)?.pallet_id)===item.ref_id);
+        if(matches.length) freightByUnit.set(item.id, matches.reduce((n,w)=>n+allocations.get(w.id)!.freight_cad,0));
+      }
+    } catch (error) {
+      // Operational dispatch stays available; never substitute old CNY or zero for missing pricing.
+      console.error('Delivery freight snapshot unavailable', error);
+    }
+  }
   return items.map((it: any) => {
     const src =
       it.kind === "waybill" ? wMap.get(it.ref_id) : it.kind === "carton" ? cMap.get(it.ref_id) : pMap.get(it.ref_id);
@@ -361,14 +379,8 @@ async function hydrateItems(admin: any, items: any[], fx: number) {
       length_cm: s.length_cm != null ? Number(s.length_cm) : null,
       width_cm: s.width_cm != null ? Number(s.width_cm) : null,
       height_cm: s.height_cm != null ? Number(s.height_cm) : null,
-      fee_cny:
-        it.kind === "waybill"
-          ? s.freight_cad != null
-            ? Number(s.freight_cad) / fx
-            : 0
-          : s.self_freight_cny != null
-            ? Number(s.self_freight_cny)
-            : 0,
+      freight_cad: freightByUnit.get(it.id) ?? null,
+      fee_cny: freightByUnit.has(it.id) ? freightByUnit.get(it.id)! / fx : null,
       order_id: s.order_id ?? null,
     };
   });
@@ -452,7 +464,8 @@ export async function loadDeliveryGroups(status: string, customerCode?: string) 
             ? [p.reg_address, p.reg_city, p.reg_province, p.reg_country, p.reg_postal_code].filter(Boolean).join(" ")
             : "");
         const phone = a?.phone || null;
-        const feeCny = extraFeeMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) ?? g.fee_cny;
+        // Delivery extras are explicit adjustments; freight is already in the batch bill.
+        const feeCny = extraFeeMap.get(g.batch_id + ':' + (g.customer_code || p?.customer_code)) ?? 0;
         return {
           ...g,
           batch_name: batchMap.get(g.batch_id)?.display_name || batchMap.get(g.batch_id)?.batch_no || '未关联批次',
@@ -507,7 +520,7 @@ export const getCustomerDelivery = createServerFn({ method: "GET" })
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
-    const items = await hydrateItems(supabaseAdmin, rows ?? [], fx);
+    const items = await hydrateItems(supabaseAdmin, rows ?? [], fx, true);
 
     let profile: any = null;
     let address: any = null;

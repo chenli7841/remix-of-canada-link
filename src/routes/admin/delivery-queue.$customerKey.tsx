@@ -143,7 +143,7 @@ function CustomerDeliveryDetail() {
   return (
     <Page
       title={`派送详情 · ${profile?.customer_code ?? customerCode ?? "—"}`}
-      subtitle={`共 ${items.length} 项 · 待派送 ${totals.count} · 总重 ${totals.weight.toFixed(2)} kg · 总费用 ${fmtCNY(totals.fee)}`}
+      subtitle={`共 ${items.length} 项 · 待派送 ${totals.count} · 总重 ${totals.weight.toFixed(2)} kg`}
       action={
         <Link
           to="/admin/delivery-queue"
@@ -232,7 +232,7 @@ function CustomerDeliveryDetail() {
               <th className="px-4 py-2.5">编号</th>
               <th className="px-4 py-2.5 text-right">重量 (kg)</th>
               <th className="px-4 py-2.5">尺寸 (cm)</th>
-              <th className="px-4 py-2.5 text-right">费用</th>
+              <th className="px-4 py-2.5 text-right">运费参考（CAD）</th>
               <th className="px-4 py-2.5">状态</th>
               <th className="px-4 py-2.5">加入时间</th>
               <th className="px-4 py-2.5 text-right">操作</th>
@@ -279,7 +279,7 @@ function CustomerDeliveryDetail() {
                   <td className="px-4 py-3 text-xs text-slate-400">
                     {dims.length === 3 ? `${dims[0]} × ${dims[1]} × ${dims[2]}` : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs">{fmtCNY(it.fee_cny)}</td>
+                  <td className="px-4 py-3 text-right text-xs">{it.freight_cad == null ? "待量尺核价" : `CA${it.freight_cad.toFixed(2)}`}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_COLOR[it.status]}`}>
                       {STATUS_LABEL[it.status]}

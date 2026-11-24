@@ -577,56 +577,15 @@ export async function computeAnyWaybillDutyBreakdown(admin: any, wb: any): Promi
   };
 }
 
-// Chargeable weight + the CAD/kg rate that produced it — for either waybill
-// type. Computed fresh from the waybill's own weight/dimensions and the
-// route's current freight_rules row (display-only, for the invoice's 运费
-// table — it doesn't feed back into what the customer is actually charged,
-// that's waybills.freight_cad, fetched separately in buildInvoiceLineMeta).
-export async function computeWaybillFreightMeta(
-  admin: any,
-  wb: any,
-): Promise<{ chargeable_weight_kg: number; rate_cad_per_kg: number } | null> {
-  let route_id: string | null = null;
-  if (wb.forwarding_id) {
-    const { data: fo } = await admin
-      .from("forwarding_orders")
-      .select("route_id")
-      .eq("id", wb.forwarding_id)
-      .maybeSingle();
-    route_id = fo?.route_id ?? null;
-  } else if (wb.order_id) {
-    const { data: ord } = await admin.from("orders").select("route_id").eq("id", wb.order_id).maybeSingle();
-    route_id = ord?.route_id ?? null;
-  }
-  if (!route_id) return null;
-
-  const { data: rule } = await admin
-    .from("freight_rules")
-    .select("*")
-    .eq("route_id", route_id)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!rule) return null;
-
-  let fx = 0.19;
-  try {
-    const { data: s } = await admin.from("app_settings").select("value").eq("key", "fx_rate").maybeSingle();
-    const cnyPerCad = Number((s?.value as any)?.cny_per_cad ?? 0);
-    if (cnyPerCad > 0) fx = +(1 / cnyPerCad).toFixed(6);
-  } catch {
-    // fall back to the 0.19 default set above
-  }
-
-  const w = Number(wb.weight_kg ?? 0);
-  const v = Number(wb.length_cm ?? 0) * Number(wb.width_cm ?? 0) * Number(wb.height_cm ?? 0);
-  const divisor = Number(rule.volumetric_divisor) || 6000;
-  const volW = v / divisor;
-  const chargeable = rule.weight_mode === "actual" ? w : rule.weight_mode === "volumetric" ? volW : Math.max(w, volW);
-  const rate_cad =
-    Number(rule.unit_price_cad) > 0 ? Number(rule.unit_price_cad) : Number(rule.unit_price_cny ?? 0) * fx;
-  return { chargeable_weight_kg: +chargeable.toFixed(2), rate_cad_per_kg: +rate_cad.toFixed(4) };
+// Invoice details use the measurement snapshot saved with the charged amount.
+// Current route rules must not retroactively change invoice weights or rates.
+export async function computeWaybillFreightMeta(_admin: any, wb: any): Promise<{chargeable_weight_kg:number;rate_cad_per_kg:number}|null> {
+  const snapshot=wb.weight_snapshot;
+  if(snapshot?.chargeable_weight==null || wb.freight_cad==null) return null;
+  const weight=Number(snapshot.chargeable_weight),amount=Number(wb.freight_cad);
+  const rate=Number(snapshot.unit_price_cad ?? (weight>0?amount/weight:0));
+  if(![weight,amount,rate].every(n=>Number.isFinite(n)&&n>=0)) throw new Error("运单运费明细无效，请重新量尺核价");
+  return {chargeable_weight_kg:+weight.toFixed(3),rate_cad_per_kg:+rate.toFixed(4)};
 }
 
 export type InvoiceLineMeta = {
@@ -651,31 +610,15 @@ export type InvoiceLineMeta = {
 // and declared_value_cad are already CAD-native (computeAnyWaybillDutyBreakdown),
 // and freight's `amount_cad` is read straight off waybills.freight_cad — the
 // same figure the customer was actually charged, not a recomputed one.
-export async function buildInvoiceLineMeta(admin: any, wb: any): Promise<InvoiceLineMeta> {
-  const [duty, freightMeta] = await Promise.all([
-    computeAnyWaybillDutyBreakdown(admin, wb),
-    computeWaybillFreightMeta(admin, wb),
-  ]);
-
-  const duty_items = duty.items
-    .filter((it) => it.duty_applied && (it.mfn_rate + it.anti_dumping_rate > 0 || it.gst_rate > 0))
-    .map((it) => {
-      const customsRate = it.mfn_rate + it.anti_dumping_rate;
-      return {
-        name: it.name,
-        value_cad: it.declared_value_cad,
-        customs_rate_pct: +(customsRate * 100).toFixed(2),
-        customs_cad: +(it.declared_value_cad * customsRate).toFixed(2),
-        gst_rate_pct: +(it.gst_rate * 100).toFixed(2),
-        gst_cad: +(it.declared_value_cad * it.gst_rate).toFixed(2),
-      };
-    });
-
-  const freight = freightMeta ? { ...freightMeta, amount_cad: +Number(wb.freight_cad ?? 0).toFixed(2) } : null;
-
-  return {
-    waybill_no: wb.waybill_no ?? null,
-    freight,
-    duty_items,
-  };
+export async function buildInvoiceLineMeta(admin:any,wb:any):Promise<InvoiceLineMeta> {
+  const saved=await admin.from("waybill_items").select("name,declared_value_cad,mfn_rate,gst_rate,anti_dumping_rate,duty_applied,duty_cad").eq("waybill_id",wb.id);
+  if(saved.error) throw new Error(saved.error.message);
+  const items=saved.data??[];
+  if(items.length && Math.round(items.reduce((n:number,i:any)=>n+Number(i.duty_cad??0),0)*100)!==Math.round(Number(wb.duty_cad??0)*100)) throw new Error("关税明细与运单费用不一致，请重新量尺核价");
+  const duty_items=items.filter((i:any)=>i.duty_applied && Number(i.duty_cad)>0).map((i:any)=>{
+    const gst=+((Number(i.declared_value_cad)||0)*(Number(i.gst_rate)||0)).toFixed(2);
+    return {name:i.name,value_cad:Number(i.declared_value_cad??0),customs_rate_pct:+((Number(i.mfn_rate??0)+Number(i.anti_dumping_rate??0))*100).toFixed(2),customs_cad:+(Number(i.duty_cad)-gst).toFixed(2),gst_rate_pct:+(Number(i.gst_rate??0)*100).toFixed(2),gst_cad:gst};
+  });
+  const freightMeta=await computeWaybillFreightMeta(admin,wb);
+  return {waybill_no:wb.waybill_no??null,freight:freightMeta?{...freightMeta,amount_cad:+Number(wb.freight_cad).toFixed(2)}:null,duty_items};
 }

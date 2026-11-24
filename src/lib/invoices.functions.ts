@@ -99,7 +99,7 @@ async function computeWaybillFees(admin: any, waybillId: string, fx: number) {
   return { freight_cny: +(allocations.get(wb.id)!.freight_cad / fx).toFixed(2),
     customs_cny: +(Number(wb.duty_cad)/fx).toFixed(2), insurance_cny,
     other_cny: +((Number(wb.clearance_cad ?? 0)+Number(wb.surcharge_cad ?? 0))/fx).toFixed(2),
-    meta: {...meta, clearance_cad:Number(wb.clearance_cad ?? 0), surcharge_cad:Number(wb.surcharge_cad ?? 0), freight_source:allocations.get(wb.id)!.kind}, ref: { wb } };
+    meta: {...meta, freight: allocations.get(wb.id)!.kind === "waybill" ? meta?.freight : null, billing_reference_only: allocations.get(wb.id)!.kind !== "waybill", clearance_cad:Number(wb.clearance_cad ?? 0), surcharge_cad:Number(wb.surcharge_cad ?? 0), freight_source:allocations.get(wb.id)!.kind}, ref: { wb } };
 
 }
 
@@ -145,7 +145,7 @@ export const generateInvoiceForWaybill = createServerFn({ method: "POST" })
       waybill_id: wb.id,
       order_id: wb.order_id,
       forwarding_id: wb.forwarding_id,
-      description: `运单 ${wb.waybill_no}`,
+      description: `运单 ${wb.waybill_no}${fees.meta.billing_reference_only ? "（已合箱收费，按合箱分摊运费计入）" : ""}`,
       freight_cny: fees.freight_cny,
       customs_cny: fees.customs_cny,
       insurance_cny: fees.insurance_cny,

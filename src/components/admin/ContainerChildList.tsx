@@ -207,7 +207,7 @@ export function CartonCompactList({
                       <D label="保险之和"    v={`CA$${Number(c.child_insurance_cad ?? 0).toFixed(2)}`}/>
                       <D label="清关费"      v={`CA$${Number(c.clearance_fee_cad ?? 0).toFixed(2)}`}/>
                       <D label="附加费"      v={`CA$${Number(c.surcharge_cad ?? 0).toFixed(2)}`}/>
-                      <D label="方案"        v={c.customer_code ? "A · 合并" : "B · 不合并"}/>
+                      <D label="方案"        v={c.billing_mode === "merged" ? "合箱收费" : "按单收费"}/>
                     </div>
                   </td>
                 </tr>
@@ -317,7 +317,7 @@ export function PalletCompactList({
                       <D label="保险之和"      v={`CA$${Number(p.child_insurance_cad ?? 0).toFixed(2)}`}/>
                       <D label="清关费"        v={`CA$${Number(p.clearance_fee_cad ?? 0).toFixed(2)}`}/>
                       <D label="附加费"        v={`CA$${Number(p.surcharge_cad ?? 0).toFixed(2)}`}/>
-                      <D label="方案"          v={p.customer_code ? "A · 合并" : "B · 不合并"}/>
+                      <D label="方案"          v={p.billing_mode === "merged" ? "合箱收费" : "按单收费"}/>
                     </div>
                   </td>
                 </tr>

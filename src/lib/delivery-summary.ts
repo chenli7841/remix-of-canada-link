@@ -31,7 +31,7 @@ export function groupDeliveryUnits(items: any[]) {
 export function deliverySettlementSummary(settlement: any, batch: any) {
   if (!settlement) return { payment_label: '未确认价格', total_cad: null, chargeable_weight_kg: null };
   const breakdown = settlement.fee_breakdown;
-  const fresh = settlement.confirmed || breakdown?.billing_version === 2 || (settlement.snapshot_at && (!batch?.fees_dirty_at || settlement.snapshot_at >= batch.fees_dirty_at));
+  const fresh = settlement.confirmed || (settlement.snapshot_at && (!batch?.fees_dirty_at || settlement.snapshot_at >= batch.fees_dirty_at));
   return { payment_label: settlement.is_paid ? '已付款' : settlement.confirmed ? '未付款' : '未确认价格',
     total_cad: fresh ? settlement.subtotal_cad : null,
     chargeable_weight_kg: fresh && breakdown?.weight_version === 1 ? breakdown.chargeable_weight_kg ?? null : null };
